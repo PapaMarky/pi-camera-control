@@ -135,7 +135,7 @@ _Additional Controls_
 ## Implementation Plan
 
 # Phase 1 - PoC Validation ✓ 
-* **Completed**: Python intervalometer proof-of-concept (`interval.py`)
+* **Completed**: Python intervalometer proof-of-concept (`poc/interval.py`)
   * Validated CCAPI communication with Canon EOS R50
   * Successfully ran multi-hour timelapse sessions
   * Confirmed feasibility of Pi-based camera control
@@ -166,12 +166,15 @@ _Additional Controls_
 
 # Development Environment
 * **Local Development**: MacBook for code development and testing
-* **Repository**: https://github.com/PapaMarky/Intervalometer
+* **Repository**: https://github.com/PapaMarky/pi-camera-control
 * **Build System**: GitHub Actions for automated Debian package creation
 * **Development Pi**: Raspberry Pi 4 (pi@picontrol-001.local) for integration testing
 * **Target Hardware**: Raspberry Pi Zero W (pi@picontrol-002.local) for field deployment
   * Chosen for ultra-low power consumption during extended field operations
   * Sufficient processing power for camera control and web serving
+
+## Development Documentation
+* [Development Guide](docs/README_DEVELOPMENT.md) - Phase 2 Node.js backend setup and usage
 
 # References
 ## CCAPI
