@@ -26,6 +26,23 @@ export function createApiRouter(cameraController, powerManager) {
     }
   });
 
+  // Debug endpoint to see all available CCAPI endpoints
+  router.get('/camera/debug/endpoints', (req, res) => {
+    try {
+      const status = cameraController.getConnectionStatus();
+      const capabilities = cameraController.capabilities;
+      res.json({
+        connected: status.connected,
+        baseUrl: `https://${status.ip}:${status.port}`,
+        capabilities: capabilities,
+        shutterEndpoint: status.shutterEndpoint
+      });
+    } catch (error) {
+      logger.error('Failed to get camera debug info:', error);
+      res.status(500).json({ error: 'Failed to get camera debug info' });
+    }
+  });
+
   // Take a single photo
   router.post('/camera/photo', async (req, res) => {
     try {
