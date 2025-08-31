@@ -114,8 +114,11 @@ class CameraControlServer {
 
   async start() {
     try {
-      // Initialize camera connection
-      await this.cameraController.initialize();
+      // Initialize camera connection (don't fail server if camera fails)
+      const cameraInitialized = await this.cameraController.initialize();
+      if (!cameraInitialized) {
+        logger.warn('Camera initialization failed - server will continue with connection attempts');
+      }
       
       // Start power monitoring
       await this.powerManager.initialize();
@@ -125,6 +128,7 @@ class CameraControlServer {
         logger.info(`Camera Control Server started on port ${PORT}`, {
           environment: process.env.NODE_ENV || 'development',
           camera: `${CAMERA_IP}:${CAMERA_PORT}`,
+          cameraConnected: cameraInitialized,
           pid: process.pid
         });
       });

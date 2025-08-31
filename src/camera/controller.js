@@ -1,4 +1,5 @@
 import axios from 'axios';
+import https from 'https';
 import { logger } from '../utils/logger.js';
 
 // Disable SSL verification warnings for local camera connections
@@ -20,7 +21,7 @@ export class CameraController {
     // Create axios instance with optimized settings
     this.client = axios.create({
       timeout: 10000,
-      httpsAgent: new (await import('https')).Agent({
+      httpsAgent: new https.Agent({
         rejectUnauthorized: false
       })
     });
@@ -52,8 +53,14 @@ export class CameraController {
         throw new Error('No shutter control endpoint found');
       }
       
-      // Test camera settings endpoint
-      await this.getCameraSettings();
+      // Test camera settings endpoint (bypass connection check during connection)
+      try {
+        await this.client.get(`${this.baseUrl}/ccapi/ver100/shooting/settings`);
+        logger.debug('Camera settings endpoint verified');
+      } catch (error) {
+        logger.warn('Camera settings endpoint test failed:', error.message);
+        // Continue anyway - some cameras may not support this endpoint
+      }
       
       this.connected = true;
       this.lastError = null;
@@ -101,11 +108,15 @@ export class CameraController {
     }
 
     try {
-      const response = await this.client.get(`${this.baseUrl}/ccapi/v100/shooting/settings`);
+      const response = await this.client.get(`${this.baseUrl}/ccapi/ver100/shooting/settings`);
       return response.data;
     } catch (error) {
-      logger.error('Failed to get camera settings:', error);
-      throw error;
+      logger.error('Failed to get camera settings:', error.message);
+      // Create a clean error without circular references
+      const cleanError = new Error(error.message || 'Failed to get camera settings');
+      cleanError.status = error.response?.status;
+      cleanError.statusText = error.response?.statusText;
+      throw cleanError;
     }
   }
 
