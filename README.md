@@ -173,6 +173,9 @@ _Additional Controls_
   * Chosen for ultra-low power consumption during extended field operations
   * Sufficient processing power for camera control and web serving
 
+## Development Documentation
+* [Development Guide](docs/README_DEVELOPMENT.md) - Phase 2 Node.js backend setup and usage
+
 # References
 ## CCAPI
 * https://developercommunity.usa.canon.com/s/article/CCAPI-Function-List : API endpoint list
