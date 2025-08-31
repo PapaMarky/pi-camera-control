@@ -1,0 +1,39 @@
+# CODEOWNERS - Canon Camera Controller Project
+#
+# This file defines code ownership for the Canon Camera Controller repository.
+# Lines starting with '#' are comments.
+# Each line is a file pattern followed by one or more owners.
+#
+# More details: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Order is important - the last matching pattern takes precedence.
+
+# Global ownership - all files
+* @PapaMarky
+
+# Documentation
+*.md @PapaMarky
+/docs/ @PapaMarky
+
+# Configuration files
+*.json @PapaMarky
+*.yml @PapaMarky
+*.yaml @PapaMarky
+
+# Network configuration
+/docs/network-configuration.md @PapaMarky
+
+# Python proof of concept
+*.py @PapaMarky
+interval.py @PapaMarky
+
+# Future Node.js implementation
+package.json @PapaMarky
+*.js @PapaMarky
+*.ts @PapaMarky
+
+# Debian packaging
+/debian/ @PapaMarky
+
+# GitHub workflows and configuration
+/.github/ @PapaMarky
