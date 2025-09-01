@@ -73,7 +73,9 @@ export class PowerManager {
         'cat /sys/class/power_supply/BAT*/status 2>/dev/null || echo ""',
         // Pi power status
         'vcgencmd get_throttled 2>/dev/null || echo ""',
-        'vcgencmd measure_volts core 2>/dev/null || echo ""'
+        'vcgencmd measure_volts core 2>/dev/null || echo ""',
+        // System uptime
+        'cat /proc/uptime 2>/dev/null || echo ""'
       ];
       
       const results = await Promise.allSettled(
@@ -85,12 +87,15 @@ export class PowerManager {
         status: this.parseStatus(results[1]),
         throttled: this.parseThrottled(results[2]),
         voltage: this.parseVoltage(results[3]),
+        systemUptime: this.parseSystemUptime(results[4]),
         isPowerConnected: true // Default assumption
       };
       
       // Check for low power warning
       if (this.batteryInfo.throttled && this.batteryInfo.throttled !== '0x0') {
         logger.warn('Power throttling detected:', this.batteryInfo.throttled);
+      } else if (this.batteryInfo.throttled === '0x0') {
+        logger.debug('No throttling detected:', this.batteryInfo.throttled);
       }
       
     } catch (error) {
@@ -147,7 +152,10 @@ export class PowerManager {
 
   parseThrottled(result) {
     if (result.status === 'fulfilled' && result.value.stdout.trim()) {
-      return result.value.stdout.trim();
+      const output = result.value.stdout.trim();
+      // Extract just the hex value from "throttled=0x0"
+      const match = output.match(/throttled=(0x[0-9a-fA-F]+)/);
+      return match ? match[1] : output;
     }
     return null;
   }
@@ -156,6 +164,15 @@ export class PowerManager {
     if (result.status === 'fulfilled') {
       const voltMatch = result.value.stdout.match(/([0-9.]+)V/);
       return voltMatch ? parseFloat(voltMatch[1]) : null;
+    }
+    return null;
+  }
+
+  parseSystemUptime(result) {
+    if (result.status === 'fulfilled' && result.value.stdout.trim()) {
+      // /proc/uptime format: "uptime_seconds idle_seconds"
+      const uptimeMatch = result.value.stdout.trim().split(' ')[0];
+      return parseFloat(uptimeMatch);
     }
     return null;
   }

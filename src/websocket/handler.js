@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger.js';
+import { IntervalometerSession } from '../intervalometer/session.js';
 
-export function createWebSocketHandler(cameraController, powerManager) {
+export function createWebSocketHandler(cameraController, powerManager, server) {
   const clients = new Set();
   
   // Broadcast status updates to all connected clients
@@ -11,7 +12,10 @@ export function createWebSocketHandler(cameraController, powerManager) {
       type: 'status_update',
       timestamp: new Date().toISOString(),
       camera: cameraController.getConnectionStatus(),
-      power: powerManager.getStatus()
+      power: {
+        ...powerManager.getStatus(),
+        uptime: process.uptime() // Add system uptime to power data
+      }
     };
     
     const message = JSON.stringify(status);
@@ -53,6 +57,8 @@ export function createWebSocketHandler(cameraController, powerManager) {
         timestamp: new Date().toISOString(),
         camera: cameraController.getConnectionStatus(),
         power: powerManager.getStatus(),
+        intervalometer: server.activeIntervalometerSession ? 
+          server.activeIntervalometerSession.getStatus() : null,
         clientId
       };
       
@@ -171,21 +177,118 @@ export function createWebSocketHandler(cameraController, powerManager) {
   };
   
   const handleStartIntervalometer = async (ws, data) => {
-    // TODO: Implement full intervalometer functionality in Phase 2 expansion
-    logger.info('Intervalometer start requested via WebSocket:', data);
-    sendResponse(ws, 'intervalometer_start', {
-      success: true,
-      message: 'Intervalometer functionality coming in Phase 2 expansion',
-      params: data
-    });
+    try {
+      const { interval, shots, stopTime } = data;
+      
+      // Validation
+      if (!interval || interval <= 0) {
+        return sendError(ws, 'Invalid interval value');
+      }
+      
+      // Check if session is already running
+      if (server.activeIntervalometerSession && server.activeIntervalometerSession.state === 'running') {
+        return sendError(ws, 'Intervalometer is already running');
+      }
+      
+      // Validate against camera settings
+      const validation = await cameraController.validateInterval(interval);
+      if (!validation.valid) {
+        return sendError(ws, validation.error);
+      }
+      
+      // Clean up any existing session
+      if (server.activeIntervalometerSession) {
+        server.activeIntervalometerSession.cleanup();
+        server.activeIntervalometerSession = null;
+      }
+      
+      // Create and configure new session
+      const options = { interval };
+      if (shots && shots > 0) options.totalShots = parseInt(shots);
+      if (stopTime) {
+        // Parse time as HH:MM and create a future date
+        const [hours, minutes] = stopTime.split(':').map(Number);
+        const now = new Date();
+        const stopDate = new Date();
+        stopDate.setHours(hours, minutes, 0, 0);
+        
+        // If the time is in the past, assume it's for tomorrow
+        if (stopDate <= now) {
+          stopDate.setDate(stopDate.getDate() + 1);
+        }
+        
+        options.stopTime = stopDate;
+      }
+      
+      server.activeIntervalometerSession = new IntervalometerSession(cameraController, options);
+      
+      // Set up event handlers to broadcast updates to all clients
+      server.activeIntervalometerSession.on('started', (sessionData) => {
+        logger.info('Session started event received, broadcasting...');
+        broadcastEvent('intervalometer_started', sessionData);
+      });
+      
+      server.activeIntervalometerSession.on('photo_taken', (photoData) => {
+        logger.info('Photo taken event received, broadcasting:', photoData);
+        broadcastEvent('intervalometer_photo', photoData);
+      });
+      
+      server.activeIntervalometerSession.on('photo_failed', (errorData) => {
+        logger.info('Photo failed event received, broadcasting:', errorData);
+        broadcastEvent('intervalometer_error', errorData);
+      });
+      
+      server.activeIntervalometerSession.on('completed', (completionData) => {
+        logger.info('Session completed event received, broadcasting:', completionData);
+        broadcastEvent('intervalometer_completed', completionData);
+      });
+      
+      server.activeIntervalometerSession.on('stopped', (stopData) => {
+        logger.info('Session stopped event received, broadcasting:', stopData);
+        broadcastEvent('intervalometer_stopped', stopData);
+      });
+      
+      server.activeIntervalometerSession.on('error', (errorData) => {
+        logger.info('Session error event received, broadcasting:', errorData);
+        broadcastEvent('intervalometer_error', errorData);
+      });
+      
+      // Start the session
+      await server.activeIntervalometerSession.start();
+      
+      logger.info('Intervalometer started via WebSocket', options);
+      
+      sendResponse(ws, 'intervalometer_start', {
+        success: true,
+        message: 'Intervalometer started successfully',
+        status: server.activeIntervalometerSession.getStatus()
+      });
+    } catch (error) {
+      logger.error('Failed to start intervalometer via WebSocket:', error);
+      sendError(ws, `Failed to start intervalometer: ${error.message}`);
+    }
   };
   
   const handleStopIntervalometer = async (ws) => {
-    // TODO: Implement intervalometer stop functionality
-    sendResponse(ws, 'intervalometer_stop', {
-      success: true,
-      message: 'Stop command acknowledged'
-    });
+    try {
+      if (!server.activeIntervalometerSession) {
+        return sendError(ws, 'No intervalometer session is running');
+      }
+      
+      await server.activeIntervalometerSession.stop();
+      const finalStatus = server.activeIntervalometerSession.getStatus();
+      
+      logger.info('Intervalometer stopped via WebSocket', finalStatus.stats);
+      
+      sendResponse(ws, 'intervalometer_stop', {
+        success: true,
+        message: 'Intervalometer stopped successfully',
+        status: finalStatus
+      });
+    } catch (error) {
+      logger.error('Failed to stop intervalometer via WebSocket:', error);
+      sendError(ws, `Failed to stop intervalometer: ${error.message}`);
+    }
   };
   
   const handleGetStatus = async (ws) => {
@@ -227,11 +330,13 @@ export function createWebSocketHandler(cameraController, powerManager) {
     };
     
     const message = JSON.stringify(event);
+    logger.info(`Broadcasting event ${type} to ${clients.size} clients:`, event);
     
     for (const client of clients) {
       try {
         if (client.readyState === client.OPEN) {
           client.send(message);
+          logger.debug(`Sent event to client`);
         }
       } catch (error) {
         logger.debug('Failed to broadcast event:', error.message);
