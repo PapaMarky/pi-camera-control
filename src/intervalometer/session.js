@@ -28,6 +28,7 @@ export class IntervalometerSession extends EventEmitter {
     this.intervalId = null;
     this.cronJob = null;
     this.shouldStop = false;
+    this.nextShotTime = null;
   }
   
   async start() {
@@ -150,11 +151,26 @@ export class IntervalometerSession extends EventEmitter {
       return;
     }
     
+    // Calculate the exact time for the next shot
+    const now = new Date();
+    if (!this.nextShotTime) {
+      // First shot - take it immediately, then schedule the next
+      this.nextShotTime = now;
+    } else {
+      // Subsequent shots - calculate based on interval from start time
+      // shotsTaken has already been incremented in takeShot(), so use it directly
+      const nextShotInterval = this.stats.shotsTaken;
+      this.nextShotTime = new Date(this.stats.startTime.getTime() + (nextShotInterval * this.options.interval * 1000));
+    }
+    
+    // Calculate delay until next shot time
+    const delayMs = Math.max(0, this.nextShotTime.getTime() - now.getTime());
+    
     // Schedule the next shot
     this.intervalId = setTimeout(async () => {
       await this.takeShot();
       this.scheduleNextShot();
-    }, this.options.interval * 1000);
+    }, delayMs);
   }
   
   async takeShot() {
@@ -175,12 +191,15 @@ export class IntervalometerSession extends EventEmitter {
       
       logger.info(`Shot ${shotNumber} completed successfully`);
       
-      this.emit('photo_taken', {
+      const photoData = {
         shotNumber,
         success: true,
         timestamp: new Date().toISOString(),
         stats: { ...this.stats }
-      });
+      };
+      
+      logger.info('Emitting photo_taken event:', photoData);
+      this.emit('photo_taken', photoData);
       
     } catch (error) {
       this.stats.shotsTaken++;
@@ -252,7 +271,7 @@ export class IntervalometerSession extends EventEmitter {
       Math.max(0, this.options.totalShots - this.stats.shotsTaken) : null;
     
     const estimatedEndTime = this.options.totalShots && this.state === 'running' ?
-      new Date(Date.now() + (remainingShots * this.options.interval * 1000)) : null;
+      new Date(this.stats.startTime.getTime() + (this.options.totalShots * this.options.interval * 1000)) : null;
     
     return {
       state: this.state,
@@ -261,6 +280,7 @@ export class IntervalometerSession extends EventEmitter {
       duration,
       remainingShots,
       estimatedEndTime,
+      nextShotTime: this.nextShotTime,
       successRate: this.stats.shotsTaken > 0 ? 
         (this.stats.shotsSuccessful / this.stats.shotsTaken) : 1
     };
