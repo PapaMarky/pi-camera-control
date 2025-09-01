@@ -1,0 +1,13 @@
+# Assets directory for PWA icons and images
+# 
+# This directory should contain:
+# - icon-72.png through icon-512.png (PWA app icons)
+# - screenshot-mobile.png (375x812 mobile screenshot)
+# - screenshot-tablet.png (768x1024 tablet screenshot)
+#
+# Icons can be generated from a single 512x512 source image using:
+# - https://www.pwabuilder.com/imageGenerator
+# - https://realfavicongenerator.net/
+#
+# For now, the app will work without these icons but they improve
+# the PWA installation experience.

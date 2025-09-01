@@ -29,6 +29,9 @@ class CameraControlServer {
     this.cameraController = new CameraController(CAMERA_IP, CAMERA_PORT);
     this.powerManager = new PowerManager();
     
+    // Shared intervalometer session across WebSocket and REST API
+    this.activeIntervalometerSession = null;
+    
     this.setupMiddleware();
     this.setupRoutes();
     this.setupWebSocket();
@@ -59,7 +62,7 @@ class CameraControlServer {
 
   setupRoutes() {
     // API routes
-    this.app.use('/api', createApiRouter(this.cameraController, this.powerManager));
+    this.app.use('/api', createApiRouter(this.cameraController, this.powerManager, this));
     
     // Serve static files (Phase 3 - web interface)
     this.app.use(express.static('public'));
@@ -86,7 +89,7 @@ class CameraControlServer {
   }
 
   setupWebSocket() {
-    const wsHandler = createWebSocketHandler(this.cameraController, this.powerManager);
+    const wsHandler = createWebSocketHandler(this.cameraController, this.powerManager, this);
     this.wss.on('connection', wsHandler);
     
     logger.info('WebSocket server initialized');

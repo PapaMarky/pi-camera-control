@@ -1,0 +1,113 @@
+{
+  "name": "Pi Camera Control",
+  "short_name": "CamControl",
+  "description": "Portable off-grid camera control system for Canon CCAPI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#1a1a1a",
+  "orientation": "portrait-primary",
+  "categories": ["photography", "utilities", "tools"],
+  "lang": "en-US",
+  "dir": "ltr",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "assets/icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "assets/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "assets/icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "assets/icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "assets/icon-152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "assets/icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "assets/screenshot-mobile.png",
+      "sizes": "375x812",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile interface for camera control"
+    },
+    {
+      "src": "assets/screenshot-tablet.png", 
+      "sizes": "768x1024",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Tablet interface for camera control"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Take Photo",
+      "short_name": "Photo",
+      "description": "Take a single photo",
+      "url": "/?action=photo",
+      "icons": [
+        {
+          "src": "assets/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Start Intervalometer",
+      "short_name": "Interval",
+      "description": "Start intervalometer session",
+      "url": "/?action=interval",
+      "icons": [
+        {
+          "src": "assets/icon-192.png",
+          "sizes": "192x192", 
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "edge_side_panel": {
+    "preferred_width": 480
+  }
+}

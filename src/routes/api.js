@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { logger } from '../utils/logger.js';
+import { IntervalometerSession } from '../intervalometer/session.js';
 
-export function createApiRouter(cameraController, powerManager) {
+export function createApiRouter(cameraController, powerManager, server) {
   const router = Router();
 
   // Camera status and connection
@@ -26,15 +27,25 @@ export function createApiRouter(cameraController, powerManager) {
     }
   });
 
+  // Camera battery status
+  router.get('/camera/battery', async (req, res) => {
+    try {
+      const battery = await cameraController.getCameraBattery();
+      res.json(battery);
+    } catch (error) {
+      logger.error('Failed to get camera battery:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Debug endpoint to see all available CCAPI endpoints
   router.get('/camera/debug/endpoints', (req, res) => {
     try {
       const status = cameraController.getConnectionStatus();
-      const capabilities = cameraController.capabilities;
       res.json({
         connected: status.connected,
         baseUrl: `https://${status.ip}:${status.port}`,
-        capabilities: capabilities,
+        capabilities: cameraController.capabilities,
         shutterEndpoint: status.shutterEndpoint
       });
     } catch (error) {
@@ -71,7 +82,7 @@ export function createApiRouter(cameraController, powerManager) {
     }
   });
 
-  // Intervalometer control (placeholder for Phase 2 expansion)
+  // Intervalometer control
   router.post('/intervalometer/start', async (req, res) => {
     try {
       const { interval, shots, stopTime } = req.body;
@@ -81,20 +92,52 @@ export function createApiRouter(cameraController, powerManager) {
         return res.status(400).json({ error: 'Invalid interval value' });
       }
       
+      // Check if session is already running
+      if (server.activeIntervalometerSession && server.activeIntervalometerSession.state === 'running') {
+        return res.status(400).json({ error: 'Intervalometer is already running' });
+      }
+      
       // Validate against camera settings
       const validation = await cameraController.validateInterval(interval);
       if (!validation.valid) {
         return res.status(400).json({ error: validation.error });
       }
       
-      // TODO: Implement intervalometer session management
-      // For now, just acknowledge the request
-      logger.info('Intervalometer start requested', { interval, shots, stopTime });
+      // Clean up any existing session
+      if (server.activeIntervalometerSession) {
+        server.activeIntervalometerSession.cleanup();
+        server.activeIntervalometerSession = null;
+      }
+      
+      // Create and configure new session
+      const options = { interval };
+      if (shots && shots > 0) options.totalShots = parseInt(shots);
+      if (stopTime) {
+        // Parse time as HH:MM and create a future date
+        const [hours, minutes] = stopTime.split(':').map(Number);
+        const now = new Date();
+        const stopDate = new Date();
+        stopDate.setHours(hours, minutes, 0, 0);
+        
+        // If the time is in the past, assume it's for tomorrow
+        if (stopDate <= now) {
+          stopDate.setDate(stopDate.getDate() + 1);
+        }
+        
+        options.stopTime = stopDate;
+      }
+      
+      server.activeIntervalometerSession = new IntervalometerSession(cameraController, options);
+      
+      // Start the session
+      await server.activeIntervalometerSession.start();
+      
+      logger.info('Intervalometer started', options);
       
       res.json({ 
         success: true, 
-        message: 'Intervalometer functionality coming in Phase 2 expansion',
-        params: { interval, shots, stopTime }
+        message: 'Intervalometer started successfully',
+        status: server.activeIntervalometerSession.getStatus()
       });
     } catch (error) {
       logger.error('Failed to start intervalometer:', error);
@@ -102,17 +145,47 @@ export function createApiRouter(cameraController, powerManager) {
     }
   });
 
-  router.post('/intervalometer/stop', (req, res) => {
-    // TODO: Implement intervalometer session management
-    res.json({ success: true, message: 'Stop command acknowledged' });
+  router.post('/intervalometer/stop', async (req, res) => {
+    try {
+      if (!server.activeIntervalometerSession) {
+        return res.status(400).json({ error: 'No intervalometer session is running' });
+      }
+      
+      await server.activeIntervalometerSession.stop();
+      const finalStatus = server.activeIntervalometerSession.getStatus();
+      
+      logger.info('Intervalometer stopped', finalStatus.stats);
+      
+      res.json({ 
+        success: true, 
+        message: 'Intervalometer stopped successfully',
+        status: finalStatus
+      });
+    } catch (error) {
+      logger.error('Failed to stop intervalometer:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   router.get('/intervalometer/status', (req, res) => {
-    // TODO: Return actual intervalometer status
-    res.json({ 
-      running: false, 
-      message: 'Intervalometer status coming in Phase 2 expansion' 
-    });
+    try {
+      if (!server.activeIntervalometerSession) {
+        return res.json({ 
+          running: false, 
+          state: 'stopped',
+          message: 'No active intervalometer session'
+        });
+      }
+      
+      const status = server.activeIntervalometerSession.getStatus();
+      res.json({
+        running: status.state === 'running',
+        ...status
+      });
+    } catch (error) {
+      logger.error('Failed to get intervalometer status:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // Power and system status
@@ -128,12 +201,14 @@ export function createApiRouter(cameraController, powerManager) {
 
   router.get('/system/status', (req, res) => {
     try {
+      const powerStatus = powerManager.getStatus();
       res.json({
         uptime: process.uptime(),
         memory: process.memoryUsage(),
         platform: process.platform,
         nodeVersion: process.version,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        power: powerStatus
       });
     } catch (error) {
       logger.error('Failed to get system status:', error);

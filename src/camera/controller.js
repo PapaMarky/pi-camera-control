@@ -46,7 +46,7 @@ export class CameraController {
       logger.info('Discovering CCAPI endpoints...');
       const response = await this.client.get(`${this.baseUrl}/ccapi/`);
       
-      this.capabilities = response.data;
+      this._capabilities = response.data;
       this.shutterEndpoint = this.findShutterEndpoint(this.capabilities);
       
       if (!this.shutterEndpoint) {
@@ -117,6 +117,30 @@ export class CameraController {
       cleanError.status = error.response?.status;
       cleanError.statusText = error.response?.statusText;
       throw cleanError;
+    }
+  }
+
+  async getCameraBattery() {
+    if (!this.connected) {
+      throw new Error('Camera not connected');
+    }
+
+    try {
+      // Try the more detailed battery list first
+      const response = await this.client.get(`${this.baseUrl}/ccapi/ver110/devicestatus/batterylist`);
+      return response.data;
+    } catch (error) {
+      try {
+        // Fallback to basic battery info
+        const response = await this.client.get(`${this.baseUrl}/ccapi/ver100/devicestatus/battery`);
+        return { batterylist: [response.data] };
+      } catch (fallbackError) {
+        logger.error('Failed to get camera battery:', fallbackError.message);
+        const cleanError = new Error(fallbackError.message || 'Failed to get camera battery');
+        cleanError.status = fallbackError.response?.status;
+        cleanError.statusText = fallbackError.response?.statusText;
+        throw cleanError;
+      }
     }
   }
 
@@ -287,6 +311,15 @@ export class CameraController {
       shutterEndpoint: this.shutterEndpoint,
       hasCapabilities: !!this.capabilities
     };
+  }
+
+  // Expose capabilities for debugging
+  get capabilities() {
+    return this._capabilities;
+  }
+
+  set capabilities(value) {
+    this._capabilities = value;
   }
 
   async cleanup() {
