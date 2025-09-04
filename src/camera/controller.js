@@ -16,7 +16,9 @@ export class CameraController {
     this.capabilities = null;
     this.reconnectInterval = null;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 10;
+    this.maxReconnectAttempts = 22; // 10 attempts at 1s + 12 attempts at 5s
+    this.pollingInterval = null;
+    this.pollingPaused = false;
     
     // Create axios instance with optimized settings
     this.client = axios.create({
@@ -33,6 +35,7 @@ export class CameraController {
     try {
       await this.connect();
       this.startConnectionMonitoring();
+      this.startInfoPolling();
       return true;
     } catch (error) {
       logger.error('Failed to initialize camera controller:', error);
@@ -112,6 +115,15 @@ export class CameraController {
       return response.data;
     } catch (error) {
       logger.error('Failed to get camera settings:', error.message);
+      
+      // If we get a network error, mark camera as disconnected
+      if (error.code === 'EHOSTUNREACH' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        logger.warn('Camera network error detected, marking as disconnected');
+        this.connected = false;
+        this.lastError = error.message;
+        this.scheduleReconnect();
+      }
+      
       // Create a clean error without circular references
       const cleanError = new Error(error.message || 'Failed to get camera settings');
       cleanError.status = error.response?.status;
@@ -136,6 +148,15 @@ export class CameraController {
         return { batterylist: [response.data] };
       } catch (fallbackError) {
         logger.error('Failed to get camera battery:', fallbackError.message);
+        
+        // If we get a network error, mark camera as disconnected
+        if (fallbackError.code === 'EHOSTUNREACH' || fallbackError.code === 'ECONNREFUSED' || fallbackError.code === 'ETIMEDOUT') {
+          logger.warn('Camera network error detected during battery check, marking as disconnected');
+          this.connected = false;
+          this.lastError = fallbackError.message;
+          this.scheduleReconnect();
+        }
+        
         const cleanError = new Error(fallbackError.message || 'Failed to get camera battery');
         cleanError.status = fallbackError.response?.status;
         cleanError.statusText = fallbackError.response?.statusText;
@@ -263,29 +284,64 @@ export class CameraController {
   }
 
   startConnectionMonitoring() {
-    // Monitor connection every 30 seconds
-    setInterval(async () => {
+    // Monitor connection every 10 seconds for faster disconnection detection
+    this.monitoringInterval = setInterval(async () => {
       if (!this.connected) return;
       
       try {
         await this.client.get(`${this.baseUrl}/ccapi/`, { timeout: 5000 });
+        logger.debug('Connection monitoring: camera still reachable');
       } catch (error) {
-        logger.warn('Camera connection lost, attempting reconnect...');
+        logger.warn('Camera connection lost during monitoring, attempting reconnect...', error.message);
         this.connected = false;
+        this.lastError = error.message;
         this.scheduleReconnect();
       }
+    }, 10000);
+  }
+
+  startInfoPolling() {
+    // Poll camera info every 30 seconds to keep UI current and detect disconnections faster
+    this.pollingInterval = setInterval(async () => {
+      if (!this.connected || this.pollingPaused) return;
+      
+      try {
+        // Try to get basic camera info - this will trigger disconnection detection if camera is gone
+        logger.debug('Polling camera info...');
+        await this.client.get(`${this.baseUrl}/ccapi/ver100/shooting/settings`, { timeout: 3000 });
+      } catch (error) {
+        // Error handling is already done in getCameraSettings, just log here
+        logger.debug('Info polling detected camera issue:', error.message);
+      }
     }, 30000);
+  }
+
+  pauseInfoPolling() {
+    logger.info('Pausing camera info polling during intervalometer session');
+    this.pollingPaused = true;
+  }
+
+  resumeInfoPolling() {
+    logger.info('Resuming camera info polling');
+    this.pollingPaused = false;
   }
 
   scheduleReconnect() {
     if (this.reconnectInterval) return; // Already scheduled
     
-    const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts), 60000);
     this.reconnectAttempts++;
     
     if (this.reconnectAttempts > this.maxReconnectAttempts) {
-      logger.error('Max reconnection attempts reached');
+      logger.error('Max reconnection attempts reached - camera connection failed');
       return;
+    }
+    
+    // Timing strategy: 1s for first 10 attempts, then 5s for remaining attempts
+    let delay;
+    if (this.reconnectAttempts <= 10) {
+      delay = 1000; // 1 second for first 10 attempts
+    } else {
+      delay = 5000; // 5 seconds for attempts 11-22
     }
     
     logger.info(`Scheduling reconnection attempt ${this.reconnectAttempts} in ${delay}ms`);
@@ -299,6 +355,33 @@ export class CameraController {
         this.scheduleReconnect();
       }
     }, delay);
+  }
+
+  async manualReconnect() {
+    logger.info('Manual reconnect triggered - resetting connection state');
+    
+    // Clear any existing reconnect interval
+    if (this.reconnectInterval) {
+      clearTimeout(this.reconnectInterval);
+      this.reconnectInterval = null;
+    }
+    
+    // Reset reconnection attempts to allow fresh start
+    this.reconnectAttempts = 0;
+    this.connected = false;
+    this.lastError = null;
+    
+    try {
+      // Attempt immediate connection
+      await this.connect();
+      logger.info('Manual reconnect successful');
+      return true;
+    } catch (error) {
+      logger.warn('Manual reconnect failed, scheduling automatic retries');
+      // If manual reconnect fails, start the automatic retry cycle
+      this.scheduleReconnect();
+      return false;
+    }
   }
 
   getConnectionStatus() {
@@ -328,6 +411,16 @@ export class CameraController {
     if (this.reconnectInterval) {
       clearTimeout(this.reconnectInterval);
       this.reconnectInterval = null;
+    }
+    
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+      this.monitoringInterval = null;
+    }
+    
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
     }
     
     // Ensure shutter is released

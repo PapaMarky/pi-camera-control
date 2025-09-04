@@ -1,0 +1,138 @@
+<svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+  <!-- Define styles -->
+  <defs>
+    <style>
+      .wireframe-bg { fill: #f8f9fa; stroke: #dee2e6; stroke-width: 1; }
+      .header-bg { fill: #e9ecef; stroke: #adb5bd; stroke-width: 1; }
+      .card-bg { fill: white; stroke: #ced4da; stroke-width: 1; }
+      .preview-bg { fill: #343a40; stroke: #495057; stroke-width: 2; }
+      .button { fill: #007bff; stroke: #0056b3; stroke-width: 1; }
+      .button-secondary { fill: #6c757d; stroke: #545b62; stroke-width: 1; }
+      .button-danger { fill: #dc3545; stroke: #c82333; stroke-width: 1; }
+      .button-success { fill: #28a745; stroke: #1e7e34; stroke-width: 1; }
+      .button-text { fill: white; font-family: system-ui; font-size: 12px; text-anchor: middle; }
+      .text { fill: #212529; font-family: system-ui; font-size: 14px; }
+      .small-text { fill: #6c757d; font-family: system-ui; font-size: 11px; }
+      .header-text { fill: #212529; font-family: system-ui; font-size: 16px; font-weight: bold; }
+      .status-dot-connected { fill: #28a745; r: 4; }
+      .preview-text { fill: #adb5bd; font-family: system-ui; font-size: 12px; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <!-- Phone frame -->
+  <rect x="0" y="0" width="375" height="812" rx="20" class="wireframe-bg"/>
+  
+  <!-- Header Area (same as status view) -->
+  <rect x="10" y="10" width="355" height="50" rx="8" class="header-bg"/>
+  <text x="20" y="35" class="header-text">Camera Control</text>
+  
+  <!-- Status indicators -->
+  <circle cx="280" cy="35" class="status-dot-connected"/>
+  <text x="295" y="28" class="small-text">📷🔋💾⏱️</text>
+  
+  <!-- Function Menu (hamburger) -->
+  <rect x="340" y="25" width="20" height="20" rx="2" fill="none" stroke="#6c757d" stroke-width="1"/>
+  <line x1="345" y1="30" x2="355" y2="30" stroke="#6c757d" stroke-width="1"/>
+  <line x1="345" y1="35" x2="355" y2="35" stroke="#6c757d" stroke-width="1"/>
+  <line x1="345" y1="40" x2="355" y2="40" stroke="#6c757d" stroke-width="1"/>
+  
+  <!-- Function Area - Test Shot View -->
+  <text x="20" y="85" class="header-text">Test Shot</text>
+  
+  <!-- Live Preview Area -->
+  <rect x="20" y="100" width="335" height="200" rx="8" class="preview-bg"/>
+  <text x="187" y="195" class="preview-text">Live Preview</text>
+  <text x="187" y="210" class="preview-text">(Camera feed or last image)</text>
+  
+  <!-- Preview controls overlay -->
+  <rect x="30" y="110" width="30" height="20" rx="3" fill="rgba(0,0,0,0.7)"/>
+  <text x="45" y="123" fill="white" font-size="10" text-anchor="middle">1:1</text>
+  
+  <rect x="315" y="110" width="30" height="20" rx="3" fill="rgba(0,0,0,0.7)"/>
+  <text x="330" y="123" fill="white" font-size="10" text-anchor="middle">⚙️</text>
+  
+  <rect x="315" y="270" width="30" height="20" rx="3" fill="rgba(0,0,0,0.7)"/>
+  <text x="330" y="283" fill="white" font-size="10" text-anchor="middle">↗️</text>
+  
+  <!-- Camera Settings Panel (Quick Access) -->
+  <rect x="20" y="315" width="335" height="140" rx="8" class="card-bg"/>
+  <text x="30" y="335" class="text">Quick Settings</text>
+  
+  <!-- Settings grid -->
+  <rect x="30" y="345" width="75" height="35" rx="4" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="35" y="357" class="small-text">ISO</text>
+  <text x="60" y="375" class="text">800</text>
+  
+  <rect x="115" y="345" width="75" height="35" rx="4" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="120" y="357" class="small-text">Shutter</text>
+  <text x="142" y="375" class="text">1/30</text>
+  
+  <rect x="200" y="345" width="75" height="35" rx="4" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="205" y="357" class="small-text">Aperture</text>
+  <text x="230" y="375" class="text">f/2.8</text>
+  
+  <rect x="285" y="345" width="60" height="35" rx="4" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="290" y="357" class="small-text">Focus</text>
+  <text x="312" y="375" class="text">∞</text>
+  
+  <!-- Second row of settings -->
+  <rect x="30" y="390" width="75" height="35" rx="4" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="35" y="402" class="small-text">WB</text>
+  <text x="55" y="420" class="text">Day</text>
+  
+  <rect x="115" y="390" width="75" height="35" rx="4" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="120" y="402" class="small-text">Mode</text>
+  <text x="147" y="420" class="text">M</text>
+  
+  <rect x="200" y="390" width="75" height="35" rx="4" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="205" y="402" class="small-text">Format</text>
+  <text x="228" y="420" class="text">RAW</text>
+  
+  <rect x="285" y="390" width="60" height="35" rx="4" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="290" y="402" class="small-text">Timer</text>
+  <text x="312" y="420" class="text">Off</text>
+  
+  <!-- Action Buttons -->
+  <rect x="20" y="470" width="335" height="45" rx="6" class="button"/>
+  <text x="187" y="498" class="button-text" font-size="16">📷 Take Photo</text>
+  
+  <!-- Secondary action buttons -->
+  <rect x="20" y="525" width="100" height="35" rx="4" class="button-secondary"/>
+  <text x="70" y="547" class="button-text">⚙️ Settings</text>
+  
+  <rect x="137" y="525" width="100" height="35" rx="4" class="button-success"/>
+  <text x="187" y="547" class="button-text">💾 Save</text>
+  
+  <rect x="255" y="525" width="100" height="35" rx="4" class="button-danger"/>
+  <text x="305" y="547" class="button-text">🗑️ Delete</text>
+  
+  <!-- Image Management Section -->
+  <rect x="20" y="575" width="335" height="80" rx="8" class="card-bg"/>
+  <text x="30" y="595" class="text">Last Image</text>
+  
+  <text x="30" y="615" class="small-text">IMG_2047.CR3</text>
+  <text x="260" y="615" class="small-text">24.3MB</text>
+  
+  <text x="30" y="630" class="small-text">Taken: 14:32:15</text>
+  <text x="250" y="630" class="small-text">1/30s f/2.8 ISO800</text>
+  
+  <rect x="30" y="635" width="60" height="25" rx="4" class="button"/>
+  <text x="60" y="651" class="button-text">View</text>
+  
+  <rect x="95" y="635" width="80" height="25" rx="4" class="button-secondary"/>
+  <text x="135" y="651" class="button-text">Download</text>
+  
+  <rect x="180" y="635" width="60" height="25" rx="4" class="button-danger"/>
+  <text x="210" y="651" class="button-text">Delete</text>
+  
+  <!-- Status bar at bottom -->
+  <rect x="20" y="670" width="335" height="30" rx="4" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="30" y="690" class="small-text">Ready for next shot • Storage: 8.2GB free • Battery: 75%</text>
+  
+  <!-- Navigation breadcrumb -->
+  <text x="20" y="730" class="small-text">🏠 Status > 📸 Test Shot</text>
+  
+  <!-- Title -->
+  <text x="20" y="780" class="header-text">Test Shot View</text>
+  <text x="20" y="795" class="small-text">Live preview, quick settings, image management</text>
+</svg>

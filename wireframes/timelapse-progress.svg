@@ -1,0 +1,145 @@
+<svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+  <!-- Define styles -->
+  <defs>
+    <style>
+      .wireframe-bg { fill: #f8f9fa; stroke: #dee2e6; stroke-width: 1; }
+      .header-bg { fill: #e9ecef; stroke: #adb5bd; stroke-width: 1; }
+      .card-bg { fill: white; stroke: #ced4da; stroke-width: 1; }
+      .button { fill: #007bff; stroke: #0056b3; stroke-width: 1; }
+      .button-danger { fill: #dc3545; stroke: #c82333; stroke-width: 1; }
+      .button-secondary { fill: #6c757d; stroke: #545b62; stroke-width: 1; }
+      .button-text { fill: white; font-family: system-ui; font-size: 12px; text-anchor: middle; }
+      .text { fill: #212529; font-family: system-ui; font-size: 14px; }
+      .small-text { fill: #6c757d; font-family: system-ui; font-size: 11px; }
+      .header-text { fill: #212529; font-family: system-ui; font-size: 16px; font-weight: bold; }
+      .status-dot-running { fill: #007bff; r: 4; }
+      .progress-bar { fill: #e9ecef; stroke: none; }
+      .progress-fill { fill: #007bff; stroke: none; }
+      .stats-text { fill: #212529; font-family: system-ui; font-size: 18px; font-weight: bold; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <!-- Phone frame -->
+  <rect x="0" y="0" width="375" height="812" rx="20" class="wireframe-bg"/>
+  
+  <!-- Header Area -->
+  <rect x="10" y="10" width="355" height="50" rx="8" class="header-bg"/>
+  <text x="20" y="35" class="header-text">Camera Control</text>
+  
+  <!-- Status indicators - showing active timelapse -->
+  <circle cx="280" cy="35" class="status-dot-running"/>
+  <text x="295" y="28" class="small-text">📷🔋💾</text>
+  <text x="295" y="42" class="small-text">⏱️ Active</text>
+  
+  <!-- Function Menu -->
+  <rect x="340" y="25" width="20" height="20" rx="2" fill="none" stroke="#6c757d" stroke-width="1"/>
+  <line x1="345" y1="30" x2="355" y2="30" stroke="#6c757d" stroke-width="1"/>
+  <line x1="345" y1="35" x2="355" y2="35" stroke="#6c757d" stroke-width="1"/>
+  <line x1="345" y1="40" x2="355" y2="40" stroke="#6c757d" stroke-width="1"/>
+  
+  <!-- Function Area - Intervalometer Progress -->
+  <text x="20" y="85" class="header-text">Timelapse Progress</text>
+  
+  <!-- Progress Overview Card -->
+  <rect x="20" y="100" width="335" height="140" rx="8" class="card-bg"/>
+  
+  <!-- Large progress circle/arc representation -->
+  <circle cx="100" cy="170" r="35" fill="none" stroke="#e9ecef" stroke-width="6"/>
+  <circle cx="100" cy="170" r="35" fill="none" stroke="#007bff" stroke-width="6" 
+          stroke-dasharray="87.96" stroke-dashoffset="26.39" stroke-linecap="round"
+          transform="rotate(-90 100 170)"/>
+  
+  <text x="100" y="175" class="stats-text">47</text>
+  <text x="100" y="190" class="small-text">of 100</text>
+  
+  <!-- Progress stats grid -->
+  <text x="150" y="130" class="small-text">Session Stats</text>
+  
+  <text x="150" y="150" class="small-text">Success Rate:</text>
+  <text x="280" y="150" class="text">98.9%</text>
+  
+  <text x="150" y="165" class="small-text">Duration:</text>
+  <text x="280" y="165" class="text">23m 30s</text>
+  
+  <text x="150" y="180" class="small-text">Remaining:</text>
+  <text x="280" y="180" class="text">26m 30s</text>
+  
+  <text x="150" y="195" class="small-text">Next Shot:</text>
+  <text x="280" y="195" class="text">15s</text>
+  
+  <text x="150" y="210" class="small-text">Storage Used:</text>
+  <text x="280" y="210" class="text">1.1GB</text>
+  
+  <text x="150" y="225" class="small-text">Estimated Finish:</text>
+  <text x="280" y="225" class="text">15:32</text>
+  
+  <!-- Progress Bar -->
+  <rect x="20" y="255" width="335" height="20" rx="10" class="progress-bar"/>
+  <rect x="20" y="255" width="157" rx="10" class="progress-fill"/>
+  <text x="187" y="268" class="small-text">47%</text>
+  
+  <!-- Current Status Card -->
+  <rect x="20" y="290" width="335" height="80" rx="8" class="card-bg"/>
+  <text x="30" y="310" class="text">Current Status</text>
+  
+  <circle cx="40" cy="325" r="4" fill="#28a745"/>
+  <text x="50" y="330" class="small-text">Shot #47 captured successfully</text>
+  
+  <text x="30" y="345" class="small-text">Camera: Ready for next shot</text>
+  <text x="30" y="360" class="small-text">Next interval starts in 15 seconds</text>
+  
+  <!-- Recent Activity -->
+  <rect x="20" y="385" width="335" height="120" rx="8" class="card-bg"/>
+  <text x="30" y="405" class="text">Recent Activity</text>
+  
+  <text x="30" y="425" class="small-text">15:08:30 📸 Shot #47 captured (24.1MB)</text>
+  <text x="30" y="440" class="small-text">15:08:00 📸 Shot #46 captured (24.3MB)</text>
+  <text x="30" y="455" class="small-text">15:07:30 📸 Shot #45 captured (23.9MB)</text>
+  <text x="30" y="470" class="small-text">15:07:00 📸 Shot #44 captured (24.0MB)</text>
+  <text x="30" y="485" class="small-text">15:06:30 📸 Shot #43 captured (24.2MB)</text>
+  <text x="30" y="500" class="small-text">15:06:00 📸 Shot #42 captured (24.1MB)</text>
+  
+  <!-- Session Settings Summary (collapsible) -->
+  <rect x="20" y="520" width="335" height="60" rx="8" class="card-bg"/>
+  <text x="30" y="540" class="text">Session Settings</text>
+  <text x="315" y="540" class="small-text">▼</text>
+  
+  <text x="30" y="560" class="small-text">30s intervals • Manual mode • Focus: ∞</text>
+  <text x="30" y="575" class="small-text">Started: 14:45 • Stop: After 100 shots</text>
+  
+  <!-- Control Buttons -->
+  <rect x="20" y="595" width="100" height="35" rx="6" class="button-secondary"/>
+  <text x="70" y="617" class="button-text">⏸️ Pause</text>
+  
+  <rect x="137" y="595" width="100" height="35" rx="6" class="button-danger"/>
+  <text x="187" y="617" class="button-text">⏹️ Stop</text>
+  
+  <rect x="255" y="595" width="100" height="35" rx="6" class="button"/>
+  <text x="305" y="617" class="button-text">📊 Details</text>
+  
+  <!-- Quick Actions -->
+  <rect x="20" y="640" width="335" height="45" rx="8" class="card-bg"/>
+  <text x="30" y="660" class="text">Quick Actions</text>
+  
+  <rect x="30" y="665" width="70" height="20" rx="3" class="button-secondary"/>
+  <text x="65" y="678" class="button-text">📸 Manual</text>
+  
+  <rect x="110" y="665" width="70" height="20" rx="3" class="button-secondary"/>
+  <text x="145" y="678" class="button-text">💾 Save Log</text>
+  
+  <rect x="190" y="665" width="70" height="20" rx="3" class="button-secondary"/>
+  <text x="225" y="678" class="button-text">📱 Notify</text>
+  
+  <!-- Navigation breadcrumb -->
+  <text x="20" y="715" class="small-text">🏠 Status > ⏱️ Timelapse > Progress</text>
+  
+  <!-- Live countdown animation indicator -->
+  <rect x="20" y="730" width="335" height="25" rx="4" fill="#e7f3ff" stroke="#007bff"/>
+  <text x="30" y="747" class="small-text">⏱️ Next shot in: 15s</text>
+  <rect x="300" y="735" width="30" height="15" rx="2" fill="#007bff"/>
+  <text x="315" y="745" fill="white" font-size="8" text-anchor="middle">LIVE</text>
+  
+  <!-- Title -->
+  <text x="20" y="780" class="header-text">Timelapse Progress</text>
+  <text x="20" y="795" class="small-text">Real-time progress, stats, activity log, controls</text>
+</svg>

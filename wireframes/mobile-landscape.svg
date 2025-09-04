@@ -1,0 +1,117 @@
+<svg viewBox="0 0 812 375" xmlns="http://www.w3.org/2000/svg">
+  <!-- Define styles -->
+  <defs>
+    <style>
+      .wireframe-bg { fill: #f8f9fa; stroke: #dee2e6; stroke-width: 1; }
+      .header-bg { fill: #e9ecef; stroke: #adb5bd; stroke-width: 1; }
+      .card-bg { fill: white; stroke: #ced4da; stroke-width: 1; }
+      .button { fill: #007bff; stroke: #0056b3; stroke-width: 1; }
+      .button-text { fill: white; font-family: system-ui; font-size: 12px; text-anchor: middle; }
+      .text { fill: #212529; font-family: system-ui; font-size: 14px; }
+      .small-text { fill: #6c757d; font-family: system-ui; font-size: 11px; }
+      .header-text { fill: #212529; font-family: system-ui; font-size: 16px; font-weight: bold; }
+      .status-dot-connected { fill: #28a745; r: 4; }
+      .status-dot-warning { fill: #ffc107; r: 4; }
+      .status-dot-error { fill: #dc3545; r: 4; }
+    </style>
+  </defs>
+
+  <!-- Phone frame (landscape) -->
+  <rect x="0" y="0" width="812" height="375" rx="20" class="wireframe-bg"/>
+  
+  <!-- Side Header Area (right side in landscape) -->
+  <rect x="650" y="10" width="152" height="355" rx="8" class="header-bg"/>
+  
+  <!-- App title (vertical text simulation) -->
+  <text x="665" y="30" class="header-text">Camera Control</text>
+  
+  <!-- Status indicators (stacked vertically) -->
+  <text x="665" y="55" class="small-text">Controller</text>
+  <circle cx="680" cy="65" class="status-dot-connected"/>
+  <text x="690" y="70" class="small-text">Online</text>
+  
+  <text x="665" y="90" class="small-text">Camera</text>
+  <text x="665" y="105" class="small-text">📷 Connected</text>
+  <text x="665" y="120" class="small-text">🔋 75%</text>
+  <text x="665" y="135" class="small-text">💾 8.2GB</text>
+  <text x="665" y="150" class="small-text">⏱️ Ready</text>
+  
+  <!-- Function Menu (stacked buttons) -->
+  <rect x="665" y="170" width="125" height="25" rx="4" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="727" y="186" class="small-text" text-anchor="middle">✓ Status</text>
+  
+  <rect x="665" y="200" width="125" height="25" rx="4" fill="transparent" stroke="#ced4da"/>
+  <text x="727" y="216" class="small-text" text-anchor="middle">📷 Camera</text>
+  
+  <rect x="665" y="230" width="125" height="25" rx="4" fill="transparent" stroke="#ced4da"/>
+  <text x="727" y="246" class="small-text" text-anchor="middle">📸 Test Shot</text>
+  
+  <rect x="665" y="260" width="125" height="25" rx="4" fill="transparent" stroke="#ced4da"/>
+  <text x="727" y="276" class="small-text" text-anchor="middle">⏱️ Timelapse</text>
+  
+  <rect x="665" y="290" width="125" height="25" rx="4" fill="transparent" stroke="#ced4da"/>
+  <text x="727" y="306" class="small-text" text-anchor="middle">🔴 Red Light</text>
+  
+  <!-- Function Area - showing Controller Status (wider in landscape) -->
+  <text x="20" y="30" class="header-text">Controller Status</text>
+  
+  <!-- Two-column layout for landscape -->
+  <!-- Left column: Camera Status -->
+  <rect x="20" y="45" width="300" height="150" rx="8" class="card-bg"/>
+  <text x="30" y="65" class="text">Camera Status</text>
+  <circle cx="290" cy="60" class="status-dot-connected"/>
+  
+  <text x="30" y="85" class="small-text">Battery: LP-E17 75%</text>
+  <text x="30" y="100" class="small-text">Storage: 8.2GB / 32GB</text>
+  <text x="30" y="115" class="small-text">Mode: Manual</text>
+  <text x="30" y="130" class="small-text">Settings: 1/30s f/2.8 ISO800</text>
+  <text x="30" y="145" class="small-text">Status: Ready to shoot</text>
+  <text x="30" y="160" class="small-text">Focus: Manual ∞</text>
+  <text x="30" y="175" class="small-text">White Balance: Daylight</text>
+  
+  <!-- Right column: Controller Info -->
+  <rect x="335" y="45" width="300" height="150" rx="8" class="card-bg"/>
+  <text x="345" y="65" class="text">Controller Info</text>
+  
+  <text x="345" y="85" class="small-text">Temperature: 42.1°C</text>
+  <text x="345" y="100" class="small-text">Mode: Access Point</text>
+  <text x="345" y="115" class="small-text">Uptime: 2h 15m</text>
+  <text x="345" y="130" class="small-text">Storage: 12.4GB free</text>
+  <text x="345" y="145" class="small-text">Network: CameraAP_001</text>
+  <text x="345" y="160" class="small-text">IP: 192.168.4.1</text>
+  <text x="345" y="175" class="small-text">Connected devices: 1</text>
+  
+  <!-- Activity Log (full width) -->
+  <rect x="20" y="210" width="615" height="120" rx="8" class="card-bg"/>
+  <text x="30" y="230" class="text">Activity Log</text>
+  
+  <!-- Two columns for log entries in landscape -->
+  <text x="30" y="250" class="small-text">14:32:15 Camera connected successfully</text>
+  <text x="30" y="265" class="small-text">14:31:58 Controller started in AP mode</text>
+  <text x="30" y="280" class="small-text">14:31:45 System boot complete</text>
+  <text x="30" y="295" class="small-text">14:30:12 Intervalometer session completed</text>
+  <text x="30" y="310" class="small-text">14:25:33 Shot #47 captured successfully</text>
+  
+  <text x="330" y="250" class="small-text">14:25:03 Shot #46 captured successfully</text>
+  <text x="330" y="265" class="small-text">14:24:33 Shot #45 captured successfully</text>
+  <text x="330" y="280" class="small-text">14:24:03 Intervalometer started: 30s</text>
+  <text x="330" y="295" class="small-text">14:23:45 Settings validated for timelapse</text>
+  <text x="330" y="310" class="small-text">14:23:30 Manual focus locked at ∞</text>
+  
+  <!-- Action Buttons (horizontal layout) -->
+  <rect x="20" y="340" width="140" height="25" rx="4" class="button"/>
+  <text x="90" y="356" class="button-text">Test Shot</text>
+  
+  <rect x="170" y="340" width="140" height="25" rx="4" class="button"/>
+  <text x="240" y="356" class="button-text">Controller Settings</text>
+  
+  <rect x="320" y="340" width="140" height="25" rx="4" class="button"/>
+  <text x="390" y="356" class="button-text">Validate Camera</text>
+  
+  <rect x="470" y="340" width="140" height="25" rx="4" class="button"/>
+  <text x="540" y="356" class="button-text">View Full Log</text>
+  
+  <!-- Title annotation -->
+  <text x="665" y="345" class="header-text">Mobile Landscape</text>
+  <text x="665" y="358" class="small-text">Side header with</text>
+</svg>

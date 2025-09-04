@@ -1,0 +1,126 @@
+<svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+  <!-- Define styles -->
+  <defs>
+    <style>
+      .wireframe-bg { fill: #f8f9fa; stroke: #dee2e6; stroke-width: 1; }
+      .header-bg { fill: #e9ecef; stroke: #adb5bd; stroke-width: 1; }
+      .card-bg { fill: white; stroke: #ced4da; stroke-width: 1; }
+      .button { fill: #007bff; stroke: #0056b3; stroke-width: 1; }
+      .button-text { fill: white; font-family: system-ui; font-size: 12px; text-anchor: middle; }
+      .text { fill: #212529; font-family: system-ui; font-size: 14px; }
+      .small-text { fill: #6c757d; font-family: system-ui; font-size: 11px; }
+      .header-text { fill: #212529; font-family: system-ui; font-size: 16px; font-weight: bold; }
+      .status-dot-connected { fill: #28a745; r: 4; }
+      .status-dot-warning { fill: #ffc107; r: 4; }
+      .status-dot-error { fill: #dc3545; r: 4; }
+    </style>
+  </defs>
+
+  <!-- Phone frame -->
+  <rect x="0" y="0" width="375" height="812" rx="20" class="wireframe-bg"/>
+  
+  <!-- Header Area (compact) -->
+  <rect x="10" y="10" width="355" height="50" rx="8" class="header-bg"/>
+  <text x="20" y="35" class="header-text">Camera Control</text>
+  
+  <!-- Status indicators in header -->
+  <!-- Controller status -->
+  <circle cx="280" cy="35" class="status-dot-connected"/>
+  <text x="295" y="30" class="small-text">Controller</text>
+  <text x="295" y="42" class="small-text">Online</text>
+  
+  <!-- Camera status -->
+  <circle cx="280" cy="35" class="status-dot-connected"/>
+  <text x="320" y="28" class="small-text">📷</text>
+  <text x="335" y="28" class="small-text">🔋75%</text>
+  <text x="335" y="40" class="small-text">💾8GB</text>
+  
+  <!-- Function Menu (hamburger) -->
+  <rect x="340" y="25" width="20" height="20" rx="2" fill="none" stroke="#6c757d" stroke-width="1"/>
+  <line x1="345" y1="30" x2="355" y2="30" stroke="#6c757d" stroke-width="1"/>
+  <line x1="345" y1="35" x2="355" y2="35" stroke="#6c757d" stroke-width="1"/>
+  <line x1="345" y1="40" x2="355" y2="40" stroke="#6c757d" stroke-width="1"/>
+  
+  <!-- Function Area - showing Controller Status by default -->
+  <text x="20" y="85" class="header-text">Controller Status</text>
+  
+  <!-- Camera Status Card -->
+  <rect x="20" y="100" width="335" height="120" rx="8" class="card-bg"/>
+  <text x="30" y="120" class="text">Camera Status</text>
+  <circle cx="310" cy="115" class="status-dot-connected"/>
+  
+  <text x="30" y="140" class="small-text">Battery:</text>
+  <text x="300" y="140" class="small-text">LP-E17 75%</text>
+  
+  <text x="30" y="155" class="small-text">Storage:</text>
+  <text x="280" y="155" class="small-text">8.2GB / 32GB</text>
+  
+  <text x="30" y="170" class="small-text">Mode:</text>
+  <text x="300" y="170" class="small-text">Manual</text>
+  
+  <text x="30" y="185" class="small-text">Settings:</text>
+  <text x="260" y="185" class="small-text">1/30s f/2.8 ISO800</text>
+  
+  <text x="30" y="205" class="small-text">Status:</text>
+  <text x="290" y="205" class="small-text">Ready to shoot</text>
+  
+  <!-- Controller Info Card -->
+  <rect x="20" y="235" width="335" height="100" rx="8" class="card-bg"/>
+  <text x="30" y="255" class="text">Controller Info</text>
+  
+  <text x="30" y="275" class="small-text">Temperature:</text>
+  <text x="300" y="275" class="small-text">42.1°C</text>
+  
+  <text x="30" y="290" class="small-text">Mode:</text>
+  <text x="290" y="290" class="small-text">Access Point</text>
+  
+  <text x="30" y="305" class="small-text">Uptime:</text>
+  <text x="300" y="305" class="small-text">2h 15m</text>
+  
+  <text x="30" y="320" class="small-text">Storage:</text>
+  <text x="280" y="320" class="small-text">12.4GB free</text>
+  
+  <!-- Activity Log -->
+  <rect x="20" y="350" width="335" height="180" rx="8" class="card-bg"/>
+  <text x="30" y="370" class="text">Activity Log</text>
+  
+  <text x="30" y="390" class="small-text">14:32:15 Camera connected successfully</text>
+  <text x="30" y="405" class="small-text">14:31:58 Controller started in AP mode</text>
+  <text x="30" y="420" class="small-text">14:31:45 System boot complete</text>
+  <text x="30" y="435" class="small-text">14:30:12 Intervalometer session completed</text>
+  <text x="30" y="450" class="small-text">14:25:33 Shot #47 captured successfully</text>
+  <text x="30" y="465" class="small-text">14:25:03 Shot #46 captured successfully</text>
+  <text x="30" y="480" class="small-text">14:24:33 Shot #45 captured successfully</text>
+  <text x="30" y="495" class="small-text">14:24:03 Intervalometer started: 30s intervals</text>
+  <text x="30" y="510" class="small-text">14:23:45 Settings validated for timelapse</text>
+  
+  <!-- Action Buttons -->
+  <rect x="20" y="550" width="160" height="40" rx="6" class="button"/>
+  <text x="100" y="575" class="button-text">Test Shot</text>
+  
+  <rect x="195" y="550" width="160" height="40" rx="6" class="button"/>
+  <text x="275" y="575" class="button-text">Controller Settings</text>
+  
+  <!-- Function Menu Dropdown (shown overlaid) -->
+  <rect x="220" y="60" width="140" height="200" rx="8" fill="white" stroke="#ced4da" stroke-width="1" opacity="0.95"/>
+  <text x="230" y="80" class="text">Function Menu</text>
+  
+  <rect x="225" y="90" width="130" height="25" rx="4" fill="#f8f9fa"/>
+  <text x="235" y="107" class="small-text">✓ Controller Status</text>
+  
+  <rect x="225" y="120" width="130" height="25" rx="4" fill="transparent"/>
+  <text x="235" y="137" class="small-text">📷 Camera Set Up</text>
+  
+  <rect x="225" y="150" width="130" height="25" rx="4" fill="transparent"/>
+  <text x="235" y="167" class="small-text">📸 Test Shot</text>
+  
+  <rect x="225" y="180" width="130" height="25" rx="4" fill="transparent"/>
+  <text x="235" y="197" class="small-text">⏱️ Timelapse</text>
+  
+  <rect x="225" y="210" width="130" height="25" rx="4" fill="transparent"/>
+  <text x="235" y="227" class="small-text">🔴 Red Light</text>
+  
+  <!-- Title -->
+  <text x="20" y="780" class="header-text">Mobile Portrait View</text>
+  <text x="20" y="795" class="small-text">Header at top, function menu dropdown, status indicators compact</text>
+</svg>
