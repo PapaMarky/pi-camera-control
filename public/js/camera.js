@@ -63,7 +63,6 @@ class CameraManager {
     document.getElementById('manual-reconnect-btn').addEventListener('click', () => {
       this.manualReconnect();
     });
-
     // Radio button logic for stop conditions
     this.setupStopConditionRadios();
   }
@@ -596,7 +595,6 @@ class CameraManager {
       this.setButtonLoading('manual-reconnect-btn', false);
     }
   }
-
   async refreshIntervalometerStatus() {
     try {
       const response = await fetch('/api/intervalometer/status');

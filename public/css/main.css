@@ -346,7 +346,6 @@ body {
   cursor: not-allowed;
   transform: none;
 }
-
 /* Form inputs */
 .input-group {
   display: flex;
