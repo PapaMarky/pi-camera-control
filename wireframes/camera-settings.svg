@@ -1,0 +1,184 @@
+<svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+  <!-- Define styles -->
+  <defs>
+    <style>
+      .wireframe-bg { fill: #f8f9fa; stroke: #dee2e6; stroke-width: 1; }
+      .header-bg { fill: #e9ecef; stroke: #adb5bd; stroke-width: 1; }
+      .card-bg { fill: white; stroke: #ced4da; stroke-width: 1; }
+      .section-header { fill: #f8f9fa; stroke: #ced4da; stroke-width: 1; }
+      .button { fill: #007bff; stroke: #0056b3; stroke-width: 1; }
+      .button-secondary { fill: #6c757d; stroke: #545b62; stroke-width: 1; }
+      .button-success { fill: #28a745; stroke: #1e7e34; stroke-width: 1; }
+      .button-text { fill: white; font-family: system-ui; font-size: 12px; text-anchor: middle; }
+      .text { fill: #212529; font-family: system-ui; font-size: 14px; }
+      .small-text { fill: #6c757d; font-family: system-ui; font-size: 11px; }
+      .header-text { fill: #212529; font-family: system-ui; font-size: 16px; font-weight: bold; }
+      .section-text { fill: #495057; font-family: system-ui; font-size: 13px; font-weight: 600; }
+      .status-dot-connected { fill: #28a745; r: 4; }
+      .input-bg { fill: white; stroke: #ced4da; stroke-width: 1; }
+      .dropdown-bg { fill: white; stroke: #007bff; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <!-- Phone frame -->
+  <rect x="0" y="0" width="375" height="812" rx="20" class="wireframe-bg"/>
+  
+  <!-- Header Area -->
+  <rect x="10" y="10" width="355" height="50" rx="8" class="header-bg"/>
+  <text x="20" y="35" class="header-text">Camera Control</text>
+  
+  <!-- Status indicators -->
+  <circle cx="280" cy="35" class="status-dot-connected"/>
+  <text x="295" y="28" class="small-text">📷🔋💾</text>
+  <text x="295" y="42" class="small-text">⚙️ Setup</text>
+  
+  <!-- Function Menu -->
+  <rect x="340" y="25" width="20" height="20" rx="2" fill="none" stroke="#6c757d" stroke-width="1"/>
+  
+  <!-- Function Area - Camera Settings -->
+  <text x="20" y="85" class="header-text">Camera Setup</text>
+  
+  <!-- Configuration presets bar -->
+  <rect x="20" y="95" width="335" height="35" rx="6" class="section-header"/>
+  <text x="30" y="110" class="small-text">Configuration Presets</text>
+  <rect x="30" y="115" width="50" height="20" rx="3" class="button"/>
+  <text x="55" y="128" class="button-text">Load</text>
+  
+  <rect x="85" y="115" width="50" height="20" rx="3" class="button-secondary"/>
+  <text x="110" y="128" class="button-text">Save</text>
+  
+  <rect x="140" y="115" width="50" height="20" rx="3" class="button-secondary"/>
+  <text x="165" y="128" class="button-text">Reset</text>
+  
+  <!-- Scrollable settings container -->
+  <rect x="20" y="140" width="335" height="520" rx="8" fill="white" stroke="#ced4da"/>
+  
+  <!-- Exposure Settings Section -->
+  <rect x="30" y="150" width="315" height="25" rx="4" class="section-header"/>
+  <text x="35" y="167" class="section-text">📸 Exposure Settings</text>
+  <text x="335" y="167" class="small-text">▼</text>
+  
+  <!-- Exposure controls grid -->
+  <text x="35" y="190" class="small-text">Shooting Mode</text>
+  <rect x="35" y="195" width="140" height="25" rx="4" class="dropdown-bg"/>
+  <text x="45" y="210" class="text">Manual</text>
+  <text x="165" y="210" class="small-text">▼</text>
+  
+  <text x="185" y="190" class="small-text">Metering</text>
+  <rect x="185" y="195" width="150" height="25" rx="4" class="input-bg"/>
+  <text x="195" y="210" class="text">Evaluative</text>
+  <text x="325" y="210" class="small-text">▼</text>
+  
+  <text x="35" y="235" class="small-text">Shutter Speed</text>
+  <rect x="35" y="240" width="90" height="25" rx="4" class="dropdown-bg"/>
+  <text x="45" y="255" class="text">1/30</text>
+  <text x="115" y="255" class="small-text">▼</text>
+  
+  <text x="135" y="235" class="small-text">Aperture</text>
+  <rect x="135" y="240" width="70" height="25" rx="4" class="dropdown-bg"/>
+  <text x="145" y="255" class="text">f/2.8</text>
+  <text x="195" y="255" class="small-text">▼</text>
+  
+  <text x="215" y="235" class="small-text">ISO</text>
+  <rect x="215" y="240" width="120" height="25" rx="4" class="dropdown-bg"/>
+  <text x="225" y="255" class="text">800</text>
+  <text x="325" y="255" class="small-text">▼</text>
+  
+  <!-- Focus Settings Section -->
+  <rect x="30" y="280" width="315" height="25" rx="4" class="section-header"/>
+  <text x="35" y="297" class="section-text">🎯 Focus Settings</text>
+  <text x="335" y="297" class="small-text">▼</text>
+  
+  <text x="35" y="320" class="small-text">Focus Mode</text>
+  <rect x="35" y="325" width="140" height="25" rx="4" class="dropdown-bg"/>
+  <text x="45" y="340" class="text">Manual Focus</text>
+  <text x="165" y="340" class="small-text">▼</text>
+  
+  <text x="185" y="320" class="small-text">Focus Distance</text>
+  <rect x="185" y="325" width="150" height="25" rx="4" class="dropdown-bg"/>
+  <text x="195" y="340" class="text">Infinity</text>
+  <text x="325" y="340" class="small-text">▼</text>
+  
+  <!-- Quality Settings Section -->
+  <rect x="30" y="365" width="315" height="25" rx="4" class="section-header"/>
+  <text x="35" y="382" class="section-text">💾 Image Quality</text>
+  <text x="335" y="382" class="small-text">▼</text>
+  
+  <text x="35" y="405" class="small-text">Image Format</text>
+  <rect x="35" y="410" width="90" height="25" rx="4" class="dropdown-bg"/>
+  <text x="45" y="425" class="text">RAW</text>
+  <text x="115" y="425" class="small-text">▼</text>
+  
+  <text x="135" y="405" class="small-text">Quality</text>
+  <rect x="135" y="410" width="70" height="25" rx="4" class="input-bg"/>
+  <text x="145" y="425" class="text">Fine</text>
+  <text x="195" y="425" class="small-text">▼</text>
+  
+  <text x="215" y="405" class="small-text">Size</text>
+  <rect x="215" y="410" width="120" height="25" rx="4" class="input-bg"/>
+  <text x="225" y="425" class="text">Large (24MP)</text>
+  
+  <!-- White Balance Section -->
+  <rect x="30" y="450" width="315" height="25" rx="4" class="section-header"/>
+  <text x="35" y="467" class="section-text">🌈 White Balance</text>
+  <text x="335" y="467" class="small-text">▼</text>
+  
+  <text x="35" y="490" class="small-text">WB Mode</text>
+  <rect x="35" y="495" width="140" height="25" rx="4" class="dropdown-bg"/>
+  <text x="45" y="510" class="text">Daylight</text>
+  <text x="165" y="510" class="small-text">▼</text>
+  
+  <text x="185" y="490" class="small-text">Fine Tune</text>
+  <rect x="185" y="495" width="150" height="25" rx="4" class="input-bg"/>
+  <text x="195" y="510" class="text">M2, G1</text>
+  
+  <!-- Advanced Settings Section -->
+  <rect x="30" y="535" width="315" height="25" rx="4" class="section-header"/>
+  <text x="35" y="552" class="section-text">⚡ Advanced</text>
+  <text x="335" y="552" class="small-text">▼</text>
+  
+  <text x="35" y="575" class="small-text">Drive Mode</text>
+  <rect x="35" y="580" width="90" height="25" rx="4" class="input-bg"/>
+  <text x="45" y="595" class="text">Single</text>
+  <text x="115" y="595" class="small-text">▼</text>
+  
+  <text x="135" y="575" class="small-text">Mirror Lock</text>
+  <rect x="135" y="580" width="70" height="25" rx="4" class="input-bg"/>
+  <text x="145" y="595" class="text">On</text>
+  
+  <text x="215" y="575" class="small-text">Timer</text>
+  <rect x="215" y="580" width="120" height="25" rx="4" class="input-bg"/>
+  <text x="225" y="595" class="text">Off</text>
+  <text x="325" y="595" class="small-text">▼</text>
+  
+  <text x="35" y="620" class="small-text">Long Exposure NR</text>
+  <rect x="35" y="625" width="140" height="25" rx="4" class="input-bg"/>
+  <text x="45" y="640" class="text">Auto</text>
+  <text x="165" y="640" class="small-text">▼</text>
+  
+  <text x="185" y="620" class="small-text">High ISO NR</text>
+  <rect x="185" y="625" width="150" height="25" rx="4" class="input-bg"/>
+  <text x="195" y="640" class="text">Standard</text>
+  <text x="325" y="640" class="small-text">▼</text>
+  
+  <!-- Action Buttons -->
+  <rect x="20" y="675" width="100" height="35" rx="6" class="button-secondary"/>
+  <text x="70" y="697" class="button-text">📸 Test Shot</text>
+  
+  <rect x="137" y="675" width="100" height="35" rx="6" class="button"/>
+  <text x="187" y="697" class="button-text">✓ Apply</text>
+  
+  <rect x="255" y="675" width="100" height="35" rx="6" class="button-success"/>
+  <text x="305" y="697" class="button-text">💾 Save</text>
+  
+  <!-- Live preview/status -->
+  <rect x="20" y="720" width="335" height="40" rx="6" fill="#e7f3ff" stroke="#007bff"/>
+  <text x="30" y="735" class="small-text">Preview Settings</text>
+  <text x="30" y="750" class="small-text">Exposure: 1/30s f/2.8 ISO800 • Manual Focus ∞ • 24MB/shot estimated</text>
+  
+  <!-- Navigation breadcrumb -->
+  <text x="20" y="780" class="small-text">🏠 Status > 📷 Camera Setup</text>
+  
+  <!-- Title -->
+  <text x="20" y="800" class="header-text">Camera Settings View</text>
+</svg>

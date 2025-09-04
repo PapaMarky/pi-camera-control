@@ -60,6 +60,9 @@ export class IntervalometerSession extends EventEmitter {
       currentShot: 0,
       errors: []
     };
+
+    // Pause camera info polling during intervalometer session to avoid interference
+    this.cameraController.pauseInfoPolling();
     
     logger.info('Starting intervalometer session', {
       interval: this.options.interval,
@@ -95,6 +98,9 @@ export class IntervalometerSession extends EventEmitter {
     
     this.state = 'stopped';
     this.stats.endTime = new Date();
+    
+    // Resume camera info polling after intervalometer session ends
+    this.cameraController.resumeInfoPolling();
     
     this.emit('stopped', { stats: { ...this.stats } });
     
@@ -239,6 +245,9 @@ export class IntervalometerSession extends EventEmitter {
       clearTimeout(this.intervalId);
       this.intervalId = null;
     }
+    
+    // Resume camera info polling after intervalometer session completes
+    this.cameraController.resumeInfoPolling();
     
     this.emit('completed', {
       reason,

@@ -59,6 +59,10 @@ class CameraManager {
       this.showConnectionDetails();
     });
 
+    // Manual reconnect button
+    document.getElementById('manual-reconnect-btn').addEventListener('click', () => {
+      this.manualReconnect();
+    });
     // Radio button logic for stop conditions
     this.setupStopConditionRadios();
   }
@@ -245,12 +249,6 @@ class CameraManager {
   }
 
   updateCameraStatusDisplay(status) {
-    // Update camera status text
-    const statusText = document.getElementById('camera-status-text');
-    if (statusText) {
-      statusText.textContent = status.connected ? 'Connected' : 'Disconnected';
-    }
-    
     // Update camera IP
     const ipElement = document.getElementById('camera-ip');
     if (ipElement) {
@@ -261,6 +259,27 @@ class CameraManager {
     const statusDot = document.querySelector('.camera-status .status-dot');
     if (statusDot) {
       statusDot.className = `status-dot ${status.connected ? 'connected' : 'disconnected'}`;
+    }
+    
+    // Update camera status text and reconnect button based on connection status
+    const statusText = document.getElementById('camera-status-text');
+    const reconnectRow = document.getElementById('reconnect-row');
+    
+    if (status.connected) {
+      // Connected: hide reconnect button, show connected status
+      statusText.textContent = 'Connected';
+      reconnectRow.style.display = 'none';
+    } else {
+      // Disconnected: always show reconnect button with appropriate status
+      reconnectRow.style.display = 'flex';
+      
+      if (status.reconnectAttempts >= 22) {
+        statusText.textContent = 'Connection Failed';
+      } else if (status.reconnectAttempts > 0) {
+        statusText.textContent = `Reconnecting... (${status.reconnectAttempts}/22)`;
+      } else {
+        statusText.textContent = 'Disconnected';
+      }
     }
     
     // Get camera settings and battery when connected
@@ -548,6 +567,34 @@ class CameraManager {
     }
   }
 
+  async manualReconnect() {
+    this.log('Attempting manual camera reconnect...', 'info');
+    this.setButtonLoading('manual-reconnect-btn', true);
+    
+    // Hide the reconnect button during attempt
+    const reconnectRow = document.getElementById('reconnect-row');
+    const statusText = document.getElementById('camera-status-text');
+    statusText.textContent = 'Reconnecting...';
+
+    try {
+      const response = await fetch('/api/camera/reconnect', { method: 'POST' });
+      const result = await response.json();
+      
+      if (result.success) {
+        this.log('Manual reconnect successful', 'success');
+        reconnectRow.style.display = 'none';
+        // Status will be updated via WebSocket or next status check
+      } else {
+        this.log(`Manual reconnect failed: ${result.error || 'Unknown error'}`, 'error');
+        statusText.textContent = 'Connection Failed';
+      }
+    } catch (error) {
+      this.log(`Manual reconnect failed: ${error.message}`, 'error');
+      statusText.textContent = 'Connection Failed';
+    } finally {
+      this.setButtonLoading('manual-reconnect-btn', false);
+    }
+  }
   async refreshIntervalometerStatus() {
     try {
       const response = await fetch('/api/intervalometer/status');
@@ -762,7 +809,8 @@ class CameraManager {
         'get-settings-btn': '⚙️',
         'validate-interval-btn': '✓',
         'start-intervalometer-btn': '▶️',
-        'stop-intervalometer-btn': '⏹️'
+        'stop-intervalometer-btn': '⏹️',
+        'manual-reconnect-btn': '🔄'
       };
       icon.textContent = iconMap[buttonId] || '•';
     }

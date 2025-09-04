@@ -65,6 +65,23 @@ export function createApiRouter(cameraController, powerManager, server) {
     }
   });
 
+  // Manual reconnect trigger
+  router.post('/camera/reconnect', async (req, res) => {
+    try {
+      logger.info('Manual reconnect requested');
+      const result = await cameraController.manualReconnect();
+      
+      if (result) {
+        res.json({ success: true, message: 'Reconnection successful' });
+      } else {
+        res.json({ success: false, error: 'Reconnection failed' });
+      }
+    } catch (error) {
+      logger.error('Failed to reconnect to camera:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // Validate intervalometer settings
   router.post('/camera/validate-interval', async (req, res) => {
     try {

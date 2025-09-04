@@ -1,0 +1,152 @@
+<svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+  <!-- Define styles -->
+  <defs>
+    <style>
+      .wireframe-bg { fill: #f8f9fa; stroke: #dee2e6; stroke-width: 1; }
+      .header-bg { fill: #e9ecef; stroke: #adb5bd; stroke-width: 1; }
+      .card-bg { fill: white; stroke: #ced4da; stroke-width: 1; }
+      .button { fill: #007bff; stroke: #0056b3; stroke-width: 1; }
+      .button-secondary { fill: #6c757d; stroke: #545b62; stroke-width: 1; }
+      .button-success { fill: #28a745; stroke: #1e7e34; stroke-width: 1; }
+      .button-text { fill: white; font-family: system-ui; font-size: 12px; text-anchor: middle; }
+      .text { fill: #212529; font-family: system-ui; font-size: 14px; }
+      .small-text { fill: #6c757d; font-family: system-ui; font-size: 11px; }
+      .header-text { fill: #212529; font-family: system-ui; font-size: 16px; font-weight: bold; }
+      .status-dot-connected { fill: #28a745; r: 4; }
+      .input-bg { fill: white; stroke: #ced4da; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <!-- Phone frame -->
+  <rect x="0" y="0" width="375" height="812" rx="20" class="wireframe-bg"/>
+  
+  <!-- Header Area -->
+  <rect x="10" y="10" width="355" height="50" rx="8" class="header-bg"/>
+  <text x="20" y="35" class="header-text">Camera Control</text>
+  
+  <!-- Status indicators -->
+  <circle cx="280" cy="35" class="status-dot-connected"/>
+  <text x="295" y="28" class="small-text">📷🔋💾</text>
+  <text x="295" y="42" class="small-text">⏱️ Setup</text>
+  
+  <!-- Function Menu -->
+  <rect x="340" y="25" width="20" height="20" rx="2" fill="none" stroke="#6c757d" stroke-width="1"/>
+  <line x1="345" y1="30" x2="355" y2="30" stroke="#6c757d" stroke-width="1"/>
+  <line x1="345" y1="35" x2="355" y2="35" stroke="#6c757d" stroke-width="1"/>
+  <line x1="345" y1="40" x2="355" y2="40" stroke="#6c757d" stroke-width="1"/>
+  
+  <!-- Function Area - Intervalometer Setup -->
+  <text x="20" y="85" class="header-text">Intervalometer Setup</text>
+  
+  <!-- Basic Settings Card -->
+  <rect x="20" y="100" width="335" height="160" rx="8" class="card-bg"/>
+  <text x="30" y="120" class="text">Timing Settings</text>
+  
+  <!-- Interval input -->
+  <text x="30" y="140" class="small-text">Interval (seconds)</text>
+  <rect x="30" y="145" width="100" height="30" rx="4" class="input-bg"/>
+  <text x="75" y="165" class="text">30</text>
+  
+  <!-- Total shots input -->
+  <text x="150" y="140" class="small-text">Total Shots</text>
+  <rect x="150" y="145" width="100" height="30" rx="4" class="input-bg"/>
+  <text x="195" y="165" class="text">100</text>
+  
+  <!-- Duration estimate -->
+  <text x="270" y="140" class="small-text">Duration</text>
+  <rect x="270" y="145" width="75" height="30" rx="4" fill="#e7f3ff" stroke="#007bff"/>
+  <text x="307" y="165" class="text">50m</text>
+  
+  <!-- Stop conditions -->
+  <text x="30" y="195" class="small-text">Stop Condition</text>
+  
+  <rect x="30" y="200" width="315" height="25" rx="4" fill="#f8f9fa" stroke="#ced4da"/>
+  <circle cx="40" cy="212" r="6" fill="white" stroke="#ced4da" stroke-width="1"/>
+  <circle cx="40" cy="212" r="3" fill="#007bff"/>
+  <text x="55" y="217" class="small-text">After specified number of shots</text>
+  
+  <rect x="30" y="230" width="315" height="25" rx="4" fill="transparent" stroke="#ced4da"/>
+  <circle cx="40" cy="242" r="6" fill="white" stroke="#ced4da" stroke-width="1"/>
+  <text x="55" y="247" class="small-text">At specific time: </text>
+  <rect x="150" y="235" width="60" height="20" rx="3" class="input-bg"/>
+  <text x="175" y="248" class="small-text">22:00</text>
+  
+  <!-- Advanced Settings Card -->
+  <rect x="20" y="275" width="335" height="120" rx="8" class="card-bg"/>
+  <text x="30" y="295" class="text">Advanced Settings</text>
+  
+  <!-- Validation settings -->
+  <text x="30" y="315" class="small-text">Pre-flight Validation</text>
+  
+  <rect x="30" y="320" width="15" height="15" rx="2" fill="#007bff" stroke="#0056b3"/>
+  <text x="18" y="332" fill="white" font-size="10">✓</text>
+  <text x="50" y="332" class="small-text">Validate camera settings</text>
+  
+  <rect x="30" y="340" width="15" height="15" rx="2" fill="#007bff" stroke="#0056b3"/>
+  <text x="18" y="352" fill="white" font-size="10">✓</text>
+  <text x="50" y="352" class="small-text">Check storage space</text>
+  
+  <rect x="30" y="360" width="15" height="15" rx="2" fill="white" stroke="#ced4da"/>
+  <text x="50" y="372" class="small-text">Send test notification</text>
+  
+  <!-- Error handling -->
+  <text x="190" y="315" class="small-text">Error Handling</text>
+  
+  <rect x="190" y="320" width="15" height="15" rx="2" fill="#007bff" stroke="#0056b3"/>
+  <text x="178" y="332" fill="white" font-size="10">✓</text>
+  <text x="210" y="332" class="small-text">Continue on error</text>
+  
+  <rect x="190" y="340" width="15" height="15" rx="2" fill="white" stroke="#ced4da"/>
+  <text x="210" y="352" class="small-text">Stop on 3 failures</text>
+  
+  <rect x="190" y="360" width="15" height="15" rx="2" fill="#white" stroke="#ced4da"/>
+  <text x="210" y="372" class="small-text">Email notifications</text>
+  
+  <!-- Current Settings Summary -->
+  <rect x="20" y="410" width="335" height="100" rx="8" class="card-bg"/>
+  <text x="30" y="430" class="text">Setup Summary</text>
+  
+  <text x="30" y="450" class="small-text">• 100 shots every 30 seconds</text>
+  <text x="30" y="465" class="small-text">• Estimated duration: 50 minutes</text>
+  <text x="30" y="480" class="small-text">• Storage required: ~2.4GB (24MB/shot)</text>
+  <text x="30" y="495" class="small-text">• Stop condition: After 100 shots</text>
+  
+  <!-- Validation Status -->
+  <rect x="20" y="525" width="335" height="60" rx="8" class="card-bg"/>
+  <text x="30" y="545" class="text">Pre-flight Check</text>
+  
+  <circle cx="40" cy="560" r="4" fill="#28a745"/>
+  <text x="50" y="565" class="small-text">Camera ready: Manual mode, focus ∞</text>
+  <circle cx="40" cy="575" r="4" fill="#28a745"/>
+  <text x="50" y="580" class="small-text">Storage: 8.2GB free (sufficient)</text>
+  
+  <!-- Action Buttons -->
+  <rect x="20" y="600" width="160" height="40" rx="6" class="button-secondary"/>
+  <text x="100" y="625" class="button-text">✓ Validate Settings</text>
+  
+  <rect x="195" y="600" width="160" height="40" rx="6" class="button-success"/>
+  <text x="275" y="625" class="button-text">▶️ Start Timelapse</text>
+  
+  <!-- Quick presets -->
+  <rect x="20" y="650" width="335" height="50" rx="8" class="card-bg"/>
+  <text x="30" y="670" class="text">Quick Presets</text>
+  
+  <rect x="30" y="675" width="60" height="25" rx="3" class="button-secondary"/>
+  <text x="60" y="691" class="button-text">Sunset</text>
+  
+  <rect x="95" y="675" width="60" height="25" rx="3" class="button-secondary"/>
+  <text x="125" y="691" class="button-text">Stars</text>
+  
+  <rect x="160" y="675" width="60" height="25" rx="3" class="button-secondary"/>
+  <text x="190" y="691" class="button-text">Clouds</text>
+  
+  <rect x="225" y="675" width="60" height="25" rx="3" class="button-secondary"/>
+  <text x="255" y="691" class="button-text">Custom</text>
+  
+  <!-- Navigation breadcrumb -->
+  <text x="20" y="730" class="small-text">🏠 Status > ⏱️ Timelapse > Setup</text>
+  
+  <!-- Title -->
+  <text x="20" y="780" class="header-text">Timelapse Setup</text>
+  <text x="20" y="795" class="small-text">Timing, validation, presets, duration estimation</text>
+</svg>

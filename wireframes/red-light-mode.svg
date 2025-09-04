@@ -1,0 +1,88 @@
+<svg viewBox="0 0 375 812" xmlns="http://www.w3.org/2000/svg">
+  <!-- Define styles -->
+  <defs>
+    <style>
+      .wireframe-bg { fill: #000000; stroke: none; }
+      .red-light-bg { fill: #660000; stroke: none; }
+      .red-light-bright { fill: #cc0000; stroke: none; }
+      .red-light-text { fill: #ff6666; font-family: system-ui; font-size: 14px; text-anchor: middle; }
+      .red-light-small { fill: #cc6666; font-family: system-ui; font-size: 11px; text-anchor: middle; }
+      .slider-track { fill: #330000; stroke: #660000; stroke-width: 1; }
+      .slider-thumb { fill: #ff0000; stroke: #cc0000; stroke-width: 1; }
+      .button-red { fill: #990000; stroke: #cc0000; stroke-width: 1; }
+      .button-text-red { fill: #ffcccc; font-family: system-ui; font-size: 12px; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <!-- Phone frame (black for red light mode) -->
+  <rect x="0" y="0" width="375" height="812" rx="20" class="wireframe-bg"/>
+  
+  <!-- Minimal header (very dim) -->
+  <rect x="10" y="10" width="355" height="40" rx="8" fill="#220000"/>
+  <text x="30" y="35" fill="#660000" font-family="system-ui" font-size="14px">Red Light Mode</text>
+  
+  <!-- Exit button (top right) -->
+  <rect x="320" y="20" width="30" height="20" rx="4" class="button-red"/>
+  <text x="335" y="33" class="button-text-red">✕</text>
+  
+  <!-- Main red light area (large central area) -->
+  <rect x="20" y="70" width="335" height="450" rx="20" class="red-light-bg"/>
+  
+  <!-- Optional dim content in red area -->
+  <text x="187" y="150" class="red-light-small">Night Vision Friendly</text>
+  <text x="187" y="170" class="red-light-small">Illumination</text>
+  
+  <!-- Current time display (dim) -->
+  <text x="187" y="300" fill="#ff3333" font-family="system-ui" font-size="48px" font-weight="bold" text-anchor="middle">23:42</text>
+  <text x="187" y="330" class="red-light-small">Local Time</text>
+  
+  <!-- Brightness control -->
+  <rect x="50" y="540" width="275" height="60" rx="8" fill="#110000"/>
+  <text x="187" y="560" class="red-light-text">Brightness</text>
+  
+  <!-- Slider track -->
+  <rect x="70" y="575" width="235" height="8" rx="4" class="slider-track"/>
+  
+  <!-- Slider fill (showing ~60% brightness) -->
+  <rect x="70" y="575" width="141" rx="4" class="red-light-bright"/>
+  
+  <!-- Slider thumb -->
+  <circle cx="211" cy="579" r="12" class="slider-thumb"/>
+  
+  <!-- Brightness percentage -->
+  <text x="187" y="595" class="red-light-small">60%</text>
+  
+  <!-- Control buttons (minimal, dim) -->
+  <rect x="50" y="620" width="80" height="30" rx="6" class="button-red"/>
+  <text x="90" y="640" class="button-text-red">📱 Apps</text>
+  
+  <rect x="145" y="620" width="85" height="30" rx="6" class="button-red"/>
+  <text x="187" y="640" class="button-text-red">📷 Camera</text>
+  
+  <rect x="245" y="620" width="80" height="30" rx="6" class="button-red"/>
+  <text x="285" y="640" class="button-text-red">⚙️ Menu</text>
+  
+  <!-- Status information (very minimal) -->
+  <rect x="50" y="670" width="275" height="50" rx="6" fill="#110000"/>
+  <text x="187" y="690" class="red-light-small">Controller Status</text>
+  <text x="187" y="705" class="red-light-small">Connected • Battery: 75% • Temp: 42°C</text>
+  
+  <!-- Auto-dim timer -->
+  <rect x="50" y="730" width="275" height="35" rx="6" fill="#110000"/>
+  <text x="187" y="750" class="red-light-small">Auto-dim in 4m 32s</text>
+  
+  <!-- Tap zones indicator (very subtle) -->
+  <circle cx="60" cy="400" r="15" fill="none" stroke="#330000" stroke-width="1" opacity="0.5"/>
+  <text x="60" y="405" fill="#330000" font-size="8" text-anchor="middle">TAP</text>
+  <text x="60" y="430" class="red-light-small">Dimmer</text>
+  
+  <circle cx="315" cy="400" r="15" fill="none" stroke="#330000" stroke-width="1" opacity="0.5"/>
+  <text x="315" y="405" fill="#330000" font-size="8" text-anchor="middle">TAP</text>
+  <text x="315" y="430" class="red-light-small">Brighter</text>
+  
+  <!-- Double tap to exit hint -->
+  <text x="187" y="785" fill="#440000" font-family="system-ui" font-size="10px" text-anchor="middle">Double tap anywhere to exit</text>
+  
+  <!-- Title annotation -->
+  <text x="187" y="800" fill="#440000" font-family="system-ui" font-size="12px" font-weight="bold" text-anchor="middle">Red Light Mode</text>
+</svg>
