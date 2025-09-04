@@ -19,14 +19,32 @@
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <h1 class="app-title">Camera Control</h1>
+                
+                <!-- Status Indicators -->
+                <div class="header-status">
+                    <div class="status-indicator" id="controller-status" title="Controller Status">
+                        <span class="status-icon">🎛️</span>
+                    </div>
+                    <div class="status-indicator" id="camera-status-header" title="Camera Status">
+                        <span class="status-icon">📷</span>
+                    </div>
+                    <div class="status-indicator" id="battery-status-header" title="Camera Battery">
+                        <span class="status-icon">🔋</span>
+                        <span class="status-text" id="battery-level-header">-</span>
+                    </div>
+                    <div class="status-indicator" id="storage-status-header" title="Camera Storage">
+                        <span class="status-icon">💾</span>
+                        <span class="status-text" id="storage-level-header">-</span>
+                    </div>
+                    <div class="status-indicator" id="timer-status-header" title="Intervalometer Status">
+                        <span class="status-icon">⏱️</span>
+                    </div>
+                </div>
+                
+                <!-- Header Controls -->
                 <div class="header-controls">
-                    <button id="theme-toggle" class="icon-btn" title="Toggle Theme">
-                        <span class="theme-icon">🌙</span>
-                    </button>
-                    <button id="connection-indicator" class="connection-status" title="Connection Status">
-                        <span class="status-dot"></span>
-                        <span class="status-text">Connecting...</span>
+                    <button id="function-menu" class="icon-btn" title="Function Menu">
+                        <span class="menu-icon">☰</span>
                     </button>
                 </div>
             </div>
@@ -95,7 +113,6 @@
             <!-- Camera Controls -->
             <section class="controls-section">
                 <div class="control-group">
-                    <h3>Camera Control</h3>
                     
                     <div class="button-grid">
                         <button id="take-photo-btn" class="primary-btn" disabled>

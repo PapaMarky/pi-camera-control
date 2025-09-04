@@ -26,11 +26,16 @@ class CameraControlServer {
     this.server = createServer(this.app);
     this.wss = new WebSocketServer({ server: this.server });
     
-    this.cameraController = new CameraController(CAMERA_IP, CAMERA_PORT);
+    // Initialize camera controller with disconnection callback
+    this.cameraController = new CameraController(CAMERA_IP, CAMERA_PORT, (status) => {
+      this.broadcastCameraStatusChange(status);
+    });
     this.powerManager = new PowerManager();
     
     // Shared intervalometer session across WebSocket and REST API
     this.activeIntervalometerSession = null;
+    // Store WebSocket handler for broadcasting
+    this.wsHandler = null;
     
     this.setupMiddleware();
     this.setupRoutes();
@@ -89,10 +94,20 @@ class CameraControlServer {
   }
 
   setupWebSocket() {
-    const wsHandler = createWebSocketHandler(this.cameraController, this.powerManager, this);
-    this.wss.on('connection', wsHandler);
+    this.wsHandler = createWebSocketHandler(this.cameraController, this.powerManager, this);
+    this.wss.on('connection', this.wsHandler);
     
     logger.info('WebSocket server initialized');
+  }
+
+  broadcastCameraStatusChange(status) {
+    if (!this.wsHandler || !this.wsHandler.broadcastStatus) {
+      logger.debug('No WebSocket handler available for broadcasting camera status');
+      return;
+    }
+    
+    logger.info('Broadcasting immediate camera status change to all clients');
+    this.wsHandler.broadcastStatus();
   }
 
   setupErrorHandling() {

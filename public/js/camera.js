@@ -49,10 +49,6 @@ class CameraManager {
       this.stopIntervalometer();
     });
 
-    // Theme toggle
-    document.getElementById('theme-toggle').addEventListener('click', () => {
-      this.toggleTheme();
-    });
 
     // Connection indicator click
     document.getElementById('connection-indicator').addEventListener('click', () => {
@@ -63,6 +59,12 @@ class CameraManager {
     document.getElementById('manual-reconnect-btn').addEventListener('click', () => {
       this.manualReconnect();
     });
+
+    // Function menu button (placeholder for now)
+    document.getElementById('function-menu').addEventListener('click', () => {
+      this.showFunctionMenu();
+    });
+
     // Radio button logic for stop conditions
     this.setupStopConditionRadios();
   }
@@ -94,11 +96,15 @@ class CameraManager {
     wsManager.on('connected', () => {
       this.updateConnectionStatus('connected', 'Connected');
       this.enableControls();
+      // Update header status indicators when controller connection changes
+      this.updateHeaderStatusIndicators(this.status || { connected: false });
     });
 
     wsManager.on('disconnected', () => {
       this.updateConnectionStatus('disconnected', 'Disconnected');
       this.disableControls();
+      // Update header status indicators when controller connection changes
+      this.updateHeaderStatusIndicators(this.status || { connected: false });
     });
 
     wsManager.on('connecting', () => {
@@ -282,6 +288,9 @@ class CameraManager {
       }
     }
     
+    // Update header status indicators
+    this.updateHeaderStatusIndicators(status);
+    
     // Get camera settings and battery when connected
     if (status.connected && !this.settingsRequested) {
       this.settingsRequested = true;
@@ -296,6 +305,70 @@ class CameraManager {
     }
     
     console.log('Camera status display updated:', status);
+  }
+
+  updateHeaderStatusIndicators(status) {
+    // Get all status indicator elements
+    const controllerStatus = document.getElementById('controller-status');
+    const cameraStatus = document.getElementById('camera-status-header');
+    const batteryStatus = document.getElementById('battery-status-header');
+    const storageStatus = document.getElementById('storage-status-header');
+    const timerStatus = document.getElementById('timer-status-header');
+    
+    const controllerConnected = wsManager && wsManager.connected;
+    const cameraConnected = status.connected && !status.reconnectAttempts;
+    const timerRunning = this.intervalometerState && this.intervalometerState.running;
+    
+    // If controller not connected, hide all status indicators
+    if (!controllerConnected) {
+      if (controllerStatus) controllerStatus.style.display = 'none';
+      if (cameraStatus) cameraStatus.style.display = 'none';
+      if (batteryStatus) batteryStatus.style.display = 'none';
+      if (storageStatus) storageStatus.style.display = 'none';
+      if (timerStatus) timerStatus.style.display = 'none';
+      return;
+    }
+    
+    // Controller is connected, show controller
+    if (controllerStatus) {
+      controllerStatus.style.display = 'flex';
+    }
+    
+    // If camera not connected, only show controller
+    if (!cameraConnected) {
+      if (cameraStatus) cameraStatus.style.display = 'none';
+      if (batteryStatus) batteryStatus.style.display = 'none';
+      if (storageStatus) storageStatus.style.display = 'none';
+      if (timerStatus) timerStatus.style.display = 'none';
+      return;
+    }
+    
+    // Camera is connected, show camera, battery, and storage
+    if (cameraStatus) {
+      cameraStatus.style.display = 'flex';
+    }
+    
+    if (batteryStatus) {
+      batteryStatus.style.display = 'flex';
+    }
+    
+    if (storageStatus) {
+      storageStatus.style.display = 'flex';
+      const storageLevelHeader = document.getElementById('storage-level-header');
+      if (storageLevelHeader) {
+        // TODO: Get actual storage info from camera
+        storageLevelHeader.textContent = '8GB';
+      }
+    }
+    
+    // Only show timer if timelapse is running
+    if (timerStatus) {
+      if (timerRunning) {
+        timerStatus.style.display = 'flex';
+      } else {
+        timerStatus.style.display = 'none';
+      }
+    }
   }
 
   async getCameraSettingsForMode() {
@@ -375,6 +448,23 @@ class CameraManager {
       
       batteryElement.textContent = displayText || 'Unknown';
       
+      // Update header battery level
+      const batteryLevelHeader = document.getElementById('battery-level-header');
+      if (batteryLevelHeader) {
+        // Show compact version in header (just percentage)
+        if (typeof battery.level === 'number') {
+          batteryLevelHeader.textContent = `${battery.level}%`;
+        } else {
+          const numericLevel = parseInt(battery.level);
+          if (!isNaN(numericLevel)) {
+            batteryLevelHeader.textContent = `${numericLevel}%`;
+          } else {
+            const levelMap = { 'full': '100%', 'high': '75%', 'medium': '50%', 'low': '25%', 'critical': '10%' };
+            batteryLevelHeader.textContent = levelMap[battery.level.toLowerCase()] || battery.level;
+          }
+        }
+      }
+      
       // Update color based on battery level
       const levelValue = typeof battery.level === 'number' ? battery.level : parseInt(battery.level);
       if (!isNaN(levelValue)) {
@@ -394,6 +484,10 @@ class CameraManager {
       
     } else {
       batteryElement.textContent = 'No battery info';
+      const batteryLevelHeader = document.getElementById('battery-level-header');
+      if (batteryLevelHeader) {
+        batteryLevelHeader.textContent = '-';
+      }
     }
   }
 
@@ -856,20 +950,6 @@ class CameraManager {
     }
   }
 
-  toggleTheme() {
-    const body = document.body;
-    const themeIcon = document.querySelector('.theme-icon');
-    
-    if (body.classList.contains('dark-theme')) {
-      body.classList.remove('dark-theme');
-      themeIcon.textContent = '🌙';
-      localStorage.setItem('theme', 'light');
-    } else {
-      body.classList.add('dark-theme');
-      themeIcon.textContent = '☀️';
-      localStorage.setItem('theme', 'dark');
-    }
-  }
 
   showConnectionDetails() {
     const details = `
@@ -880,6 +960,11 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
     `.trim();
     
     alert(details);
+  }
+
+  showFunctionMenu() {
+    // Placeholder for function menu - will be implemented in next phase
+    alert('Function menu coming soon!\n\n- Controller Status ✓\n- Camera Setup\n- Test Shot\n- Timelapse\n- Red Light');
   }
 
   showSettingsModal(settings) {
@@ -915,25 +1000,14 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
     };
   }
 
-  // Load saved theme preference
-  loadTheme() {
-    const savedTheme = localStorage.getItem('theme');
-    const body = document.body;
-    const themeIcon = document.querySelector('.theme-icon');
-    
-    if (savedTheme === 'light') {
-      body.classList.remove('dark-theme');
-      themeIcon.textContent = '🌙';
-    } else {
-      // Default to dark theme for night photography
-      body.classList.add('dark-theme');
-      themeIcon.textContent = '☀️';
-    }
-  }
 
   // Intervalometer status management
   updateIntervalometerUI(status) {
     console.log('updateIntervalometerUI called with status:', status);
+    
+    // Update header status indicators when intervalometer state changes
+    this.updateHeaderStatusIndicators(this.status || { connected: false });
+    
     if (!status) {
       console.log('No status provided, hiding progress UI');
       // Hide progress section and show start button

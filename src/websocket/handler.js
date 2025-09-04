@@ -361,8 +361,9 @@ export function createWebSocketHandler(cameraController, powerManager, server) {
     clients.clear();
   };
   
-  // Attach cleanup to the handler for access from server
+  // Attach cleanup and broadcast functions to the handler for access from server
   handleConnection.cleanup = cleanup;
+  handleConnection.broadcastStatus = broadcastStatus;
   
   return handleConnection;
 }
