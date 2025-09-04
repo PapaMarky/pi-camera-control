@@ -22,8 +22,19 @@ class CameraManager {
     // Set up WebSocket event listeners
     this.setupWebSocketListeners();
     
+    // Initialize card system
+    this.initializeCardSystem();
+    
     // Initial status check via REST API (fallback if WebSocket fails)
     await this.updateCameraStatus();
+  }
+
+  initializeCardSystem() {
+    // Show default card (Controller Status)
+    this.switchToCard('controller-status');
+    
+    // Initialize menu states
+    this.updateMenuItemStates();
   }
 
   setupEventListeners() {
@@ -50,19 +61,39 @@ class CameraManager {
     });
 
 
-    // Connection indicator click
-    document.getElementById('connection-indicator').addEventListener('click', () => {
-      this.showConnectionDetails();
-    });
+    // Connection indicator click (removed from UI, but keeping method for debugging)
 
     // Manual reconnect button
     document.getElementById('manual-reconnect-btn').addEventListener('click', () => {
       this.manualReconnect();
     });
 
-    // Function menu button (placeholder for now)
-    document.getElementById('function-menu').addEventListener('click', () => {
-      this.showFunctionMenu();
+    // Function menu toggle
+    const menuToggle = document.getElementById('function-menu-toggle');
+    if (menuToggle) {
+      menuToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleFunctionMenu();
+      });
+    } else {
+      console.error('Function menu toggle button not found!');
+    }
+
+    // Function menu items
+    document.querySelectorAll('.menu-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (!item.disabled) {
+          this.switchToCard(item.dataset.card);
+          this.hideFunctionMenu();
+        }
+      });
+    });
+
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.function-menu-container')) {
+        this.hideFunctionMenu();
+      }
     });
 
     // Radio button logic for stop conditions
@@ -290,6 +321,17 @@ class CameraManager {
     
     // Update header status indicators
     this.updateHeaderStatusIndicators(status);
+    
+    // Update menu item states when camera connection changes
+    this.updateMenuItemStates();
+    
+    // If camera disconnected while on a camera-dependent card, switch to Controller Status
+    if (!status.connected || status.reconnectAttempts > 0) {
+      const currentCard = this.getCurrentCard();
+      if (['test-shot', 'camera-settings', 'intervalometer'].includes(currentCard)) {
+        this.switchToCard('controller-status');
+      }
+    }
     
     // Get camera settings and battery when connected
     if (status.connected && !this.settingsRequested) {
@@ -962,9 +1004,100 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
     alert(details);
   }
 
+  toggleFunctionMenu() {
+    const dropdown = document.getElementById('function-menu-dropdown');
+    console.log('Toggling menu, dropdown element:', dropdown);
+    
+    if (!dropdown) {
+      console.error('Menu dropdown element not found!');
+      return;
+    }
+    
+    const isVisible = dropdown.style.display !== 'none';
+    console.log('Menu currently visible:', isVisible);
+    
+    if (isVisible) {
+      this.hideFunctionMenu();
+    } else {
+      this.showFunctionMenu();
+    }
+  }
+
   showFunctionMenu() {
-    // Placeholder for function menu - will be implemented in next phase
-    alert('Function menu coming soon!\n\n- Controller Status ✓\n- Camera Setup\n- Test Shot\n- Timelapse\n- Red Light');
+    const dropdown = document.getElementById('function-menu-dropdown');
+    console.log('Showing menu, dropdown element:', dropdown);
+    
+    if (!dropdown) {
+      console.error('Menu dropdown element not found in showFunctionMenu!');
+      return;
+    }
+    
+    dropdown.style.display = 'block';
+    console.log('Menu display style set to block');
+    
+    // Update menu item states based on camera connection
+    this.updateMenuItemStates();
+  }
+
+  hideFunctionMenu() {
+    const dropdown = document.getElementById('function-menu-dropdown');
+    dropdown.style.display = 'none';
+  }
+
+  updateMenuItemStates() {
+    try {
+      const cameraConnected = this.status && this.status.connected && !this.status.reconnectAttempts;
+      
+      // Enable/disable camera-dependent menu items
+      const testShotItem = document.querySelector('[data-card="test-shot"]');
+      const cameraSettingsItem = document.querySelector('[data-card="camera-settings"]');
+      const intervalometerItem = document.querySelector('[data-card="intervalometer"]');
+      
+      if (testShotItem) testShotItem.disabled = !cameraConnected;
+      if (cameraSettingsItem) cameraSettingsItem.disabled = !cameraConnected;
+      if (intervalometerItem) intervalometerItem.disabled = !cameraConnected;
+      
+      // Update active state
+      const currentCard = this.getCurrentCard();
+      document.querySelectorAll('.menu-item').forEach(item => {
+        if (item.dataset && item.dataset.card) {
+          item.classList.toggle('active', item.dataset.card === currentCard);
+        }
+      });
+    } catch (error) {
+      console.error('Error updating menu item states:', error);
+    }
+  }
+
+  getCurrentCard() {
+    const cards = document.querySelectorAll('.function-card');
+    for (const card of cards) {
+      if (card.style.display !== 'none') {
+        return card.id.replace('-card', '');
+      }
+    }
+    return 'controller-status';
+  }
+
+  switchToCard(cardName) {
+    // Hide all cards
+    document.querySelectorAll('.function-card').forEach(card => {
+      card.style.display = 'none';
+    });
+    
+    // Show selected card
+    const targetCard = document.getElementById(`${cardName}-card`);
+    if (targetCard) {
+      targetCard.style.display = 'block';
+    }
+    
+    // Handle special case for intervalometer progress view
+    if (cardName === 'intervalometer') {
+      this.updateIntervalometerView();
+    }
+    
+    // Update menu active states
+    this.updateMenuItemStates();
   }
 
   showSettingsModal(settings) {
@@ -1009,16 +1142,8 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
     this.updateHeaderStatusIndicators(this.status || { connected: false });
     
     if (!status) {
-      console.log('No status provided, hiding progress UI');
-      // Hide progress section and show start button
-      const progressSection = document.getElementById('progress-section');
-      const startBtn = document.getElementById('start-intervalometer-btn');
-      const stopBtn = document.getElementById('stop-intervalometer-btn');
-      
-      if (progressSection) progressSection.style.display = 'none';
-      if (startBtn) startBtn.style.display = 'inline-flex';
-      if (stopBtn) stopBtn.style.display = 'none';
-      
+      console.log('No status provided, showing setup view');
+      this.showIntervalometerSetup();
       this.stopIntervalometerStatusUpdates();
       return;
     }
@@ -1030,34 +1155,42 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
       options: status.options
     };
 
-    // Show/hide progress section
-    const progressSection = document.getElementById('progress-section');
-    const startBtn = document.getElementById('start-intervalometer-btn');
-    const stopBtn = document.getElementById('stop-intervalometer-btn');
-
-    console.log('Progress section element:', progressSection);
-    console.log('Status state:', status.state);
-
     if (status.state === 'running' || status.state === 'paused') {
-      console.log('Setting progress section to visible');
-      progressSection.style.display = 'block';
-      startBtn.style.display = 'none';
-      stopBtn.style.display = 'inline-flex';
-      stopBtn.disabled = false;
-      
-      // Start periodic updates
+      console.log('Showing intervalometer progress view');
+      this.showIntervalometerProgress();
       this.startIntervalometerStatusUpdates();
     } else {
-      console.log('Hiding progress section');
-      progressSection.style.display = 'none';
-      startBtn.style.display = 'inline-flex';
-      stopBtn.style.display = 'none';
-      
-      // Stop periodic updates
+      console.log('Showing intervalometer setup view');
+      this.showIntervalometerSetup();
       this.stopIntervalometerStatusUpdates();
     }
 
     this.updateProgressDisplay(status);
+  }
+
+  updateIntervalometerView() {
+    // Update the intervalometer card based on current state
+    if (this.intervalometerState && this.intervalometerState.running) {
+      this.showIntervalometerProgress();
+    } else {
+      this.showIntervalometerSetup();
+    }
+  }
+
+  showIntervalometerSetup() {
+    const setupSection = document.getElementById('intervalometer-setup');
+    const progressSection = document.getElementById('intervalometer-progress');
+    
+    if (setupSection) setupSection.style.display = 'block';
+    if (progressSection) progressSection.style.display = 'none';
+  }
+
+  showIntervalometerProgress() {
+    const setupSection = document.getElementById('intervalometer-setup');
+    const progressSection = document.getElementById('intervalometer-progress');
+    
+    if (setupSection) setupSection.style.display = 'none';
+    if (progressSection) progressSection.style.display = 'block';
   }
 
   updateProgressDisplay(status) {
