@@ -754,21 +754,21 @@ class CameraManager {
     // Handle different data structures
     let cameraData = null;
     let powerData = null;
+    let networkData = null;
     
     if (data && typeof data === 'object') {
-      // Check if data has camera property
-      if (data.camera) {
+      console.log('Processing status update, data type:', data.type, 'keys:', Object.keys(data));
+      
+      // Welcome messages and status updates both have camera/power/network properties
+      if (data.camera || data.power || data.network) {
         cameraData = data.camera;
         powerData = data.power;
+        networkData = data.network;
+        console.log('Extracted data:', { cameraData: !!cameraData, powerData: !!powerData, networkData: !!networkData });
       }
       // Or if data IS the camera data directly
       else if (data.connected !== undefined) {
         cameraData = data;
-      }
-      // Or if it's the full status structure
-      else {
-        cameraData = data.camera || null;
-        powerData = data.power || null;
       }
     }
     
@@ -784,6 +784,23 @@ class CameraManager {
     // Update power status if we have power data
     if (powerData) {
       this.updatePowerStatus(powerData);
+    }
+
+    // Update network status if we have network data
+    if (networkData && window.networkUI) {
+      console.log('Calling NetworkUI.updateNetworkStatus with:', networkData);
+      window.networkUI.updateNetworkStatus(networkData);
+    } else if (networkData) {
+      console.log('NetworkData available but NetworkUI not ready, retrying in 1000ms:', networkData);
+      // Retry after NetworkUI is initialized
+      setTimeout(() => {
+        if (window.networkUI) {
+          console.log('Retry: Calling NetworkUI.updateNetworkStatus with:', networkData);
+          window.networkUI.updateNetworkStatus(networkData);
+        } else {
+          console.log('Retry failed: NetworkUI still not available');
+        }
+      }, 1000);
     }
 
     // Update intervalometer status if we have intervalometer data

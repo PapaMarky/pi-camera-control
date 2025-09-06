@@ -27,6 +27,10 @@ class CameraControlApp {
       // Initialize camera manager with graceful error handling
       this.updateLoadingMessage('Connecting...', 'connecting');
       await this.initializeCameraWithRetry();
+
+      // Initialize network UI
+      this.networkUI = new NetworkUI(wsManager);
+      window.networkUI = this.networkUI;
       
       // Start periodic status updates (fallback if WebSocket fails)
       this.startStatusUpdates();
@@ -360,6 +364,83 @@ class CameraControlApp {
     window.addEventListener('offline', updateOnlineStatus);
   }
 
+  // Toast notification system
+  showToast(message, type = 'info') {
+    // Remove existing toast
+    const existingToast = document.querySelector('.toast-notification');
+    if (existingToast) {
+      existingToast.remove();
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast-notification toast-${type}`;
+    
+    // Set icon based on type
+    const icons = {
+      success: '✓',
+      error: '✗',
+      warning: '⚠',
+      info: 'ℹ'
+    };
+    
+    toast.innerHTML = `
+      <span class="toast-icon">${icons[type] || icons.info}</span>
+      <span class="toast-message">${message}</span>
+    `;
+    
+    // Style the toast
+    Object.assign(toast.style, {
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      padding: '12px 16px',
+      borderRadius: '8px',
+      color: 'white',
+      fontSize: '14px',
+      fontWeight: '500',
+      zIndex: '10001',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      minWidth: '200px',
+      maxWidth: '400px',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+      transform: 'translateX(100%)',
+      transition: 'transform 0.3s ease-out',
+      pointerEvents: 'auto'
+    });
+    
+    // Set background color based on type
+    const colors = {
+      success: '#28a745',
+      error: '#dc3545', 
+      warning: '#ffc107',
+      info: '#007bff'
+    };
+    toast.style.backgroundColor = colors[type] || colors.info;
+    
+    // Add to DOM and animate in
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => {
+      toast.style.transform = 'translateX(0)';
+    });
+    
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => toast.remove(), 300);
+      }
+    }, 4000);
+    
+    // Allow manual dismissal
+    toast.addEventListener('click', () => {
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => toast.remove(), 300);
+    });
+  }
+
   // Cleanup on page unload
   cleanup() {
     if (this.statusUpdateInterval) {
@@ -371,12 +452,17 @@ class CameraControlApp {
     }
     
     this.hideTooltip();
+    
+    // Remove any toasts
+    const toasts = document.querySelectorAll('.toast-notification');
+    toasts.forEach(toast => toast.remove());
   }
 }
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
   window.app = new CameraControlApp();
+  window.appInstance = window.app; // Also provide as appInstance for compatibility
   
   try {
     await app.initialize();

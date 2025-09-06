@@ -10,6 +10,7 @@ import dotenv from 'dotenv';
 import { logger } from './utils/logger.js';
 import { CameraController } from './camera/controller.js';
 import { PowerManager } from './system/power.js';
+import { NetworkManager } from './network/manager.js';
 import { createApiRouter } from './routes/api.js';
 import { createWebSocketHandler } from './websocket/handler.js';
 
@@ -31,6 +32,7 @@ class CameraControlServer {
       this.broadcastCameraStatusChange(status);
     });
     this.powerManager = new PowerManager();
+    this.networkManager = new NetworkManager();
     
     // Shared intervalometer session across WebSocket and REST API
     this.activeIntervalometerSession = null;
@@ -67,7 +69,7 @@ class CameraControlServer {
 
   setupRoutes() {
     // API routes
-    this.app.use('/api', createApiRouter(this.cameraController, this.powerManager, this));
+    this.app.use('/api', createApiRouter(this.cameraController, this.powerManager, this, this.networkManager));
     
     // Serve static files (Phase 3 - web interface)
     this.app.use(express.static('public'));
@@ -94,7 +96,7 @@ class CameraControlServer {
   }
 
   setupWebSocket() {
-    this.wsHandler = createWebSocketHandler(this.cameraController, this.powerManager, this);
+    this.wsHandler = createWebSocketHandler(this.cameraController, this.powerManager, this, this.networkManager);
     this.wss.on('connection', this.wsHandler);
     
     logger.info('WebSocket server initialized');
@@ -141,6 +143,14 @@ class CameraControlServer {
       // Start power monitoring
       await this.powerManager.initialize();
       
+      // Initialize network manager
+      const networkInitialized = await this.networkManager.initialize();
+      if (!networkInitialized) {
+        logger.warn('Network manager initialization failed - network features may not work');
+      } else {
+        logger.info('Network manager initialized successfully');
+      }
+      
       // Start server
       this.server.listen(PORT, () => {
         logger.info(`Camera Control Server started on port ${PORT}`, {
@@ -173,6 +183,7 @@ class CameraControlServer {
     // Cleanup camera and power monitoring
     await this.cameraController.cleanup();
     await this.powerManager.cleanup();
+    await this.networkManager.cleanup();
     
     logger.info('Graceful shutdown complete');
     process.exit(0);
