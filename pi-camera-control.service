@@ -1,0 +1,33 @@
+[Unit]
+Description=Pi Camera Control Service
+Documentation=https://github.com/PapaMarky/pi-camera-control
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/home/pi/pi-camera-control
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=10
+KillMode=process
+
+# Environment
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=LOG_LEVEL=info
+EnvironmentFile=-/home/pi/pi-camera-control/.env
+
+# Security and resource limits
+NoNewPrivileges=false
+LimitNOFILE=65536
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pi-camera-control
+
+[Install]
+WantedBy=multi-user.target
