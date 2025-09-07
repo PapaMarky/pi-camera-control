@@ -10,6 +10,7 @@ import dotenv from 'dotenv';
 import { logger } from './utils/logger.js';
 import { CameraController } from './camera/controller.js';
 import { PowerManager } from './system/power.js';
+import { NetworkManager } from './network/manager.js';
 import { createApiRouter } from './routes/api.js';
 import { createWebSocketHandler } from './websocket/handler.js';
 
@@ -26,11 +27,17 @@ class CameraControlServer {
     this.server = createServer(this.app);
     this.wss = new WebSocketServer({ server: this.server });
     
-    this.cameraController = new CameraController(CAMERA_IP, CAMERA_PORT);
+    // Initialize camera controller with disconnection callback
+    this.cameraController = new CameraController(CAMERA_IP, CAMERA_PORT, (status) => {
+      this.broadcastCameraStatusChange(status);
+    });
     this.powerManager = new PowerManager();
+    this.networkManager = new NetworkManager();
     
     // Shared intervalometer session across WebSocket and REST API
     this.activeIntervalometerSession = null;
+    // Store WebSocket handler for broadcasting
+    this.wsHandler = null;
     
     this.setupMiddleware();
     this.setupRoutes();
@@ -62,7 +69,7 @@ class CameraControlServer {
 
   setupRoutes() {
     // API routes
-    this.app.use('/api', createApiRouter(this.cameraController, this.powerManager, this));
+    this.app.use('/api', createApiRouter(this.cameraController, this.powerManager, this, this.networkManager));
     
     // Serve static files (Phase 3 - web interface)
     this.app.use(express.static('public'));
@@ -89,10 +96,20 @@ class CameraControlServer {
   }
 
   setupWebSocket() {
-    const wsHandler = createWebSocketHandler(this.cameraController, this.powerManager, this);
-    this.wss.on('connection', wsHandler);
+    this.wsHandler = createWebSocketHandler(this.cameraController, this.powerManager, this, this.networkManager);
+    this.wss.on('connection', this.wsHandler);
     
     logger.info('WebSocket server initialized');
+  }
+
+  broadcastCameraStatusChange(status) {
+    if (!this.wsHandler || !this.wsHandler.broadcastStatus) {
+      logger.debug('No WebSocket handler available for broadcasting camera status');
+      return;
+    }
+    
+    logger.info('Broadcasting immediate camera status change to all clients');
+    this.wsHandler.broadcastStatus();
   }
 
   setupErrorHandling() {
@@ -126,6 +143,14 @@ class CameraControlServer {
       // Start power monitoring
       await this.powerManager.initialize();
       
+      // Initialize network manager
+      const networkInitialized = await this.networkManager.initialize();
+      if (!networkInitialized) {
+        logger.warn('Network manager initialization failed - network features may not work');
+      } else {
+        logger.info('Network manager initialized successfully');
+      }
+      
       // Start server
       this.server.listen(PORT, () => {
         logger.info(`Camera Control Server started on port ${PORT}`, {
@@ -158,6 +183,7 @@ class CameraControlServer {
     // Cleanup camera and power monitoring
     await this.cameraController.cleanup();
     await this.powerManager.cleanup();
+    await this.networkManager.cleanup();
     
     logger.info('Graceful shutdown complete');
     process.exit(0);

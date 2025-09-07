@@ -6,7 +6,7 @@ import { logger } from '../utils/logger.js';
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 export class CameraController {
-  constructor(ip, port = '443') {
+  constructor(ip, port = '443', onDisconnect = null) {
     this.ip = ip;
     this.port = port;
     this.baseUrl = `https://${ip}:${port}`;
@@ -19,6 +19,7 @@ export class CameraController {
     this.maxReconnectAttempts = 22; // 10 attempts at 1s + 12 attempts at 5s
     this.pollingInterval = null;
     this.pollingPaused = false;
+    this.onDisconnect = onDisconnect;
     
     // Create axios instance with optimized settings
     this.client = axios.create({
@@ -116,12 +117,10 @@ export class CameraController {
     } catch (error) {
       logger.error('Failed to get camera settings:', error.message);
       
-      // If we get a network error, mark camera as disconnected
+      // If we get a network error, handle disconnection
       if (error.code === 'EHOSTUNREACH' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-        logger.warn('Camera network error detected, marking as disconnected');
-        this.connected = false;
-        this.lastError = error.message;
-        this.scheduleReconnect();
+        logger.warn('Camera network error detected, handling disconnection');
+        this.handleDisconnection(error);
       }
       
       // Create a clean error without circular references
@@ -149,12 +148,10 @@ export class CameraController {
       } catch (fallbackError) {
         logger.error('Failed to get camera battery:', fallbackError.message);
         
-        // If we get a network error, mark camera as disconnected
+        // If we get a network error, handle disconnection
         if (fallbackError.code === 'EHOSTUNREACH' || fallbackError.code === 'ECONNREFUSED' || fallbackError.code === 'ETIMEDOUT') {
-          logger.warn('Camera network error detected during battery check, marking as disconnected');
-          this.connected = false;
-          this.lastError = fallbackError.message;
-          this.scheduleReconnect();
+          logger.warn('Camera network error detected during battery check, handling disconnection');
+          this.handleDisconnection(fallbackError);
         }
         
         const cleanError = new Error(fallbackError.message || 'Failed to get camera battery');
@@ -292,10 +289,8 @@ export class CameraController {
         await this.client.get(`${this.baseUrl}/ccapi/`, { timeout: 5000 });
         logger.debug('Connection monitoring: camera still reachable');
       } catch (error) {
-        logger.warn('Camera connection lost during monitoring, attempting reconnect...', error.message);
-        this.connected = false;
-        this.lastError = error.message;
-        this.scheduleReconnect();
+        logger.warn('Camera connection lost during monitoring, handling disconnection...', error.message);
+        this.handleDisconnection(error);
       }
     }, 10000);
   }
@@ -326,6 +321,20 @@ export class CameraController {
     this.pollingPaused = false;
   }
 
+  handleDisconnection(error) {
+    const wasConnected = this.connected;
+    this.connected = false;
+    this.lastError = error.message;
+    
+    // Notify immediately if we were previously connected
+    if (wasConnected && this.onDisconnect) {
+      logger.info('Notifying clients of camera disconnection');
+      this.onDisconnect(this.getConnectionStatus());
+    }
+    
+    this.scheduleReconnect();
+  }
+
   scheduleReconnect() {
     if (this.reconnectInterval) return; // Already scheduled
     
@@ -351,6 +360,11 @@ export class CameraController {
       
       try {
         await this.connect();
+        // Notify clients of successful reconnection
+        if (this.connected && this.onDisconnect) {
+          logger.info('Notifying clients of camera reconnection');
+          this.onDisconnect(this.getConnectionStatus());
+        }
       } catch (error) {
         this.scheduleReconnect();
       }

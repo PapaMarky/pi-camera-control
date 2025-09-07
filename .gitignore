@@ -211,7 +211,7 @@ __marimo__/
 *.iml
 
 # Claude
-# CLAUDE.md (commented out - we want to track project-specific instructions)
+CLAUDE.md
 
 # Node.js dependencies and runtime
 node_modules/

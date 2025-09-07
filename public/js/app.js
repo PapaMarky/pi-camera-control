@@ -9,43 +9,92 @@ class CameraControlApp {
 
     console.log('Initializing Camera Control App...');
     
+    // Update loading message to show connecting state
+    this.updateLoadingMessage('Connecting to server...', 'connecting');
+    
     try {
-      // Load theme preference
-      cameraManager.loadTheme();
       
-      // Initialize camera manager
-      await cameraManager.initialize();
+      // Initialize UI components first (non-blocking)
+      this.initializeUI();
       
-      // Connect WebSocket
+      // Connect WebSocket with timeout
+      this.updateLoadingMessage('Connecting...', 'connecting');
       wsManager.connect();
+      
+      // Give WebSocket time to connect before trying camera
+      await this.delay(1000);
+      
+      // Initialize camera manager with graceful error handling
+      this.updateLoadingMessage('Connecting...', 'connecting');
+      await this.initializeCameraWithRetry();
+
+      // Initialize network UI
+      this.networkUI = new NetworkUI(wsManager);
+      window.networkUI = this.networkUI;
       
       // Start periodic status updates (fallback if WebSocket fails)
       this.startStatusUpdates();
       
-      // Hide loading overlay
+      // Hide loading overlay after short delay
+      await this.delay(500);
       this.hideLoadingOverlay();
-      
-      // Initialize UI components
-      this.initializeUI();
       
       this.initialized = true;
       cameraManager.log('Application initialized successfully', 'success');
       
     } catch (error) {
       console.error('Failed to initialize app:', error);
-      cameraManager.log(`Initialization failed: ${error.message}`, 'error');
-      this.showErrorMessage('Failed to initialize application');
+      // Only show error after reasonable connection attempts
+      this.showErrorMessage('Connection failed. Retrying...');
     }
   }
 
+  async initializeCameraWithRetry() {
+    try {
+      // Try to initialize camera, but don't fail if camera is not ready
+      await cameraManager.initialize();
+    } catch (error) {
+      console.warn('Camera not immediately available:', error.message);
+      // Don't throw error - let the app continue and retry later
+      cameraManager.log('Camera not ready, will retry automatically', 'warning');
+    }
+  }
+
+  updateLoadingMessage(message, type = 'connecting') {
+    const overlay = document.getElementById('loading-overlay');
+    const text = overlay?.querySelector('p');
+    const spinner = overlay?.querySelector('.loading-spinner');
+    
+    if (text) {
+      text.textContent = message;
+      
+      // Update color based on type
+      if (type === 'connecting') {
+        text.style.color = '#ffc107'; // Warning yellow
+      } else if (type === 'error') {
+        text.style.color = '#fd5e53'; // Error red
+      } else {
+        text.style.color = 'white'; // Default
+      }
+    }
+    
+    if (spinner && type === 'error') {
+      spinner.style.display = 'none';
+    }
+  }
+
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   startStatusUpdates() {
-    // Update status every 30 seconds via REST API (backup for WebSocket)
+    // Update status every 10 seconds via REST API (primary for camera detection, backup for WebSocket)
     this.statusUpdateInterval = setInterval(async () => {
+      await cameraManager.updateCameraStatus();
       if (!wsManager.connected) {
-        await cameraManager.updateCameraStatus();
         await this.updateSystemStatus();
       }
-    }, 30000);
+    }, 10000);
   }
 
   async updateSystemStatus() {
@@ -73,19 +122,17 @@ class CameraControlApp {
   }
 
   showErrorMessage(message) {
-    // Update loading overlay to show error
-    const overlay = document.getElementById('loading-overlay');
-    const spinner = overlay.querySelector('.loading-spinner');
-    const text = overlay.querySelector('p');
+    // Update loading overlay to show error with retry indication
+    this.updateLoadingMessage(message, 'error');
     
-    spinner.style.display = 'none';
-    text.textContent = `Error: ${message}`;
-    text.style.color = '#fd5e53';
-    
-    // Hide after 5 seconds and try to continue
+    // Hide after 3 seconds and let the app continue
     setTimeout(() => {
       this.hideLoadingOverlay();
-    }, 5000);
+      // Continue attempting to connect in background
+      if (!this.initialized) {
+        cameraManager.log('Continuing in background...', 'info');
+      }
+    }, 3000);
   }
 
   initializeUI() {
@@ -146,9 +193,6 @@ class CameraControlApp {
           }
           break;
           
-        case 't': // T - toggle theme
-          cameraManager.toggleTheme();
-          break;
       }
     });
   }
@@ -320,6 +364,83 @@ class CameraControlApp {
     window.addEventListener('offline', updateOnlineStatus);
   }
 
+  // Toast notification system
+  showToast(message, type = 'info') {
+    // Remove existing toast
+    const existingToast = document.querySelector('.toast-notification');
+    if (existingToast) {
+      existingToast.remove();
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast-notification toast-${type}`;
+    
+    // Set icon based on type
+    const icons = {
+      success: '✓',
+      error: '✗',
+      warning: '⚠',
+      info: 'ℹ'
+    };
+    
+    toast.innerHTML = `
+      <span class="toast-icon">${icons[type] || icons.info}</span>
+      <span class="toast-message">${message}</span>
+    `;
+    
+    // Style the toast
+    Object.assign(toast.style, {
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      padding: '12px 16px',
+      borderRadius: '8px',
+      color: 'white',
+      fontSize: '14px',
+      fontWeight: '500',
+      zIndex: '10001',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      minWidth: '200px',
+      maxWidth: '400px',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+      transform: 'translateX(100%)',
+      transition: 'transform 0.3s ease-out',
+      pointerEvents: 'auto'
+    });
+    
+    // Set background color based on type
+    const colors = {
+      success: '#28a745',
+      error: '#dc3545', 
+      warning: '#ffc107',
+      info: '#007bff'
+    };
+    toast.style.backgroundColor = colors[type] || colors.info;
+    
+    // Add to DOM and animate in
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => {
+      toast.style.transform = 'translateX(0)';
+    });
+    
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => toast.remove(), 300);
+      }
+    }, 4000);
+    
+    // Allow manual dismissal
+    toast.addEventListener('click', () => {
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => toast.remove(), 300);
+    });
+  }
+
   // Cleanup on page unload
   cleanup() {
     if (this.statusUpdateInterval) {
@@ -331,12 +452,17 @@ class CameraControlApp {
     }
     
     this.hideTooltip();
+    
+    // Remove any toasts
+    const toasts = document.querySelectorAll('.toast-notification');
+    toasts.forEach(toast => toast.remove());
   }
 }
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
   window.app = new CameraControlApp();
+  window.appInstance = window.app; // Also provide as appInstance for compatibility
   
   try {
     await app.initialize();

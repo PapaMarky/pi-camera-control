@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { logger } from '../utils/logger.js';
 import { IntervalometerSession } from '../intervalometer/session.js';
 
-export function createApiRouter(cameraController, powerManager, server) {
+export function createApiRouter(cameraController, powerManager, server, networkManager) {
   const router = Router();
 
   // Camera status and connection
@@ -232,6 +232,123 @@ export function createApiRouter(cameraController, powerManager, server) {
       res.status(500).json({ error: 'Failed to get system status' });
     }
   });
+
+  // Network Management Routes
+  if (networkManager) {
+    // Get current network status
+    router.get('/network/status', async (req, res) => {
+      try {
+        const status = await networkManager.getNetworkStatus();
+        res.json(status);
+      } catch (error) {
+        logger.error('Failed to get network status:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Switch network mode (field/development)
+    router.post('/network/mode', async (req, res) => {
+      try {
+        const { mode } = req.body;
+        
+        if (!mode || !['field', 'development'].includes(mode)) {
+          return res.status(400).json({ error: 'Invalid mode. Must be "field" or "development"' });
+        }
+
+        const result = await networkManager.switchNetworkMode(mode);
+        res.json(result);
+      } catch (error) {
+        logger.error('Failed to switch network mode:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Scan for WiFi networks
+    router.get('/network/wifi/scan', async (req, res) => {
+      try {
+        const forceRefresh = req.query.refresh === 'true';
+        const networks = await networkManager.scanWiFiNetworks(forceRefresh);
+        res.json({ networks });
+      } catch (error) {
+        logger.error('WiFi scan failed:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Get saved WiFi networks
+    router.get('/network/wifi/saved', async (req, res) => {
+      try {
+        const networks = await networkManager.getSavedNetworks();
+        res.json({ networks });
+      } catch (error) {
+        logger.error('Failed to get saved networks:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Connect to WiFi network
+    router.post('/network/wifi/connect', async (req, res) => {
+      try {
+        const { ssid, password, priority } = req.body;
+        
+        if (!ssid) {
+          return res.status(400).json({ error: 'SSID is required' });
+        }
+
+        const result = await networkManager.connectToWiFi(ssid, password, priority);
+        res.json(result);
+      } catch (error) {
+        logger.error('WiFi connection failed:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Disconnect from WiFi
+    router.post('/network/wifi/disconnect', async (req, res) => {
+      try {
+        const result = await networkManager.disconnectWiFi();
+        res.json(result);
+      } catch (error) {
+        logger.error('WiFi disconnection failed:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Remove saved WiFi network
+    router.delete('/network/wifi/saved/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await networkManager.removeSavedNetwork(id);
+        res.json(result);
+      } catch (error) {
+        logger.error('Failed to remove saved network:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Configure access point
+    router.post('/network/accesspoint/configure', async (req, res) => {
+      try {
+        const { ssid, passphrase, channel, hidden } = req.body;
+        
+        if (!ssid || !passphrase) {
+          return res.status(400).json({ error: 'SSID and passphrase are required' });
+        }
+
+        if (passphrase.length < 8) {
+          return res.status(400).json({ error: 'Passphrase must be at least 8 characters' });
+        }
+
+        const result = await networkManager.configureAccessPoint({
+          ssid, passphrase, channel, hidden
+        });
+        res.json(result);
+      } catch (error) {
+        logger.error('Access point configuration failed:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+  }
 
   // Error handling middleware for API routes
   router.use((err, req, res, next) => {

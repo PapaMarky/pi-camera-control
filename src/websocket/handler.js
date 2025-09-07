@@ -1,12 +1,22 @@
 import { logger } from '../utils/logger.js';
 import { IntervalometerSession } from '../intervalometer/session.js';
 
-export function createWebSocketHandler(cameraController, powerManager, server) {
+export function createWebSocketHandler(cameraController, powerManager, server, networkManager) {
   const clients = new Set();
   
   // Broadcast status updates to all connected clients
-  const broadcastStatus = () => {
+  const broadcastStatus = async () => {
     if (clients.size === 0) return;
+    
+    // Get network status if networkManager is available
+    let networkStatus = null;
+    if (networkManager) {
+      try {
+        networkStatus = await networkManager.getNetworkStatus();
+      } catch (error) {
+        logger.debug('Failed to get network status for broadcast:', error);
+      }
+    }
     
     const status = {
       type: 'status_update',
@@ -15,7 +25,8 @@ export function createWebSocketHandler(cameraController, powerManager, server) {
       power: {
         ...powerManager.getStatus(),
         uptime: process.uptime() // Add system uptime to power data
-      }
+      },
+      network: networkStatus
     };
     
     const message = JSON.stringify(status);
@@ -44,7 +55,7 @@ export function createWebSocketHandler(cameraController, powerManager, server) {
   const statusInterval = setInterval(broadcastStatus, 10000);
   
   // Handle individual WebSocket connections
-  const handleConnection = (ws, req) => {
+  const handleConnection = async (ws, req) => {
     const clientId = `${req.socket.remoteAddress}:${req.socket.remotePort}`;
     
     logger.info(`WebSocket client connected: ${clientId}`);
@@ -52,11 +63,25 @@ export function createWebSocketHandler(cameraController, powerManager, server) {
     
     // Send initial status immediately
     try {
+      // Get network status for welcome message
+      let networkStatus = null;
+      if (networkManager) {
+        try {
+          networkStatus = await networkManager.getNetworkStatus();
+          logger.info('Network status for welcome message:', networkStatus);
+        } catch (error) {
+          logger.error('Failed to get network status for welcome:', error);
+        }
+      } else {
+        logger.warn('NetworkManager not available for welcome message');
+      }
+      
       const initialStatus = {
         type: 'welcome',
         timestamp: new Date().toISOString(),
         camera: cameraController.getConnectionStatus(),
         power: powerManager.getStatus(),
+        network: networkStatus,
         intervalometer: server.activeIntervalometerSession ? 
           server.activeIntervalometerSession.getStatus() : null,
         clientId
@@ -121,6 +146,22 @@ export function createWebSocketHandler(cameraController, powerManager, server) {
           
         case 'get_status':
           await handleGetStatus(ws);
+          break;
+          
+        case 'network_scan':
+          await handleNetworkScan(ws, data);
+          break;
+          
+        case 'network_connect':
+          await handleNetworkConnect(ws, data);
+          break;
+          
+        case 'network_disconnect':
+          await handleNetworkDisconnect(ws);
+          break;
+          
+        case 'network_mode_switch':
+          await handleNetworkModeSwitch(ws, data);
           break;
           
         case 'ping':
@@ -292,13 +333,104 @@ export function createWebSocketHandler(cameraController, powerManager, server) {
   };
   
   const handleGetStatus = async (ws) => {
+    let networkStatus = null;
+    if (networkManager) {
+      try {
+        networkStatus = await networkManager.getNetworkStatus();
+      } catch (error) {
+        logger.debug('Failed to get network status:', error);
+      }
+    }
+    
     const status = {
       camera: cameraController.getConnectionStatus(),
       power: powerManager.getStatus(),
+      network: networkStatus,
       timestamp: new Date().toISOString()
     };
     
     sendResponse(ws, 'status', status);
+  };
+
+  const handleNetworkScan = async (ws, data) => {
+    if (!networkManager) {
+      return sendError(ws, 'Network management not available');
+    }
+    
+    try {
+      const forceRefresh = data?.refresh || false;
+      const networks = await networkManager.scanWiFiNetworks(forceRefresh);
+      sendResponse(ws, 'network_scan_result', { networks });
+    } catch (error) {
+      logger.error('Network scan failed via WebSocket:', error);
+      sendError(ws, `Network scan failed: ${error.message}`);
+    }
+  };
+
+  const handleNetworkConnect = async (ws, data) => {
+    if (!networkManager) {
+      return sendError(ws, 'Network management not available');
+    }
+    
+    try {
+      const { ssid, password, priority } = data;
+      
+      if (!ssid) {
+        return sendError(ws, 'SSID is required');
+      }
+
+      const result = await networkManager.connectToWiFi(ssid, password, priority);
+      sendResponse(ws, 'network_connect_result', result);
+      
+      // Broadcast network status change to all clients
+      setTimeout(() => broadcastStatus(), 2000);
+      
+    } catch (error) {
+      logger.error('Network connection failed via WebSocket:', error);
+      sendError(ws, `Connection failed: ${error.message}`);
+    }
+  };
+
+  const handleNetworkDisconnect = async (ws) => {
+    if (!networkManager) {
+      return sendError(ws, 'Network management not available');
+    }
+    
+    try {
+      const result = await networkManager.disconnectWiFi();
+      sendResponse(ws, 'network_disconnect_result', result);
+      
+      // Broadcast network status change to all clients
+      setTimeout(() => broadcastStatus(), 2000);
+      
+    } catch (error) {
+      logger.error('Network disconnection failed via WebSocket:', error);
+      sendError(ws, `Disconnection failed: ${error.message}`);
+    }
+  };
+
+  const handleNetworkModeSwitch = async (ws, data) => {
+    if (!networkManager) {
+      return sendError(ws, 'Network management not available');
+    }
+    
+    try {
+      const { mode } = data;
+      
+      if (!mode || !['field', 'development'].includes(mode)) {
+        return sendError(ws, 'Invalid mode. Must be "field" or "development"');
+      }
+
+      const result = await networkManager.switchNetworkMode(mode);
+      sendResponse(ws, 'network_mode_result', result);
+      
+      // Broadcast network status change to all clients
+      setTimeout(() => broadcastStatus(), 3000);
+      
+    } catch (error) {
+      logger.error('Network mode switch failed via WebSocket:', error);
+      sendError(ws, `Mode switch failed: ${error.message}`);
+    }
   };
   
   const sendResponse = (ws, type, data) => {
@@ -361,8 +493,9 @@ export function createWebSocketHandler(cameraController, powerManager, server) {
     clients.clear();
   };
   
-  // Attach cleanup to the handler for access from server
+  // Attach cleanup and broadcast functions to the handler for access from server
   handleConnection.cleanup = cleanup;
+  handleConnection.broadcastStatus = broadcastStatus;
   
   return handleConnection;
 }
