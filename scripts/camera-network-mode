@@ -1,0 +1,155 @@
+#!/bin/bash
+# Pi Camera Control Network Mode Manager
+# Manages switching between field mode (AP active) and development mode (AP + WiFi)
+
+set -e
+
+MODE="$1"
+LOG_PREFIX="[camera-network-mode]"
+
+log() {
+    echo "$LOG_PREFIX $1" | logger -t camera-network-mode
+    echo "$LOG_PREFIX $1"
+}
+
+# Function to check if a service is running
+is_service_active() {
+    systemctl is-active --quiet "$1" 2>/dev/null
+}
+
+# Function to ensure AP interface exists
+ensure_ap_interface() {
+    if ! ip link show ap0 >/dev/null 2>&1; then
+        log "Creating ap0 interface..."
+        if ip link show wlan0 >/dev/null 2>&1; then
+            # Create AP interface from wlan0
+            iw phy phy0 interface add ap0 type __ap 2>/dev/null || {
+                log "Failed to create ap0 interface - may already exist or hardware doesn't support dual mode"
+            }
+        else
+            log "Warning: wlan0 interface not found"
+        fi
+    fi
+}
+
+# Function to start access point services
+start_ap_services() {
+    log "Starting access point services..."
+    
+    # Ensure AP interface exists and is configured
+    ensure_ap_interface
+    
+    # Configure AP interface if it exists
+    if ip link show ap0 >/dev/null 2>&1; then
+        log "Configuring ap0 interface..."
+        ip addr flush dev ap0 2>/dev/null || true
+        ip addr add 192.168.4.1/24 dev ap0 2>/dev/null || log "Failed to set ap0 IP (may already be set)"
+        ip link set ap0 up 2>/dev/null || log "Failed to bring up ap0 interface"
+    else
+        log "Warning: ap0 interface not available, using wlan0 for AP mode"
+    fi
+    
+    # Start hostapd service
+    if ! is_service_active hostapd; then
+        log "Starting hostapd service..."
+        systemctl start hostapd || log "Failed to start hostapd"
+    else
+        log "hostapd already running"
+    fi
+    
+    # Start dnsmasq service  
+    if ! is_service_active dnsmasq; then
+        log "Starting dnsmasq service..."
+        systemctl start dnsmasq || log "Failed to start dnsmasq"
+    else
+        log "dnsmasq already running"
+    fi
+    
+    # Enable IP forwarding for internet sharing
+    echo 1 > /proc/sys/net/ipv4/ip_forward 2>/dev/null || log "Failed to enable IP forwarding"
+    
+    log "Access point services started"
+}
+
+# Function to stop access point services (for development mode)
+stop_ap_services() {
+    log "Stopping access point services..."
+    
+    # Stop services
+    if is_service_active hostapd; then
+        systemctl stop hostapd || log "Failed to stop hostapd"
+    fi
+    
+    if is_service_active dnsmasq; then
+        systemctl stop dnsmasq || log "Failed to stop dnsmasq"
+    fi
+    
+    log "Access point services stopped"
+}
+
+# Function to ensure WiFi client services are running
+start_wifi_client() {
+    log "Starting WiFi client services..."
+    
+    # Ensure wpa_supplicant is running on wlan0
+    if ! is_service_active wpa_supplicant@wlan0; then
+        log "Starting wpa_supplicant@wlan0..."
+        systemctl start wpa_supplicant@wlan0 || log "Failed to start wpa_supplicant@wlan0"
+    fi
+    
+    # Restart dhcpcd to get IP on wlan0 if connected
+    systemctl restart dhcpcd || log "Failed to restart dhcpcd"
+    
+    log "WiFi client services started"
+}
+
+# Main mode switching logic
+case "$MODE" in
+    "field")
+        log "Switching to field mode (Access Point active, WiFi client disabled)"
+        start_ap_services
+        log "Field mode activated"
+        ;;
+        
+    "development") 
+        log "Switching to development mode (Access Point + WiFi client)"
+        start_ap_services
+        start_wifi_client
+        log "Development mode activated"
+        ;;
+        
+    "wifi-only")
+        log "Switching to WiFi-only mode (Access Point disabled)"
+        stop_ap_services
+        start_wifi_client
+        log "WiFi-only mode activated"
+        ;;
+        
+    *)
+        echo "Usage: $0 {field|development|wifi-only}"
+        echo ""
+        echo "Modes:"
+        echo "  field       - Access Point only (for field use)"
+        echo "  development - Access Point + WiFi client (for development)"
+        echo "  wifi-only   - WiFi client only (AP disabled)"
+        exit 1
+        ;;
+esac
+
+# Always ensure access point is active in field and development modes
+if [[ "$MODE" == "field" || "$MODE" == "development" ]]; then
+    # Give services time to start
+    sleep 2
+    
+    # Verify AP is actually working
+    if is_service_active hostapd && is_service_active dnsmasq; then
+        log "Access Point successfully activated"
+    else
+        log "Warning: Access Point may not be fully active"
+        # Try to restart services once more
+        log "Attempting to restart AP services..."
+        systemctl restart hostapd dnsmasq || log "Failed to restart AP services"
+    fi
+fi
+
+log "Network mode switch to '$MODE' completed"

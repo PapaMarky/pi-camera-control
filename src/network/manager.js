@@ -23,6 +23,10 @@ export class NetworkManager {
   async initialize() {
     try {
       await this.detectCurrentMode();
+      
+      // Ensure access point is always active on startup
+      await this.ensureAccessPointActive();
+      
       await this.updateConnectionStatus();
       logger.info('NetworkManager initialized', {
         mode: this.currentMode,
@@ -66,14 +70,19 @@ export class NetworkManager {
     try {
       logger.info(`Switching to ${mode} mode`);
       
-      // Use the network mode control script from docs/network-configuration.md
-      const { stdout, stderr } = await execAsync(`/usr/local/bin/camera-network-mode ${mode}`);
+      // Use the network mode control script (deployed by service)
+      const scriptPath = '/usr/local/bin/camera-network-mode';
+      const { stdout, stderr } = await execAsync(`sudo ${scriptPath} ${mode}`);
       
       if (stderr && !stderr.includes('Warning')) {
         logger.warn('Mode switch warnings:', stderr);
       }
       
       this.currentMode = mode;
+      
+      // Wait for services to settle
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
       await this.updateConnectionStatus();
       
       logger.info(`Successfully switched to ${mode} mode`, {
@@ -85,6 +94,25 @@ export class NetworkManager {
     } catch (error) {
       logger.error(`Failed to switch to ${mode} mode:`, error);
       throw new Error(`Mode switch failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Ensure access point is always active (critical for field mode)
+   */
+  async ensureAccessPointActive() {
+    try {
+      logger.info('Ensuring access point is active...');
+      
+      // Always switch to the detected mode to ensure AP is active
+      const scriptPath = '/usr/local/bin/camera-network-mode';
+      await execAsync(`sudo ${scriptPath} ${this.currentMode}`);
+      
+      logger.info(`Access point activation completed for ${this.currentMode} mode`);
+    } catch (error) {
+      logger.error('Failed to ensure access point is active:', error);
+      // Don't throw error - allow initialization to continue
+      logger.warn('Access point may not be active - network functionality may be limited');
     }
   }
 
@@ -134,14 +162,27 @@ export class NetworkManager {
         logger.debug('Could not get AP client list:', error.message);
       }
 
+      // Get current SSID from hostapd config
+      let currentSSID = 'Unknown';
+      try {
+        const hostapdConfig = await readFile('/etc/hostapd/hostapd.conf', 'utf8');
+        const ssidMatch = hostapdConfig.match(/^ssid=(.+)$/m);
+        if (ssidMatch) {
+          currentSSID = ssidMatch[1].trim();
+        }
+      } catch (error) {
+        logger.debug('Could not read current SSID from hostapd.conf:', error.message);
+      }
+
       this.connectionStatus.ap0 = {
         active: hasIP,
         clients: clients,
-        ip: hasIP ? '192.168.4.1' : null
+        ip: hasIP ? '192.168.4.1' : null,
+        ssid: currentSSID
       };
 
     } catch (error) {
-      this.connectionStatus.ap0 = { active: false, clients: [], ip: null };
+      this.connectionStatus.ap0 = { active: false, clients: [], ip: null, ssid: 'Unknown' };
       logger.debug('AP status check failed:', error.message);
     }
   }
@@ -430,30 +471,107 @@ export class NetworkManager {
       
       logger.info('Configuring access point', { ssid, channel, hidden });
       
+      // Validate inputs
+      if (!ssid || ssid.trim().length === 0) {
+        throw new Error('SSID cannot be empty');
+      }
+      if (!passphrase || passphrase.length < 8) {
+        throw new Error('Passphrase must be at least 8 characters');
+      }
+      if (channel < 1 || channel > 13) {
+        throw new Error('Channel must be between 1 and 13');
+      }
+      
       // Read current hostapd configuration
       let hostapdConfig = '';
       try {
         hostapdConfig = await readFile('/etc/hostapd/hostapd.conf', 'utf8');
+        logger.debug('Read existing hostapd configuration');
       } catch (error) {
         logger.warn('Could not read hostapd config, using template');
         hostapdConfig = this.getDefaultHostapdConfig();
       }
       
-      // Update configuration
+      // Update configuration with new values
       hostapdConfig = hostapdConfig
         .replace(/^ssid=.*/m, `ssid=${ssid}`)
         .replace(/^wpa_passphrase=.*/m, `wpa_passphrase=${passphrase}`)
         .replace(/^channel=.*/m, `channel=${channel}`)
         .replace(/^ignore_broadcast_ssid=.*/m, `ignore_broadcast_ssid=${hidden ? '1' : '0'}`);
       
-      // Write configuration (would require sudo in production)
-      // This is a placeholder - in production, this would need proper privilege escalation
-      logger.info('Access point configuration updated (requires system privileges to apply)');
+      // Write configuration file (we run as root via systemd service)
+      const configPath = '/etc/hostapd/hostapd.conf';
+      const tempConfigPath = `/tmp/hostapd.conf.${Date.now()}`;
       
-      return { success: true, config: { ssid, channel, hidden } };
+      // Write to temp file first
+      await writeFile(tempConfigPath, hostapdConfig, 'utf8');
+      logger.debug('Wrote temporary configuration file');
+      
+      // Move to final location with sudo (even though we're root, use sudo for consistency)
+      await execAsync(`sudo cp "${tempConfigPath}" "${configPath}"`);
+      await execAsync(`sudo chmod 644 "${configPath}"`);
+      await execAsync(`sudo rm -f "${tempConfigPath}"`);
+      
+      logger.info('Access point configuration file updated successfully');
+      
+      // Restart hostapd service to apply changes
+      await this.restartAccessPointServices();
+      
+      // Update our connection status
+      await this.updateConnectionStatus();
+      
+      logger.info('Access point configuration completed and applied', {
+        ssid,
+        channel,
+        hidden,
+        status: this.connectionStatus.ap0
+      });
+      
+      return { 
+        success: true, 
+        config: { ssid, channel, hidden },
+        status: this.connectionStatus.ap0
+      };
+      
     } catch (error) {
       logger.error('Access point configuration failed:', error);
       throw new Error(`AP configuration failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Restart access point services to apply configuration changes
+   */
+  async restartAccessPointServices() {
+    try {
+      logger.info('Restarting access point services...');
+      
+      // Stop services first
+      await execAsync('sudo systemctl stop hostapd dnsmasq').catch(error => {
+        logger.debug('Some services were already stopped:', error.message);
+      });
+      
+      // Wait a moment for services to fully stop
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Restart services
+      await execAsync('sudo systemctl start hostapd');
+      await execAsync('sudo systemctl start dnsmasq');
+      
+      // Wait for services to be ready
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      logger.info('Access point services restarted successfully');
+      
+      // Verify services are running
+      const services = await this.getServiceStatus();
+      logger.debug('Service status after restart:', services);
+      
+      return true;
+      
+    } catch (error) {
+      logger.error('Failed to restart access point services:', error);
+      throw new Error(`Service restart failed: ${error.message}`);
     }
   }
 
@@ -463,7 +581,7 @@ export class NetworkManager {
   getDefaultHostapdConfig() {
     return `interface=ap0
 driver=nl80211
-ssid=CanonController
+ssid=PiCameraController
 hw_mode=g
 channel=7
 wmm_enabled=0
@@ -471,11 +589,174 @@ macaddr_acl=0
 auth_algs=1
 ignore_broadcast_ssid=0
 wpa=2
-wpa_passphrase=your_secure_password
+wpa_passphrase=camera123
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP
 rsn_pairwise=CCMP
 `;
+  }
+
+  /**
+   * Set WiFi regulatory country for international travel
+   */
+  async setWiFiCountry(countryCode) {
+    try {
+      // Validate country code (2-letter ISO code)
+      if (!countryCode || !/^[A-Z]{2}$/.test(countryCode)) {
+        throw new Error('Country code must be a 2-letter ISO code (e.g., US, GB, DE)');
+      }
+      
+      logger.info(`Setting WiFi country to: ${countryCode}`);
+      
+      // Set country in wpa_supplicant configuration
+      await execAsync(`sudo wpa_cli -i wlan0 set country ${countryCode}`);
+      await execAsync(`sudo wpa_cli -i wlan0 save_config`);
+      
+      // Update regulatory domain via iw (if available)
+      try {
+        await execAsync(`sudo iw reg set ${countryCode}`);
+        logger.debug('Regulatory domain updated via iw');
+      } catch (error) {
+        logger.debug('Could not set regulatory domain via iw:', error.message);
+      }
+      
+      // Update /etc/wpa_supplicant/wpa_supplicant.conf if it exists
+      try {
+        const wpaConfigPath = '/etc/wpa_supplicant/wpa_supplicant.conf';
+        let wpaConfig = await readFile(wpaConfigPath, 'utf8');
+        
+        // Check if country line exists
+        if (wpaConfig.includes('country=')) {
+          wpaConfig = wpaConfig.replace(/^country=.*/m, `country=${countryCode}`);
+        } else {
+          // Add country line after ctrl_interface if it exists, otherwise at the beginning
+          if (wpaConfig.includes('ctrl_interface=')) {
+            wpaConfig = wpaConfig.replace(
+              /^(ctrl_interface=.*)/m, 
+              `$1\ncountry=${countryCode}`
+            );
+          } else {
+            wpaConfig = `country=${countryCode}\n${wpaConfig}`;
+          }
+        }
+        
+        // Write updated configuration
+        const tempPath = `/tmp/wpa_supplicant.conf.${Date.now()}`;
+        await writeFile(tempPath, wpaConfig, 'utf8');
+        await execAsync(`sudo cp "${tempPath}" "${wpaConfigPath}"`);
+        await execAsync(`sudo rm -f "${tempPath}"`);
+        
+        logger.debug('Updated wpa_supplicant configuration file');
+        
+      } catch (error) {
+        logger.warn('Could not update wpa_supplicant.conf:', error.message);
+      }
+      
+      // Restart wpa_supplicant to apply changes
+      try {
+        await execAsync('sudo systemctl restart wpa_supplicant@wlan0');
+        logger.debug('Restarted wpa_supplicant service');
+      } catch (error) {
+        logger.warn('Could not restart wpa_supplicant service:', error.message);
+      }
+      
+      logger.info(`WiFi country set to ${countryCode} successfully`);
+      return { success: true, country: countryCode };
+      
+    } catch (error) {
+      logger.error('Failed to set WiFi country:', error);
+      throw new Error(`WiFi country setting failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get current WiFi country setting
+   */
+  async getWiFiCountry() {
+    try {
+      // Try to get country from wpa_cli first
+      const { stdout } = await execAsync('wpa_cli -i wlan0 get country 2>/dev/null || echo ""');
+      const country = stdout.trim();
+      
+      if (country && country !== 'FAIL' && country.length === 2) {
+        return { country: country.toUpperCase() };
+      }
+      
+      // Fallback: check wpa_supplicant.conf
+      try {
+        const wpaConfig = await readFile('/etc/wpa_supplicant/wpa_supplicant.conf', 'utf8');
+        const match = wpaConfig.match(/^country=([A-Z]{2})/m);
+        if (match) {
+          return { country: match[1] };
+        }
+      } catch (error) {
+        logger.debug('Could not read wpa_supplicant.conf:', error.message);
+      }
+      
+      // Default to US if no country is set
+      return { country: 'US' };
+      
+    } catch (error) {
+      logger.error('Failed to get WiFi country:', error);
+      return { country: 'US' }; // Safe default
+    }
+  }
+
+  /**
+   * Get list of common country codes for international travel
+   */
+  getCountryCodes() {
+    return [
+      { code: 'AD', name: 'Andorra' },
+      { code: 'AE', name: 'United Arab Emirates' },
+      { code: 'AR', name: 'Argentina' },
+      { code: 'AT', name: 'Austria' },
+      { code: 'AU', name: 'Australia' },
+      { code: 'BE', name: 'Belgium' },
+      { code: 'BG', name: 'Bulgaria' },
+      { code: 'BR', name: 'Brazil' },
+      { code: 'CA', name: 'Canada' },
+      { code: 'CH', name: 'Switzerland' },
+      { code: 'CN', name: 'China' },
+      { code: 'CZ', name: 'Czech Republic' },
+      { code: 'DE', name: 'Germany' },
+      { code: 'DK', name: 'Denmark' },
+      { code: 'EE', name: 'Estonia' },
+      { code: 'ES', name: 'Spain' },
+      { code: 'FI', name: 'Finland' },
+      { code: 'FR', name: 'France' },
+      { code: 'GB', name: 'United Kingdom' },
+      { code: 'GR', name: 'Greece' },
+      { code: 'HK', name: 'Hong Kong' },
+      { code: 'HR', name: 'Croatia' },
+      { code: 'HU', name: 'Hungary' },
+      { code: 'IE', name: 'Ireland' },
+      { code: 'IL', name: 'Israel' },
+      { code: 'IN', name: 'India' },
+      { code: 'IS', name: 'Iceland' },
+      { code: 'IT', name: 'Italy' },
+      { code: 'JP', name: 'Japan' },
+      { code: 'KR', name: 'South Korea' },
+      { code: 'LT', name: 'Lithuania' },
+      { code: 'LU', name: 'Luxembourg' },
+      { code: 'LV', name: 'Latvia' },
+      { code: 'MX', name: 'Mexico' },
+      { code: 'NL', name: 'Netherlands' },
+      { code: 'NO', name: 'Norway' },
+      { code: 'NZ', name: 'New Zealand' },
+      { code: 'PL', name: 'Poland' },
+      { code: 'PT', name: 'Portugal' },
+      { code: 'RO', name: 'Romania' },
+      { code: 'RU', name: 'Russia' },
+      { code: 'SE', name: 'Sweden' },
+      { code: 'SG', name: 'Singapore' },
+      { code: 'SI', name: 'Slovenia' },
+      { code: 'SK', name: 'Slovakia' },
+      { code: 'TR', name: 'Turkey' },
+      { code: 'TW', name: 'Taiwan' },
+      { code: 'US', name: 'United States' },
+      { code: 'ZA', name: 'South Africa' }
+    ];
   }
 
   /**

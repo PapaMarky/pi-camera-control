@@ -50,7 +50,7 @@ Create `/etc/hostapd/hostapd.conf`:
 ```bash
 interface=ap0
 driver=nl80211
-ssid=CanonController
+ssid=PiCameraController
 hw_mode=g
 channel=7
 wmm_enabled=0
@@ -242,7 +242,7 @@ sudo hostapd -d /etc/hostapd/hostapd.conf
 
 ## Security Considerations
 
-- Change default SSID and password in production
+- Change default SSID and password from PiCameraController/camera123 in production
 - Consider disabling WPS if not needed
 - Use strong WPA2 passwords (minimum 12 characters)
 - Regularly update system packages

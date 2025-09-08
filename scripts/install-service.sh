@@ -29,6 +29,16 @@ cp "$SERVICE_FILE" "$SYSTEMD_DIR/"
 # Set correct permissions
 chmod 644 "$SYSTEMD_DIR/$SERVICE_FILE"
 
+# Install network mode control script
+echo "Installing network mode control script..."
+if [[ -f "scripts/camera-network-mode" ]]; then
+    sudo cp "scripts/camera-network-mode" "/usr/local/bin/"
+    sudo chmod 755 "/usr/local/bin/camera-network-mode"
+    echo "Network mode script installed to /usr/local/bin/camera-network-mode"
+else
+    echo "Warning: scripts/camera-network-mode not found - network mode switching may not work"
+fi
+
 # Reload systemd daemon
 echo "Reloading systemd daemon..."
 systemctl daemon-reload

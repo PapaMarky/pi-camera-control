@@ -218,9 +218,10 @@ class NetworkUI {
         const devicesElement = document.getElementById('ap-connected-devices');
         const clientsDetailElement = document.getElementById('ap-clients-detail');
         const headerClientsElement = document.getElementById('ap-clients-count');
+        const ssidElement = document.getElementById('ap-ssid');
 
         if (apData) {
-            const { active, clients, ip } = apData;
+            const { active, clients, ip, ssid } = apData;
             const clientCount = clients ? clients.length : 0;
 
             const status = active ? 'Active' : 'Inactive';
@@ -229,6 +230,7 @@ class NetworkUI {
             if (devicesElement) devicesElement.textContent = clientCount.toString();
             if (clientsDetailElement) clientsDetailElement.textContent = `${clientCount} connected`;
             if (headerClientsElement) headerClientsElement.textContent = clientCount.toString();
+            if (ssidElement && ssid) ssidElement.textContent = ssid;
         }
     }
 
@@ -456,8 +458,8 @@ class NetworkUI {
     saveAPConfiguration() {
         const ssid = document.getElementById('ap-ssid-input')?.value;
         const password = document.getElementById('ap-password-input')?.value;
-        const channel = document.getElementById('ap-channel-input')?.value;
-        const hidden = document.getElementById('ap-hidden-checkbox')?.checked;
+        const channel = document.getElementById('ap-channel-input')?.value || '7';
+        const hidden = document.getElementById('ap-hidden-checkbox')?.checked || false;
 
         if (!ssid || !password) {
             this.showToast('SSID and password are required', 'error');
@@ -472,8 +474,39 @@ class NetworkUI {
         this.hideAPConfigModal();
         this.showToast('Saving access point configuration...', 'info');
 
-        // Note: This would require system privileges to actually apply
-        this.showToast('Configuration saved (restart may be required)', 'info');
+        // Send configuration to backend via API
+        fetch('/api/network/accesspoint/configure', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                ssid: ssid.trim(),
+                passphrase: password,
+                channel: parseInt(channel),
+                hidden: hidden
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.showToast(`Access point configured successfully! SSID: ${data.config.ssid}`, 'success');
+                
+                // Update the UI with new settings
+                setTimeout(() => {
+                    // Refresh network status to show updated AP info
+                    if (this.ws && this.ws.send) {
+                        this.ws.send('get_status');
+                    }
+                }, 2000);
+            } else {
+                this.showToast(`Configuration failed: ${data.error || 'Unknown error'}`, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('AP configuration error:', error);
+            this.showToast('Failed to save configuration - check network connection', 'error');
+        });
     }
 
     setButtonLoading(buttonId, loading) {

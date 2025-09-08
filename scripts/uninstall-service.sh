@@ -33,6 +33,12 @@ if [[ -f "$SYSTEMD_DIR/$SERVICE_FILE" ]]; then
     rm "$SYSTEMD_DIR/$SERVICE_FILE"
 fi
 
+# Remove network mode control script
+if [[ -f "/usr/local/bin/camera-network-mode" ]]; then
+    echo "Removing network mode control script..."
+    sudo rm -f "/usr/local/bin/camera-network-mode"
+fi
+
 # Reload systemd daemon
 echo "Reloading systemd daemon..."
 systemctl daemon-reload

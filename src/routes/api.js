@@ -348,6 +348,45 @@ export function createApiRouter(cameraController, powerManager, server, networkM
         res.status(500).json({ error: error.message });
       }
     });
+
+    // Set WiFi country for international travel
+    router.post('/network/wifi/country', async (req, res) => {
+      try {
+        const { country } = req.body;
+        
+        if (!country) {
+          return res.status(400).json({ error: 'Country code is required' });
+        }
+        
+        const result = await networkManager.setWiFiCountry(country.toUpperCase());
+        res.json(result);
+      } catch (error) {
+        logger.error('WiFi country setting failed:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Get current WiFi country
+    router.get('/network/wifi/country', async (req, res) => {
+      try {
+        const result = await networkManager.getWiFiCountry();
+        res.json(result);
+      } catch (error) {
+        logger.error('Failed to get WiFi country:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Get available country codes
+    router.get('/network/wifi/countries', async (req, res) => {
+      try {
+        const countries = networkManager.getCountryCodes();
+        res.json({ countries });
+      } catch (error) {
+        logger.error('Failed to get country codes:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
   }
 
   // Error handling middleware for API routes
