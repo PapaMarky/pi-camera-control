@@ -495,9 +495,28 @@ export class NetworkManager {
       // Update configuration with new values
       hostapdConfig = hostapdConfig
         .replace(/^ssid=.*/m, `ssid=${ssid}`)
-        .replace(/^wpa_passphrase=.*/m, `wpa_passphrase=${passphrase}`)
         .replace(/^channel=.*/m, `channel=${channel}`)
         .replace(/^ignore_broadcast_ssid=.*/m, `ignore_broadcast_ssid=${hidden ? '1' : '0'}`);
+      
+      // Handle WPA configuration - replace if exists, add if missing
+      if (hostapdConfig.includes('wpa_passphrase=')) {
+        hostapdConfig = hostapdConfig.replace(/^wpa_passphrase=.*/m, `wpa_passphrase=${passphrase}`);
+      } else {
+        // Add WPA configuration if missing
+        if (!hostapdConfig.includes('wpa=2')) {
+          hostapdConfig += `wpa=2\n`;
+        }
+        hostapdConfig += `wpa_passphrase=${passphrase}\n`;
+        if (!hostapdConfig.includes('wpa_key_mgmt=')) {
+          hostapdConfig += `wpa_key_mgmt=WPA-PSK\n`;
+        }
+        if (!hostapdConfig.includes('wpa_pairwise=')) {
+          hostapdConfig += `wpa_pairwise=TKIP\n`;
+        }
+        if (!hostapdConfig.includes('rsn_pairwise=')) {
+          hostapdConfig += `rsn_pairwise=CCMP\n`;
+        }
+      }
       
       // Write configuration file (we run as root via systemd service)
       const configPath = '/etc/hostapd/hostapd.conf';
