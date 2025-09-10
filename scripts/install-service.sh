@@ -43,6 +43,10 @@ fi
 echo "Reloading systemd daemon..."
 systemctl daemon-reload
 
+# Disable IPv6 system-wide for simplified networking
+echo "Disabling IPv6 system-wide..."
+./scripts/disable-ipv6.sh
+
 # Enable service to start on boot
 echo "Enabling service to start on boot..."
 systemctl enable "$SERVICE_NAME"
@@ -56,7 +60,11 @@ echo ""
 echo "Service installation complete!"
 echo "Service status:"
 systemctl status "$SERVICE_NAME" --no-pager --lines=5
-
+echo ""
+echo "=== IPv6 Disabled ==="
+echo "IPv6 has been disabled system-wide for simplified networking."
+echo "A reboot is required for all IPv6 changes to take effect:"
+echo "  sudo reboot"
 echo ""
 echo "Useful commands:"
 echo "  Check status:    sudo systemctl status $SERVICE_NAME"
