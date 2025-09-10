@@ -82,6 +82,49 @@ export function createApiRouter(cameraController, powerManager, server, networkM
     }
   });
 
+  // Update camera IP and port configuration
+  router.post('/camera/configure', async (req, res) => {
+    try {
+      const { ip, port = '443' } = req.body;
+      
+      // Validate IP address format
+      if (!ip || typeof ip !== 'string') {
+        return res.status(400).json({ success: false, error: 'IP address is required' });
+      }
+      
+      // Basic IP address validation
+      const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+      if (!ipRegex.test(ip)) {
+        return res.status(400).json({ success: false, error: 'Invalid IP address format' });
+      }
+      
+      // Validate port
+      const portNum = parseInt(port);
+      if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+        return res.status(400).json({ success: false, error: 'Port must be between 1 and 65535' });
+      }
+      
+      logger.info(`Camera configuration update requested: ${ip}:${port}`);
+      const result = await cameraController.updateConfiguration(ip, port.toString());
+      
+      if (result) {
+        res.json({ 
+          success: true, 
+          message: 'Camera configuration updated successfully',
+          configuration: { ip, port }
+        });
+      } else {
+        res.json({ 
+          success: false, 
+          error: 'Failed to connect to camera with new configuration' 
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to update camera configuration:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // Validate intervalometer settings
   router.post('/camera/validate-interval', async (req, res) => {
     try {
@@ -202,6 +245,86 @@ export function createApiRouter(cameraController, powerManager, server, networkM
     } catch (error) {
       logger.error('Failed to get intervalometer status:', error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Set system time from client
+  router.post('/system/time', async (req, res) => {
+    try {
+      const { timestamp } = req.body;
+      
+      if (!timestamp) {
+        return res.status(400).json({ error: 'Timestamp is required' });
+      }
+      
+      const clientTime = new Date(timestamp);
+      if (isNaN(clientTime.getTime())) {
+        return res.status(400).json({ error: 'Invalid timestamp format' });
+      }
+      
+      // Check if we're running on Linux (Pi) before attempting to set system time
+      if (process.platform !== 'linux') {
+        logger.warn('Time sync requested but not running on Linux - ignoring');
+        return res.json({ 
+          success: false, 
+          error: 'Time synchronization only supported on Linux systems',
+          currentTime: new Date().toISOString()
+        });
+      }
+      
+      // Format timestamp for date command (YYYY-MM-DD HH:MM:SS)
+      const formattedTime = clientTime.toISOString().slice(0, 19).replace('T', ' ');
+      
+      logger.info(`Time sync requested. Current: ${new Date().toISOString()}, Client: ${clientTime.toISOString()}`);
+      
+      // Use child_process to set system time
+      const { spawn } = await import('child_process');
+      const setTime = spawn('sudo', ['date', '-s', formattedTime], { stdio: 'pipe' });
+      
+      setTime.on('close', (code) => {
+        if (code === 0) {
+          const newTime = new Date().toISOString();
+          logger.info(`System time synchronized successfully to: ${newTime}`);
+          res.json({ 
+            success: true, 
+            message: 'System time synchronized successfully',
+            previousTime: new Date().toISOString(),
+            newTime: newTime
+          });
+        } else {
+          logger.error(`Time sync failed with exit code: ${code}`);
+          res.status(500).json({ 
+            success: false, 
+            error: 'Failed to set system time. Check sudo permissions.' 
+          });
+        }
+      });
+      
+      setTime.on('error', (error) => {
+        logger.error('Time sync error:', error);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to execute time sync command' 
+        });
+      });
+      
+    } catch (error) {
+      logger.error('Failed to sync time:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get current system time
+  router.get('/system/time', (req, res) => {
+    try {
+      res.json({
+        currentTime: new Date().toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      logger.error('Failed to get system time:', error);
+      res.status(500).json({ error: 'Failed to get system time' });
     }
   });
 

@@ -27,6 +27,9 @@ class CameraManager {
     
     // Initial status check via REST API (fallback if WebSocket fails)
     await this.updateCameraStatus();
+    
+    // Get intervalometer status immediately on startup
+    await this.refreshIntervalometerStatus();
   }
 
   initializeCardSystem() {
@@ -45,6 +48,10 @@ class CameraManager {
 
     document.getElementById('get-settings-btn').addEventListener('click', () => {
       this.getCameraSettings();
+    });
+
+    document.getElementById('update-camera-config-btn').addEventListener('click', () => {
+      this.updateCameraConfiguration();
     });
 
     // Intervalometer controls
@@ -581,6 +588,71 @@ class CameraManager {
     }
   }
 
+  async updateCameraConfiguration() {
+    const ipInput = document.getElementById('camera-ip');
+    const portInput = document.getElementById('camera-port');
+    
+    const ip = ipInput.value.trim();
+    const port = portInput.value.trim() || '443';
+    
+    if (!ip) {
+      this.handleError('Please enter a camera IP address');
+      return;
+    }
+    
+    // Basic IP validation
+    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    if (!ipRegex.test(ip)) {
+      this.handleError('Please enter a valid IP address (e.g., 192.168.1.100)');
+      return;
+    }
+    
+    this.log(`Updating camera configuration to ${ip}:${port}...`, 'info');
+    this.setButtonLoading('update-camera-config-btn', true);
+    
+    try {
+      const response = await fetch('/api/camera/configure', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ip, port })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        this.log(`Camera configuration updated successfully: ${ip}:${port}`, 'success');
+        // Clear form validation states
+        ipInput.setCustomValidity('');
+        portInput.setCustomValidity('');
+      } else {
+        this.handleError(`Configuration update failed: ${result.error}`);
+      }
+    } catch (error) {
+      this.handleError(`Configuration update failed: ${error.message}`);
+    } finally {
+      this.setButtonLoading('update-camera-config-btn', false);
+    }
+  }
+
+  populateCameraConfigForm() {
+    // Get current camera status to populate form with current IP
+    const ipInput = document.getElementById('camera-ip');
+    const portInput = document.getElementById('camera-port');
+    
+    if (this.status && this.status.ip) {
+      ipInput.value = this.status.ip;
+    } else {
+      ipInput.placeholder = '192.168.12.98';
+    }
+    
+    // Port is typically 443 for Canon cameras
+    if (!portInput.value) {
+      portInput.value = '443';
+    }
+  }
+
   async validateInterval() {
     const interval = parseFloat(document.getElementById('interval-input').value);
     
@@ -680,6 +752,28 @@ class CameraManager {
   }
 
   async stopIntervalometer() {
+    // Show confirmation dialog with current session info
+    const stats = this.intervalometerState?.stats || {};
+    const shotsTaken = stats.shotsTaken || 0;
+    const shotsSuccessful = stats.shotsSuccessful || 0;
+    const totalShots = this.intervalometerState?.options?.totalShots;
+    
+    let confirmMessage = 'Are you sure you want to stop the intervalometer?';
+    if (shotsTaken > 0) {
+      confirmMessage += `\n\nCurrent progress: ${shotsTaken} shots taken`;
+      if (shotsSuccessful < shotsTaken) {
+        confirmMessage += ` (${shotsSuccessful} successful)`;
+      }
+      if (totalShots && totalShots > 0) {
+        const progress = ((shotsTaken / totalShots) * 100).toFixed(1);
+        confirmMessage += ` - ${progress}% complete`;
+      }
+    }
+    
+    if (!confirm(confirmMessage)) {
+      return; // User cancelled
+    }
+
     this.log('Stopping intervalometer...', 'info');
     this.setButtonLoading('stop-intervalometer-btn', true);
 
@@ -1108,9 +1202,15 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
       targetCard.style.display = 'block';
     }
     
-    // Handle special case for intervalometer progress view
+    // Handle special cases
     if (cardName === 'intervalometer') {
       this.updateIntervalometerView();
+    } else if (cardName === 'network-settings') {
+      this.populateCameraConfigForm();
+    } else if (cardName === 'utilities') {
+      if (window.utilitiesManager) {
+        window.utilitiesManager.initialize();
+      }
     }
     
     // Update menu active states
@@ -1200,6 +1300,12 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
     
     if (setupSection) setupSection.style.display = 'block';
     if (progressSection) progressSection.style.display = 'none';
+    
+    // Disable stop button when not running
+    const stopButton = document.getElementById('stop-intervalometer-btn');
+    if (stopButton) {
+      stopButton.disabled = true;
+    }
   }
 
   showIntervalometerProgress() {
@@ -1208,6 +1314,12 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
     
     if (setupSection) setupSection.style.display = 'none';
     if (progressSection) progressSection.style.display = 'block';
+    
+    // Enable stop button when intervalometer is running
+    const stopButton = document.getElementById('stop-intervalometer-btn');
+    if (stopButton) {
+      stopButton.disabled = false;
+    }
   }
 
   updateProgressDisplay(status) {
