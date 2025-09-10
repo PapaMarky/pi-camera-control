@@ -262,3 +262,6 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Documentation from Canon Cannot be published
+CanonDocs/
