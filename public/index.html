@@ -58,6 +58,7 @@
                         <div id="function-menu-dropdown" class="function-menu-dropdown" style="display: none;">
                             <button class="menu-item" data-card="controller-status">Controller Status</button>
                             <button class="menu-item" data-card="network-settings">Network Settings</button>
+                            <button class="menu-item" data-card="utilities">Utilities</button>
                             <button class="menu-item" data-card="test-shot" disabled>Test Shot</button>
                             <button class="menu-item" data-card="camera-settings" disabled>Camera Settings</button>
                             <button class="menu-item" data-card="intervalometer" disabled>Intervalometer</button>
@@ -221,7 +222,7 @@
                             </div>
                             <div class="status-row">
                                 <span class="label">SSID:</span>
-                                <span id="ap-ssid">CanonController</span>
+                                <span id="ap-ssid">-</span>
                             </div>
                             <div class="status-row">
                                 <span class="label">IP Address:</span>
@@ -237,6 +238,67 @@
                             <button id="configure-ap-btn" class="secondary-btn">
                                 <span class="btn-icon">⚙️</span>
                                 <span class="btn-text">Configure AP</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Camera Connection Configuration -->
+                    <div class="network-section">
+                        <h4>Camera Connection</h4>
+                        <div class="config-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="camera-ip">Camera IP Address:</label>
+                                    <input type="text" id="camera-ip" placeholder="192.168.12.98" pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$">
+                                </div>
+                                <div class="form-group">
+                                    <label for="camera-port">Port:</label>
+                                    <input type="number" id="camera-port" placeholder="443" min="1" max="65535" value="443">
+                                </div>
+                            </div>
+                            <button id="update-camera-config-btn" class="primary-btn">
+                                <span class="btn-icon">🔗</span>
+                                <span class="btn-text">Update Connection</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Utilities Card -->
+            <div class="function-card" id="utilities-card" style="display: none;">
+                <div class="card-header">
+                    <h3>Utilities</h3>
+                </div>
+                <div class="card-content">
+                    <!-- Time Synchronization Section -->
+                    <div class="utility-section">
+                        <h4>Time Synchronization</h4>
+                        <p class="section-description">Sync system clock to prevent timelapse timing issues in remote locations</p>
+                        
+                        <div class="time-info">
+                            <div class="status-row">
+                                <span class="label">Pi Time:</span>
+                                <span id="pi-current-time">Loading...</span>
+                            </div>
+                            <div class="status-row">
+                                <span class="label">Your Device:</span>
+                                <span id="client-current-time">Loading...</span>
+                            </div>
+                            <div class="status-row">
+                                <span class="label">Time Difference:</span>
+                                <span id="time-difference">Calculating...</span>
+                            </div>
+                        </div>
+                        
+                        <div class="button-grid">
+                            <button id="get-time-btn" class="secondary-btn">
+                                <span class="btn-icon">🕐</span>
+                                <span class="btn-text">Get Current Time</span>
+                            </button>
+                            <button id="sync-time-btn" class="primary-btn">
+                                <span class="btn-icon">🔄</span>
+                                <span class="btn-text">Sync Time to Pi</span>
                             </button>
                         </div>
                     </div>
@@ -426,7 +488,7 @@
                 <div class="modal-body">
                     <div class="input-group">
                         <label for="ap-ssid-input">Network Name (SSID):</label>
-                        <input type="text" id="ap-ssid-input" value="CanonController" maxlength="32">
+                        <input type="text" id="ap-ssid-input" value="PiCameraController" maxlength="32">
                     </div>
                     <div class="input-group">
                         <label for="ap-password-input">Password:</label>
@@ -469,6 +531,7 @@
     <script src="js/websocket.js"></script>
     <script src="js/camera.js"></script>
     <script src="js/network.js"></script>
+    <script src="js/utilities.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
