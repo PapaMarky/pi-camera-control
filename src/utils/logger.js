@@ -38,7 +38,31 @@ if (process.env.NODE_ENV !== 'production') {
       winston.format.colorize(),
       winston.format.timestamp({ format: 'HH:mm:ss' }),
       winston.format.printf(({ timestamp, level, message, ...meta }) => {
-        let metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
+        let metaStr = '';
+        if (Object.keys(meta).length) {
+          try {
+            // Safe stringify that handles circular references
+            metaStr = ` ${JSON.stringify(meta, (key, value) => {
+              // Skip circular references and complex objects
+              if (value && typeof value === 'object') {
+                // Skip HTTP request/response objects that contain circular references
+                if (value.constructor && (
+                  value.constructor.name === 'ClientRequest' ||
+                  value.constructor.name === 'IncomingMessage' ||
+                  value.constructor.name === 'TLSSocket' ||
+                  value.constructor.name === 'Socket'
+                )) {
+                  return '[Circular Reference]';
+                }
+                // Handle other potential circular references
+                if (value === meta) return '[Self Reference]';
+              }
+              return value;
+            })}`;
+          } catch (err) {
+            metaStr = ` [Logging Error: ${err.message}]`;
+          }
+        }
         return `${timestamp} [${level}] ${message}${metaStr}`;
       })
     )
