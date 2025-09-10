@@ -30,6 +30,39 @@ export class CameraController {
     });
   }
 
+  /**
+   * Update camera IP and port configuration
+   */
+  async updateConfiguration(newIp, newPort = '443') {
+    logger.info(`Updating camera configuration from ${this.baseUrl} to https://${newIp}:${newPort}`);
+    
+    // Stop current connection monitoring
+    this.stopConnectionMonitoring();
+    
+    // Update configuration
+    this.ip = newIp;
+    this.port = newPort;
+    this.baseUrl = `https://${newIp}:${newPort}`;
+    
+    // Reset connection state
+    this.connected = false;
+    this.lastError = null;
+    this.shutterEndpoint = null;
+    this.capabilities = null;
+    this.reconnectAttempts = 0;
+    
+    // Attempt to connect with new configuration
+    try {
+      await this.connect();
+      this.startConnectionMonitoring();
+      logger.info(`Successfully updated camera configuration to ${this.baseUrl}`);
+      return true;
+    } catch (error) {
+      logger.error(`Failed to connect to new camera configuration ${this.baseUrl}:`, error);
+      return false;
+    }
+  }
+
   async initialize() {
     logger.info(`Initializing camera controller for ${this.baseUrl}`);
     

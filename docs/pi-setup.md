@@ -21,10 +21,22 @@ sudo apt update -y
 sudo apt full-upgrade -y
 ```
 
-### Devel
+### Required Packages
 ```commandline
-sudo apt install screen avahi-utils npm -y
+sudo apt install screen avahi-utils npm hostapd dnsmasq -y
 npm install
+```
+
+### Access Point Setup
+For full field operation (Access Point functionality):
+```commandline
+# Run the AP configuration script
+chmod +x configure-ap.sh
+sudo ./configure-ap.sh
+
+# Setup network mode switching
+chmod +x setup-network-mode.sh
+sudo ./setup-network-mode.sh
 ```
 
 ## Deploy / Setup PiCameraControl

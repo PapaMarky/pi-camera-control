@@ -13,6 +13,17 @@ export class IntervalometerSession extends EventEmitter {
       stopTime: null, // Date object
       ...options
     };
+
+    // Calculate totalShots if we have stopTime but no explicit totalShots
+    if (this.options.stopTime && !this.options.totalShots) {
+      const now = new Date();
+      const durationMs = this.options.stopTime.getTime() - now.getTime();
+      const intervalMs = this.options.interval * 1000;
+      if (durationMs > 0) {
+        this.options.totalShots = Math.ceil(durationMs / intervalMs);
+        logger.info(`Calculated totalShots: ${this.options.totalShots} based on stopTime and interval`);
+      }
+    }
     
     this.state = 'stopped'; // stopped, running, paused, completed, error
     this.stats = {
@@ -60,6 +71,16 @@ export class IntervalometerSession extends EventEmitter {
       currentShot: 0,
       errors: []
     };
+
+    // Recalculate totalShots based on actual start time if using stopTime
+    if (this.options.stopTime && !this.options.totalShots) {
+      const durationMs = this.options.stopTime.getTime() - this.stats.startTime.getTime();
+      const intervalMs = this.options.interval * 1000;
+      if (durationMs > 0) {
+        this.options.totalShots = Math.ceil(durationMs / intervalMs);
+        logger.info(`Recalculated totalShots: ${this.options.totalShots} based on actual startTime`);
+      }
+    }
 
     // Pause camera info polling during intervalometer session to avoid interference
     this.cameraController.pauseInfoPolling();
