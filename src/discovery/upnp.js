@@ -2,6 +2,7 @@ import dgram from 'dgram';
 import axios from 'axios';
 import { parseStringPromise } from 'xml2js';
 import { EventEmitter } from 'events';
+import { networkInterfaces } from 'os';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -49,6 +50,34 @@ export class UPnPDiscovery extends EventEmitter {
   }
 
   /**
+   * Get available network interfaces for camera discovery
+   */
+  getAvailableInterfaces() {
+    const interfaces = networkInterfaces();
+    const availableInterfaces = [];
+    
+    for (const [name, addresses] of Object.entries(interfaces)) {
+      if (!addresses) continue;
+      
+      for (const addr of addresses) {
+        // Look for IPv4 addresses that aren't loopback
+        if (addr.family === 'IPv4' && !addr.internal) {
+          availableInterfaces.push({
+            name,
+            address: addr.address,
+            netmask: addr.netmask,
+            // Prioritize access point interface
+            priority: name === 'ap0' ? 1 : name === 'wlan0' ? 2 : 3
+          });
+        }
+      }
+    }
+    
+    // Sort by priority (ap0 first, then wlan0, then others)
+    return availableInterfaces.sort((a, b) => a.priority - b.priority);
+  }
+
+  /**
    * Start listening for SSDP NOTIFY messages (camera advertisements)
    */
   async startListening() {
@@ -68,15 +97,10 @@ export class UPnPDiscovery extends EventEmitter {
         const address = this.socket.address();
         logger.debug(`UPnP listening on ${address.address}:${address.port}`);
         
-        // Join multicast group to receive NOTIFY messages
-        try {
-          this.socket.addMembership(this.MULTICAST_ADDRESS);
-          this.isListening = true;
-          resolve();
-        } catch (error) {
-          logger.error('Failed to join multicast group:', error);
-          reject(error);
-        }
+        // Join multicast group on all available interfaces
+        this.joinMulticastOnInterfaces();
+        this.isListening = true;
+        resolve();
       });
       
       // Bind to multicast port
@@ -85,14 +109,43 @@ export class UPnPDiscovery extends EventEmitter {
   }
 
   /**
-   * Perform M-SEARCH to actively discover Canon cameras
+   * Join multicast group on all available network interfaces
+   */
+  joinMulticastOnInterfaces() {
+    const interfaces = this.getAvailableInterfaces();
+    logger.debug('Available network interfaces:', interfaces.map(i => `${i.name}:${i.address}`));
+    
+    for (const iface of interfaces) {
+      try {
+        this.socket.addMembership(this.MULTICAST_ADDRESS, iface.address);
+        logger.debug(`Joined multicast on interface ${iface.name} (${iface.address})`);
+      } catch (error) {
+        logger.warn(`Failed to join multicast on interface ${iface.name} (${iface.address}):`, error.message);
+      }
+    }
+    
+    // If no specific interfaces worked, try default
+    if (interfaces.length === 0) {
+      try {
+        this.socket.addMembership(this.MULTICAST_ADDRESS);
+        logger.debug('Joined multicast on default interface');
+      } catch (error) {
+        logger.error('Failed to join multicast group:', error);
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Perform M-SEARCH to actively discover Canon cameras on all interfaces
    */
   async performMSearch() {
     if (!this.socket) {
       throw new Error('Socket not initialized');
     }
 
-    logger.debug('Performing M-SEARCH for Canon cameras...');
+    const interfaces = this.getAvailableInterfaces();
+    logger.debug('Performing M-SEARCH for Canon cameras on all interfaces...');
     
     for (const serviceType of this.CANON_SERVICE_TYPES) {
       const searchMessage = [
@@ -104,19 +157,45 @@ export class UPnPDiscovery extends EventEmitter {
         '', ''
       ].join('\\r\\n');
 
-      await new Promise((resolve, reject) => {
-        this.socket.send(searchMessage, this.MULTICAST_PORT, this.MULTICAST_ADDRESS, (error) => {
-          if (error) {
-            logger.error(`M-SEARCH failed for ${serviceType}:`, error);
-            reject(error);
-          } else {
-            logger.debug(`M-SEARCH sent for ${serviceType}`);
-            resolve();
-          }
-        });
-      });
+      // Send M-SEARCH on each available interface
+      for (const iface of interfaces) {
+        try {
+          // Set the outbound interface for this search
+          await new Promise((resolve, reject) => {
+            this.socket.send(searchMessage, this.MULTICAST_PORT, this.MULTICAST_ADDRESS, (error) => {
+              if (error) {
+                logger.warn(`M-SEARCH failed for ${serviceType} on ${iface.name}:`, error);
+                resolve(); // Don't fail the whole process
+              } else {
+                logger.debug(`M-SEARCH sent for ${serviceType} on ${iface.name} (${iface.address})`);
+                resolve();
+              }
+            });
+          });
+          
+          // Small delay between interface searches
+          await new Promise(resolve => setTimeout(resolve, 50));
+        } catch (error) {
+          logger.warn(`Error sending M-SEARCH on ${iface.name}:`, error.message);
+        }
+      }
       
-      // Small delay between searches
+      // If no interfaces available, try default
+      if (interfaces.length === 0) {
+        await new Promise((resolve, reject) => {
+          this.socket.send(searchMessage, this.MULTICAST_PORT, this.MULTICAST_ADDRESS, (error) => {
+            if (error) {
+              logger.error(`M-SEARCH failed for ${serviceType}:`, error);
+              reject(error);
+            } else {
+              logger.debug(`M-SEARCH sent for ${serviceType} on default interface`);
+              resolve();
+            }
+          });
+        });
+      }
+      
+      // Delay between service type searches
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   }

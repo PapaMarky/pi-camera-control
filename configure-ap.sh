@@ -9,7 +9,7 @@ sudo tee /etc/hostapd/hostapd.conf > /dev/null <<EOF
 # Basic configuration
 interface=ap0
 driver=nl80211
-ssid=PiCameraController
+ssid=PiCameraController002
 hw_mode=g
 channel=7
 wmm_enabled=0
@@ -117,5 +117,5 @@ echo "To test AP functionality:"
 echo "  sudo /usr/local/bin/start-ap-mode"
 echo "  sudo /usr/local/bin/stop-ap-mode"
 echo ""
-echo "The AP will broadcast 'PiCameraController' with password 'camera123'"
+echo "The AP will broadcast 'PiCameraController002' with password 'camera123'"
 echo "Clients will get IPs in range 192.168.4.2-192.168.4.20"

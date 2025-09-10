@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { UPnPDiscovery } from './upnp.js';
 import { CameraController } from '../camera/controller.js';
 import { logger } from '../utils/logger.js';
+import axios from 'axios';
 
 /**
  * Camera Discovery Manager
@@ -42,12 +43,36 @@ export class DiscoveryManager extends EventEmitter {
         this.isDiscovering = true;
         logger.info('Camera discovery started successfully');
         this.emit('discoveryStarted');
+        
+        // Start periodic status logging
+        this.logDiscoveryStatus();
+        
+        // Start fallback IP scanning after initial UPnP discovery
+        setTimeout(() => this.performFallbackScanning(), 5000);
       }
       return success;
     } catch (error) {
       logger.error('Failed to start camera discovery:', error);
       return false;
     }
+  }
+
+  /**
+   * Log discovery status for debugging
+   */
+  logDiscoveryStatus() {
+    setInterval(() => {
+      const networkInterfaces = this.upnp.getAvailableInterfaces();
+      logger.debug('Discovery status:', {
+        isDiscovering: this.isDiscovering,
+        cameras: this.cameras.size,
+        networkInterfaces: networkInterfaces.map(i => `${i.name}:${i.address}`)
+      });
+      
+      if (this.cameras.size > 0) {
+        logger.debug('Discovered cameras:', Array.from(this.cameras.keys()));
+      }
+    }, 30000); // Log every 30 seconds
   }
 
   /**
@@ -336,6 +361,100 @@ export class DiscoveryManager extends EventEmitter {
 
     // Connect to it
     return await this.connectToCamera(uuid);
+  }
+
+  /**
+   * Perform fallback IP scanning on known camera network ranges
+   */
+  async performFallbackScanning() {
+    logger.debug('Starting fallback IP scanning for cameras...');
+    
+    const networkRanges = [
+      '192.168.4', // Access point network
+      '192.168.12', // Development network  
+      '192.168.1',  // Common home network
+      '192.168.0'   // Another common range
+    ];
+
+    for (const baseRange of networkRanges) {
+      logger.debug(`Scanning network range ${baseRange}.x`);
+      
+      // Scan full DHCP range for access point, and common camera ranges for other networks
+      const promises = [];
+      if (baseRange === '192.168.4') {
+        // Access point network - scan full DHCP range (2-20)
+        for (let i = 2; i <= 20; i++) {
+          const ip = `${baseRange}.${i}`;
+          promises.push(this.checkCameraAtIp(ip));
+        }
+      } else {
+        // Other networks - scan common camera IP ranges (typically .90-99 for cameras)
+        for (let i = 90; i <= 99; i++) {
+          const ip = `${baseRange}.${i}`;
+          promises.push(this.checkCameraAtIp(ip));
+        }
+      }
+      
+      // Wait for all scans in this range to complete
+      await Promise.allSettled(promises);
+      
+      // Small delay between network ranges
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    logger.debug('Fallback IP scanning completed');
+  }
+
+  /**
+   * Check if there's a Canon camera at a specific IP
+   */
+  async checkCameraAtIp(ip, port = '443') {
+    try {
+      // Quick timeout test to see if anything is listening
+      const response = await axios.get(`https://${ip}:${port}/ccapi`, {
+        timeout: 2000,
+        httpsAgent: new (await import('https')).Agent({
+          rejectUnauthorized: false // Canon cameras use self-signed certs
+        })
+      });
+
+      if (response.status === 200 && response.data) {
+        logger.info(`Found potential Canon camera at ${ip}:${port}`);
+        
+        // Create device info for discovered camera
+        const uuid = `ip-scan-${ip}-${port}`;
+        const deviceInfo = {
+          uuid,
+          ipAddress: ip,
+          ccapiUrl: `https://${ip}:${port}/ccapi`,
+          modelName: response.data.model || 'Canon Camera',
+          friendlyName: `Camera at ${ip}`,
+          manufacturer: 'Canon',
+          discoveredAt: new Date(),
+          isManual: true,
+          discoveryMethod: 'ip-scan'
+        };
+
+        // Add to cameras if not already present
+        if (!this.cameras.has(uuid)) {
+          this.cameras.set(uuid, {
+            info: deviceInfo,
+            controller: null,
+            status: 'discovered',
+            lastError: null
+          });
+
+          logger.info(`Added camera found via IP scan: ${deviceInfo.friendlyName}`);
+          this.emit('cameraDiscovered', deviceInfo);
+        }
+      }
+    } catch (error) {
+      // Expected for most IPs - they won't have cameras
+      // Only log actual errors, not connection failures
+      if (error.code !== 'ECONNREFUSED' && error.code !== 'ETIMEDOUT' && error.code !== 'ENOTFOUND') {
+        logger.debug(`IP scan error for ${ip}:`, error.message);
+      }
+    }
   }
 
   /**
