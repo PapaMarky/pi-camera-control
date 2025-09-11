@@ -66,9 +66,6 @@ export class DiscoveryManager extends EventEmitter {
         
         // Start periodic status logging
         this.logDiscoveryStatus();
-        
-        // Start fallback IP scanning after initial UPnP discovery
-        setTimeout(() => this.performFallbackScanning(), 5000);
       }
       return success;
     } catch (error) {
