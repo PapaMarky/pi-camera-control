@@ -2,6 +2,7 @@ import dgram from 'dgram';
 import axios from 'axios';
 import { parseStringPromise } from 'xml2js';
 import { EventEmitter } from 'events';
+import { networkInterfaces } from 'os';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -22,10 +23,13 @@ export class UPnPDiscovery extends EventEmitter {
     this.MULTICAST_ADDRESS = '239.255.255.250';
     this.MULTICAST_PORT = 1900;
     
-    // Canon CCAPI service identifiers from documentation
+    // Canon CCAPI service identifiers from official documentation v1.40
     this.CANON_SERVICE_TYPES = [
-      'urn:schemas-canon-com:device:ICPO-CameraControlAPIService:1',
-      'urn:schemas-canon-com:service:ICPO-CameraControlAPIService:1'
+      'urn:schemas-canon-com:device:ICPO-CameraControlAPIService:1',    // Canon device type
+      'urn:schemas-canon-com:service:ICPO-CameraControlAPIService:1',   // Canon service type
+      'urn:schemas-upnp-org:device:ICPO-CameraControlAPIService:1',     // UPnP device type (official)
+      'upnp:rootdevice',  // General UPnP root device
+      'ssdp:all'          // All SSDP services
     ];
   }
 
@@ -49,6 +53,34 @@ export class UPnPDiscovery extends EventEmitter {
   }
 
   /**
+   * Get available network interfaces for camera discovery
+   */
+  getAvailableInterfaces() {
+    const interfaces = networkInterfaces();
+    const availableInterfaces = [];
+    
+    for (const [name, addresses] of Object.entries(interfaces)) {
+      if (!addresses) continue;
+      
+      for (const addr of addresses) {
+        // Look for IPv4 addresses that aren't loopback
+        if (addr.family === 'IPv4' && !addr.internal) {
+          availableInterfaces.push({
+            name,
+            address: addr.address,
+            netmask: addr.netmask,
+            // Prioritize access point interface
+            priority: name === 'ap0' ? 1 : name === 'wlan0' ? 2 : 3
+          });
+        }
+      }
+    }
+    
+    // Sort by priority (ap0 first, then wlan0, then others)
+    return availableInterfaces.sort((a, b) => a.priority - b.priority);
+  }
+
+  /**
    * Start listening for SSDP NOTIFY messages (camera advertisements)
    */
   async startListening() {
@@ -68,15 +100,10 @@ export class UPnPDiscovery extends EventEmitter {
         const address = this.socket.address();
         logger.debug(`UPnP listening on ${address.address}:${address.port}`);
         
-        // Join multicast group to receive NOTIFY messages
-        try {
-          this.socket.addMembership(this.MULTICAST_ADDRESS);
-          this.isListening = true;
-          resolve();
-        } catch (error) {
-          logger.error('Failed to join multicast group:', error);
-          reject(error);
-        }
+        // Join multicast group on all available interfaces
+        this.joinMulticastOnInterfaces();
+        this.isListening = true;
+        resolve();
       });
       
       // Bind to multicast port
@@ -85,14 +112,43 @@ export class UPnPDiscovery extends EventEmitter {
   }
 
   /**
-   * Perform M-SEARCH to actively discover Canon cameras
+   * Join multicast group on all available network interfaces
+   */
+  joinMulticastOnInterfaces() {
+    const interfaces = this.getAvailableInterfaces();
+    logger.debug('Available network interfaces:', interfaces.map(i => `${i.name}:${i.address}`));
+    
+    for (const iface of interfaces) {
+      try {
+        this.socket.addMembership(this.MULTICAST_ADDRESS, iface.address);
+        logger.info(`Joined multicast on interface ${iface.name} (${iface.address})`);
+      } catch (error) {
+        logger.warn(`Failed to join multicast on interface ${iface.name} (${iface.address}):`, error.message);
+      }
+    }
+    
+    // If no specific interfaces worked, try default
+    if (interfaces.length === 0) {
+      try {
+        this.socket.addMembership(this.MULTICAST_ADDRESS);
+        logger.debug('Joined multicast on default interface');
+      } catch (error) {
+        logger.error('Failed to join multicast group:', error);
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Perform M-SEARCH to actively discover Canon cameras on all interfaces
    */
   async performMSearch() {
     if (!this.socket) {
       throw new Error('Socket not initialized');
     }
 
-    logger.debug('Performing M-SEARCH for Canon cameras...');
+    const interfaces = this.getAvailableInterfaces();
+    logger.debug('Performing M-SEARCH for Canon cameras on all interfaces...');
     
     for (const serviceType of this.CANON_SERVICE_TYPES) {
       const searchMessage = [
@@ -104,19 +160,45 @@ export class UPnPDiscovery extends EventEmitter {
         '', ''
       ].join('\\r\\n');
 
-      await new Promise((resolve, reject) => {
-        this.socket.send(searchMessage, this.MULTICAST_PORT, this.MULTICAST_ADDRESS, (error) => {
-          if (error) {
-            logger.error(`M-SEARCH failed for ${serviceType}:`, error);
-            reject(error);
-          } else {
-            logger.debug(`M-SEARCH sent for ${serviceType}`);
-            resolve();
-          }
-        });
-      });
+      // Send M-SEARCH on each available interface
+      for (const iface of interfaces) {
+        try {
+          // Set the outbound interface for this search
+          await new Promise((resolve, reject) => {
+            this.socket.send(searchMessage, this.MULTICAST_PORT, this.MULTICAST_ADDRESS, (error) => {
+              if (error) {
+                logger.warn(`M-SEARCH failed for ${serviceType} on ${iface.name}:`, error);
+                resolve(); // Don't fail the whole process
+              } else {
+                logger.debug(`M-SEARCH sent for ${serviceType} on ${iface.name} (${iface.address})`);
+                resolve();
+              }
+            });
+          });
+          
+          // Small delay between interface searches
+          await new Promise(resolve => setTimeout(resolve, 50));
+        } catch (error) {
+          logger.warn(`Error sending M-SEARCH on ${iface.name}:`, error.message);
+        }
+      }
       
-      // Small delay between searches
+      // If no interfaces available, try default
+      if (interfaces.length === 0) {
+        await new Promise((resolve, reject) => {
+          this.socket.send(searchMessage, this.MULTICAST_PORT, this.MULTICAST_ADDRESS, (error) => {
+            if (error) {
+              logger.error(`M-SEARCH failed for ${serviceType}:`, error);
+              reject(error);
+            } else {
+              logger.debug(`M-SEARCH sent for ${serviceType} on default interface`);
+              resolve();
+            }
+          });
+        });
+      }
+      
+      // Delay between service type searches
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   }
@@ -126,16 +208,23 @@ export class UPnPDiscovery extends EventEmitter {
    */
   handleSSDPMessage(message, remote) {
     try {
-      const lines = message.split('\\r\\n');
+      logger.info(`Received SSDP message from ${remote.address}:${remote.port}:`);
+      logger.info(message); // Log the full message content
+      
+      const lines = message.split('\r\n');
       const firstLine = lines[0];
+      
+      logger.debug(`SSDP message type: ${firstLine}`);
       
       if (firstLine.startsWith('NOTIFY')) {
         this.handleNotifyMessage(lines, remote);
       } else if (firstLine.startsWith('HTTP/1.1 200 OK')) {
         this.handleSearchResponse(lines, remote);
+      } else {
+        logger.debug('Unknown SSDP message type:', firstLine);
       }
     } catch (error) {
-      logger.debug('Error parsing SSDP message:', error.message);
+      logger.error('Error parsing SSDP message:', error);
     }
   }
 
@@ -149,10 +238,18 @@ export class UPnPDiscovery extends EventEmitter {
     const nt = headers['nt'];
     const usn = headers['usn'];
     const nts = headers['nts'];
+    const location = headers['location'];
     
-    if (nts === 'ssdp:alive' && this.isCanonCamera(nt, usn)) {
-      logger.debug(`Canon camera advertisement from ${remote.address}:`, { nt, usn });
-      this.processDeviceLocation(headers, remote);
+    logger.debug(`NOTIFY message from ${remote.address}: NT=${nt}, USN=${usn}, NTS=${nts}, Location=${location}`);
+    
+    if (nts === 'ssdp:alive') {
+      const isCanon = this.isCanonCamera(nt, usn);
+      logger.debug(`Canon camera check result for NOTIFY: ${isCanon}`);
+      
+      if (isCanon) {
+        logger.info(`Canon camera NOTIFY from ${remote.address}:`, { nt, usn, location });
+        this.processDeviceLocation(headers, remote);
+      }
     } else if (nts === 'ssdp:byebye') {
       // Handle device going offline
       const deviceUUID = this.extractUUIDFromUSN(usn);
@@ -173,28 +270,46 @@ export class UPnPDiscovery extends EventEmitter {
     // Check if this is a Canon camera response
     const st = headers['st'];
     const usn = headers['usn'];
+    const location = headers['location'];
     
-    if (this.isCanonCamera(st, usn)) {
-      logger.debug(`Canon camera M-SEARCH response from ${remote.address}:`, { st, usn });
+    logger.debug(`M-SEARCH response from ${remote.address}: ST=${st}, USN=${usn}, Location=${location}`);
+    
+    const isCanon = this.isCanonCamera(st, usn);
+    logger.debug(`Canon camera check result for M-SEARCH response: ${isCanon}`);
+    
+    if (isCanon) {
+      logger.info(`Canon camera M-SEARCH response from ${remote.address}:`, { st, usn, location });
       this.processDeviceLocation(headers, remote);
     }
   }
 
   /**
-   * Check if the service type indicates a Canon camera
+   * Check if the service type indicates a Canon camera (based on CCAPI v1.40 specification)
    */
   isCanonCamera(serviceType, usn) {
     if (!serviceType && !usn) return false;
     
-    const canonIndicators = [
+    // Official Canon CCAPI service identifiers from documentation
+    const canonServiceTypes = [
       'ICPO-CameraControlAPIService',
-      'schemas-canon-com'
+      'schemas-canon-com',
+      'Canon Device Discovery',
+      'Canon Digital Camera'
     ];
     
-    return canonIndicators.some(indicator => 
+    // Check for Canon-specific service types in ST or USN
+    const hasCanonIndicator = canonServiceTypes.some(indicator => 
       (serviceType && serviceType.includes(indicator)) ||
       (usn && usn.includes(indicator))
     );
+    
+    // Accept upnp:rootdevice only if it has Canon indicators in USN
+    const isCanonRootDevice = (serviceType === 'upnp:rootdevice') && 
+      (usn && canonServiceTypes.some(indicator => usn.includes(indicator)));
+    
+    logger.debug(`Canon camera check - ST: ${serviceType}, USN: ${usn}, hasCanonIndicator: ${hasCanonIndicator}, isCanonRootDevice: ${isCanonRootDevice}`);
+    
+    return hasCanonIndicator || isCanonRootDevice;
   }
 
   /**
@@ -282,11 +397,16 @@ export class UPnPDiscovery extends EventEmitter {
         udn: device.UDN?.[0]
       };
 
-      // Extract Canon-specific extended information
-      const nsPrefix = 'ns:';
-      const xOnService = this.findExtendedValue(service, 'X_onService', nsPrefix);
-      const xAccessURL = this.findExtendedValue(service, 'X_accessURL', nsPrefix);
-      const xDeviceNickname = this.findExtendedValue(service, 'X_deviceNickname', nsPrefix);
+      // Extract Canon-specific extended information (CCAPI v1.40 specification)
+      // Try multiple namespace prefixes as Canon may vary implementation
+      const nsPrefixes = ['ns:', 'canon:', ''];
+      let xOnService, xAccessURL, xDeviceNickname;
+      
+      for (const prefix of nsPrefixes) {
+        xOnService = xOnService || this.findExtendedValue(service, 'X_onService', prefix);
+        xAccessURL = xAccessURL || this.findExtendedValue(service, 'X_accessURL', prefix);
+        xDeviceNickname = xDeviceNickname || this.findExtendedValue(service, 'X_deviceNickname', prefix);
+      }
 
       deviceInfo.connected = xOnService === '1';
       deviceInfo.ccapiUrl = xAccessURL;
@@ -307,10 +427,38 @@ export class UPnPDiscovery extends EventEmitter {
 
   /**
    * Find extended XML values with namespace prefix
+   * Handles xml2js parsed objects which can have various structures
    */
   findExtendedValue(service, tagName, nsPrefix = 'ns:') {
     const fullTagName = `${nsPrefix}${tagName}`;
-    return service[fullTagName]?.[0];
+    const value = service[fullTagName]?.[0];
+    
+    if (value === undefined || value === null) {
+      return null;
+    }
+    
+    // If it's already a string, return it
+    if (typeof value === 'string') {
+      return value;
+    }
+    
+    // If it's an object from xml2js, extract the text content
+    if (typeof value === 'object') {
+      // xml2js format: { _: "actual content", $: { attributes } }
+      if (value._ !== undefined) {
+        return value._;
+      }
+      // Some xml parsers put content in different properties
+      if (value['#text'] !== undefined) {
+        return value['#text'];
+      }
+      // If it's just an object with a text property
+      if (value.text !== undefined) {
+        return value.text;
+      }
+    }
+    
+    return value;
   }
 
   /**

@@ -2,13 +2,17 @@ import { Router } from 'express';
 import { logger } from '../utils/logger.js';
 import { IntervalometerSession } from '../intervalometer/session.js';
 
-export function createApiRouter(cameraController, powerManager, server, networkManager) {
+export function createApiRouter(getCameraController, powerManager, server, networkManager, discoveryManager) {
   const router = Router();
 
   // Camera status and connection
   router.get('/camera/status', (req, res) => {
     try {
-      const status = cameraController.getConnectionStatus();
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.json({ connected: false, error: 'No camera available' });
+      }
+      const status = currentController.getConnectionStatus();
       res.json(status);
     } catch (error) {
       logger.error('Failed to get camera status:', error);
@@ -19,7 +23,11 @@ export function createApiRouter(cameraController, powerManager, server, networkM
   // Camera settings
   router.get('/camera/settings', async (req, res) => {
     try {
-      const settings = await cameraController.getCameraSettings();
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      const settings = await currentController.getCameraSettings();
       res.json(settings);
     } catch (error) {
       logger.error('Failed to get camera settings:', error);
@@ -30,7 +38,11 @@ export function createApiRouter(cameraController, powerManager, server, networkM
   // Camera battery status
   router.get('/camera/battery', async (req, res) => {
     try {
-      const battery = await cameraController.getCameraBattery();
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      const battery = await currentController.getCameraBattery();
       res.json(battery);
     } catch (error) {
       logger.error('Failed to get camera battery:', error);
@@ -41,11 +53,15 @@ export function createApiRouter(cameraController, powerManager, server, networkM
   // Debug endpoint to see all available CCAPI endpoints
   router.get('/camera/debug/endpoints', (req, res) => {
     try {
-      const status = cameraController.getConnectionStatus();
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      const status = currentController.getConnectionStatus();
       res.json({
         connected: status.connected,
         baseUrl: `https://${status.ip}:${status.port}`,
-        capabilities: cameraController.capabilities,
+        capabilities: currentController.capabilities,
         shutterEndpoint: status.shutterEndpoint
       });
     } catch (error) {
@@ -508,6 +524,85 @@ export function createApiRouter(cameraController, powerManager, server, networkM
       } catch (error) {
         logger.error('Failed to get country codes:', error);
         res.status(500).json({ error: error.message });
+      }
+    });
+  }
+
+  // ===== Camera Discovery API =====
+  if (discoveryManager) {
+    // Get discovery status
+    router.get('/discovery/status', (req, res) => {
+      try {
+        const status = discoveryManager.getStatus();
+        res.json(status);
+      } catch (error) {
+        logger.error('Failed to get discovery status:', error);
+        res.status(500).json({ error: 'Failed to get discovery status' });
+      }
+    });
+
+    // Get discovered cameras
+    router.get('/discovery/cameras', (req, res) => {
+      try {
+        const cameras = discoveryManager.getDiscoveredCameras();
+        res.json(cameras);
+      } catch (error) {
+        logger.error('Failed to get discovered cameras:', error);
+        res.status(500).json({ error: 'Failed to get discovered cameras' });
+      }
+    });
+
+    // Manually trigger camera search
+    router.post('/discovery/scan', async (req, res) => {
+      try {
+        await discoveryManager.searchForCameras();
+        res.json({ success: true, message: 'Camera scan initiated' });
+      } catch (error) {
+        logger.error('Failed to trigger camera scan:', error);
+        res.status(500).json({ error: 'Failed to trigger camera scan' });
+      }
+    });
+
+    // Set primary camera
+    router.post('/discovery/primary/:uuid', async (req, res) => {
+      try {
+        const { uuid } = req.params;
+        const controller = await discoveryManager.setPrimaryCamera(uuid);
+        res.json({ success: true, message: 'Primary camera set', uuid });
+      } catch (error) {
+        logger.error('Failed to set primary camera:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Connect to camera by IP (manual connection)
+    router.post('/discovery/connect', async (req, res) => {
+      try {
+        const { ip, port = '443' } = req.body;
+        if (!ip) {
+          return res.status(400).json({ error: 'IP address is required' });
+        }
+        
+        const controller = await discoveryManager.connectToIp(ip, port);
+        res.json({ success: true, message: 'Connected to camera', ip, port });
+      } catch (error) {
+        logger.error('Failed to connect to camera:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Get specific camera by UUID
+    router.get('/discovery/cameras/:uuid', (req, res) => {
+      try {
+        const { uuid } = req.params;
+        const camera = discoveryManager.getCamera(uuid);
+        if (!camera) {
+          return res.status(404).json({ error: 'Camera not found' });
+        }
+        res.json(camera);
+      } catch (error) {
+        logger.error('Failed to get camera:', error);
+        res.status(500).json({ error: 'Failed to get camera' });
       }
     });
   }

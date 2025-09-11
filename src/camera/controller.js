@@ -14,12 +14,14 @@ export class CameraController {
     this.lastError = null;
     this.shutterEndpoint = null;
     this.capabilities = null;
-    this.reconnectInterval = null;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 22; // 10 attempts at 1s + 12 attempts at 5s
+    // Removed automatic reconnection system
     this.pollingInterval = null;
     this.pollingPaused = false;
     this.onDisconnect = onDisconnect;
+    
+    // Connection monitoring tolerance
+    this.consecutiveFailures = 0;
+    this.maxConsecutiveFailures = 3; // Allow 3 consecutive failures before disconnecting
     
     // Create axios instance with optimized settings
     this.client = axios.create({
@@ -49,7 +51,7 @@ export class CameraController {
     this.lastError = null;
     this.shutterEndpoint = null;
     this.capabilities = null;
-    this.reconnectAttempts = 0;
+    // Removed reconnectAttempts tracking
     
     // Attempt to connect with new configuration
     try {
@@ -73,7 +75,6 @@ export class CameraController {
       return true;
     } catch (error) {
       logger.error('Failed to initialize camera controller:', error);
-      this.scheduleReconnect();
       return false;
     }
   }
@@ -101,7 +102,7 @@ export class CameraController {
       
       this.connected = true;
       this.lastError = null;
-      this.reconnectAttempts = 0;
+      this.consecutiveFailures = 0; // Reset failure counter on successful connection
       
       logger.info('Camera connected successfully', {
         shutterEndpoint: this.shutterEndpoint,
@@ -319,11 +320,19 @@ export class CameraController {
       if (!this.connected) return;
       
       try {
-        await this.client.get(`${this.baseUrl}/ccapi/`, { timeout: 5000 });
+        await this.client.get(`${this.baseUrl}/ccapi/`, { timeout: 8000 });
         logger.debug('Connection monitoring: camera still reachable');
+        // Reset failure counter on successful connection
+        this.consecutiveFailures = 0;
       } catch (error) {
-        logger.warn('Camera connection lost during monitoring, handling disconnection...', error.message);
-        this.handleDisconnection(error);
+        this.consecutiveFailures++;
+        logger.warn(`Camera connection check failed (${this.consecutiveFailures}/${this.maxConsecutiveFailures}): ${error.message}`);
+        
+        // Only disconnect after multiple consecutive failures
+        if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+          logger.warn('Multiple consecutive connection failures detected, handling disconnection...');
+          this.handleDisconnection(error);
+        }
       }
     }, 10000);
   }
@@ -365,71 +374,12 @@ export class CameraController {
       this.onDisconnect(this.getConnectionStatus());
     }
     
-    this.scheduleReconnect();
+    logger.warn('Camera disconnected, manual reconnection required');
   }
 
-  scheduleReconnect() {
-    if (this.reconnectInterval) return; // Already scheduled
-    
-    this.reconnectAttempts++;
-    
-    if (this.reconnectAttempts > this.maxReconnectAttempts) {
-      logger.error('Max reconnection attempts reached - camera connection failed');
-      return;
-    }
-    
-    // Timing strategy: 1s for first 10 attempts, then 5s for remaining attempts
-    let delay;
-    if (this.reconnectAttempts <= 10) {
-      delay = 1000; // 1 second for first 10 attempts
-    } else {
-      delay = 5000; // 5 seconds for attempts 11-22
-    }
-    
-    logger.info(`Scheduling reconnection attempt ${this.reconnectAttempts} in ${delay}ms`);
-    
-    this.reconnectInterval = setTimeout(async () => {
-      this.reconnectInterval = null;
-      
-      try {
-        await this.connect();
-        // Notify clients of successful reconnection
-        if (this.connected && this.onDisconnect) {
-          logger.info('Notifying clients of camera reconnection');
-          this.onDisconnect(this.getConnectionStatus());
-        }
-      } catch (error) {
-        this.scheduleReconnect();
-      }
-    }, delay);
-  }
+  // Removed automatic reconnection system - use manual connect instead
 
-  async manualReconnect() {
-    logger.info('Manual reconnect triggered - resetting connection state');
-    
-    // Clear any existing reconnect interval
-    if (this.reconnectInterval) {
-      clearTimeout(this.reconnectInterval);
-      this.reconnectInterval = null;
-    }
-    
-    // Reset reconnection attempts to allow fresh start
-    this.reconnectAttempts = 0;
-    this.connected = false;
-    this.lastError = null;
-    
-    try {
-      // Attempt immediate connection
-      await this.connect();
-      logger.info('Manual reconnect successful');
-      return true;
-    } catch (error) {
-      logger.warn('Manual reconnect failed, scheduling automatic retries');
-      // If manual reconnect fails, start the automatic retry cycle
-      this.scheduleReconnect();
-      return false;
-    }
-  }
+  // Removed manual reconnect - use discovery manager's manual connect instead
 
   getConnectionStatus() {
     return {
@@ -437,7 +387,6 @@ export class CameraController {
       ip: this.ip,
       port: this.port,
       lastError: this.lastError,
-      reconnectAttempts: this.reconnectAttempts,
       shutterEndpoint: this.shutterEndpoint,
       hasCapabilities: !!this.capabilities
     };
@@ -455,10 +404,7 @@ export class CameraController {
   async cleanup() {
     logger.info('Cleaning up camera controller...');
     
-    if (this.reconnectInterval) {
-      clearTimeout(this.reconnectInterval);
-      this.reconnectInterval = null;
-    }
+    // No automatic reconnection timers to clear
     
     if (this.monitoringInterval) {
       clearInterval(this.monitoringInterval);
