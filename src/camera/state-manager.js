@@ -27,6 +27,9 @@ export class CameraStateManager extends EventEmitter {
   async registerCamera(uuid, deviceInfo) {
     logger.info(`Registering camera ${uuid}:`, deviceInfo);
     
+    // Check for duplicate cameras (same serial number or model at same IP)
+    await this.deduplicateCamera(uuid, deviceInfo);
+    
     const existingCamera = this.cameras.get(uuid);
     const ipChanged = existingCamera && existingCamera.info.ipAddress !== deviceInfo.ipAddress;
     
@@ -68,22 +71,103 @@ export class CameraStateManager extends EventEmitter {
     
     this.lastKnownIPs.set(uuid, deviceInfo.ipAddress);
     
-    // Auto-connect if no primary camera
-    if (!this.primaryCameraUuid && deviceInfo.connected) {
-      logger.info(`Auto-connecting to camera ${uuid} (${deviceInfo.modelName}) as no primary camera is set`);
+    // Auto-connect logic for network transitions and new cameras
+    const shouldAutoConnect = this.shouldAutoConnect(uuid, deviceInfo);
+    if (shouldAutoConnect) {
+      logger.info(`Auto-connecting to camera ${uuid} (${deviceInfo.modelName}): ${shouldAutoConnect.reason}`);
       try {
         await this.connectToCamera(uuid);
       } catch (error) {
         logger.error(`Auto-connect failed for camera ${uuid}:`, error);
       }
-    } else if (this.primaryCameraUuid) {
-      logger.debug(`Primary camera already set: ${this.primaryCameraUuid}, not auto-connecting to ${uuid}`);
     } else {
-      logger.debug(`Camera ${uuid} not auto-connecting: connected=${deviceInfo.connected}`);
+      logger.debug(`Not auto-connecting to camera ${uuid}: primary=${this.primaryCameraUuid}, connected=${deviceInfo.connected}`);
     }
     
     this.emit('cameraRegistered', { uuid, info: deviceInfo, ipChanged });
     return cameraData;
+  }
+
+  /**
+   * Remove duplicate camera entries for the same physical device
+   */
+  async deduplicateCamera(newUuid, newDeviceInfo) {
+    const duplicatesToRemove = [];
+    
+    for (const [existingUuid, existingCamera] of this.cameras) {
+      if (existingUuid === newUuid) continue;
+      
+      const existingInfo = existingCamera.info;
+      
+      // Check for duplicates based on serial number (most reliable)
+      if (newDeviceInfo.serialNumber && existingInfo.serialNumber && 
+          newDeviceInfo.serialNumber === existingInfo.serialNumber) {
+        logger.info(`Found duplicate camera by serial number: ${existingUuid} -> ${newUuid}`);
+        duplicatesToRemove.push(existingUuid);
+        continue;
+      }
+      
+      // Check for duplicates based on IP address and model name
+      if (newDeviceInfo.ipAddress === existingInfo.ipAddress &&
+          newDeviceInfo.modelName && existingInfo.modelName &&
+          newDeviceInfo.modelName.includes('Canon') && existingInfo.modelName.includes('Canon')) {
+        
+        // Prefer UPnP discovered cameras over manual/IP-scan entries
+        const newIsUPnP = !newDeviceInfo.isManual && !newDeviceInfo.discoveryMethod;
+        const existingIsUPnP = !existingInfo.isManual && !existingInfo.discoveryMethod;
+        
+        if (newIsUPnP && !existingIsUPnP) {
+          logger.info(`Found duplicate camera, preferring UPnP entry: ${existingUuid} -> ${newUuid}`);
+          duplicatesToRemove.push(existingUuid);
+        } else if (!newIsUPnP && existingIsUPnP) {
+          logger.info(`Skipping duplicate manual/scan entry, keeping UPnP: ${newUuid} (keeping ${existingUuid})`);
+          return; // Don't register the new duplicate
+        }
+      }
+    }
+    
+    // Remove duplicates
+    for (const duplicateUuid of duplicatesToRemove) {
+      logger.info(`Removing duplicate camera entry: ${duplicateUuid}`);
+      
+      // If the duplicate was our primary camera, transfer primary status
+      if (duplicateUuid === this.primaryCameraUuid) {
+        logger.info(`Transferring primary camera status from ${duplicateUuid} to ${newUuid}`);
+        this.primaryCameraUuid = null; // Will be set when new camera connects
+      }
+      
+      const duplicateCamera = this.cameras.get(duplicateUuid);
+      if (duplicateCamera?.controller) {
+        await duplicateCamera.controller.cleanup();
+      }
+      
+      this.cameras.delete(duplicateUuid);
+      this.emit('cameraRemoved', { uuid: duplicateUuid, reason: 'duplicate' });
+    }
+  }
+
+  /**
+   * Determine if a camera should auto-connect
+   */
+  shouldAutoConnect(uuid, deviceInfo) {
+    // Always try to auto-connect if no primary camera is set
+    if (!this.primaryCameraUuid) {
+      return { reason: 'no primary camera set' };
+    }
+    
+    // Auto-connect if this is a known camera that was previously connected
+    // (handles network transitions where camera reconnects with new IP)
+    const connectionHistory = this.getConnectionHistory(uuid);
+    if (connectionHistory.length > 0) {
+      const hadSuccessfulConnection = connectionHistory.some(event => 
+        event.event === 'connected' || event.event === 'reconnected'
+      );
+      if (hadSuccessfulConnection) {
+        return { reason: 'previously connected camera reconnected' };
+      }
+    }
+    
+    return false;
   }
 
   /**
