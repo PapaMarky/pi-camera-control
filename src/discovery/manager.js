@@ -134,7 +134,9 @@ export class DiscoveryManager extends EventEmitter {
     
     // Auto-connect to first camera if no primary camera is set
     if (!this.primaryCamera) {
-      this.connectToCamera(uuid);
+      this.connectToCamera(uuid).catch(error => {
+        logger.warn(`Auto-connect failed for discovered camera ${uuid}:`, error.message);
+      });
     }
   }
 
@@ -184,8 +186,21 @@ export class DiscoveryManager extends EventEmitter {
     cameraData.lastError = null;
 
     try {
-      // Extract IP and port from CCAPI URL
-      const { ip, port } = this.parseBaseUrl(cameraData.info.ccapiUrl);
+      let ip, port;
+      
+      try {
+        // Extract IP and port from CCAPI URL
+        const parsed = this.parseBaseUrl(cameraData.info.ccapiUrl);
+        ip = parsed.ip;
+        port = parsed.port;
+      } catch (ccapiError) {
+        // Fallback to using the camera's IP address directly
+        logger.warn(`CCAPI URL parsing failed, using camera IP address: ${cameraData.info.ipAddress}`);
+        ip = cameraData.info.ipAddress;
+        port = '443'; // Default Canon camera port
+      }
+      
+      logger.info(`Connecting to camera at ${ip}:${port}`);
       
       // Create camera controller with discovery-provided endpoint
       const controller = new CameraController(
@@ -194,8 +209,10 @@ export class DiscoveryManager extends EventEmitter {
         (status) => this.handleCameraConnectionChange(uuid, status)
       );
 
-      // Initialize connection
+      // Initialize connection with detailed logging
+      logger.debug(`About to initialize camera controller for ${ip}:${port}`);
       const success = await controller.initialize();
+      logger.debug(`Camera controller initialization result: ${success}`);
       
       if (success) {
         cameraData.controller = controller;
@@ -206,7 +223,9 @@ export class DiscoveryManager extends EventEmitter {
         
         return controller;
       } else {
-        throw new Error('Failed to initialize camera controller');
+        const errorMsg = `Camera controller initialization failed for ${ip}:${port}. Controller connected: ${controller.connected}, last error: ${controller.lastError}`;
+        logger.error(errorMsg);
+        throw new Error(errorMsg);
       }
     } catch (error) {
       logger.error(`Failed to connect to camera ${uuid}:`, error);
@@ -222,6 +241,12 @@ export class DiscoveryManager extends EventEmitter {
    */
   parseBaseUrl(ccapiUrl) {
     try {
+      // Ensure ccapiUrl is a string
+      if (!ccapiUrl || typeof ccapiUrl !== 'string') {
+        logger.error('Invalid CCAPI URL - not a string:', ccapiUrl);
+        throw new Error('CCAPI URL must be a string');
+      }
+      
       const url = new URL(ccapiUrl);
       return {
         ip: url.hostname,
@@ -230,10 +255,15 @@ export class DiscoveryManager extends EventEmitter {
     } catch (error) {
       logger.error('Failed to parse CCAPI URL:', ccapiUrl, error);
       // Fallback to default Canon camera port
-      return {
-        ip: ccapiUrl.replace(/https?:\\/\\//, '').split(':')[0],
-        port: '443'
-      };
+      if (typeof ccapiUrl === 'string') {
+        return {
+          ip: ccapiUrl.replace(/https?:\/\//, '').split(':')[0],
+          port: '443'
+        };
+      } else {
+        // Last resort - use the IP from remote address
+        throw new Error('Cannot parse CCAPI URL - invalid format');
+      }
     }
   }
 

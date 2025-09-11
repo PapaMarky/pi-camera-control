@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger.js';
 import { IntervalometerSession } from '../intervalometer/session.js';
 
-export function createWebSocketHandler(cameraController, powerManager, server, networkManager) {
+export function createWebSocketHandler(cameraController, powerManager, server, networkManager, discoveryManager) {
   const clients = new Set();
   
   // Broadcast status updates to all connected clients
@@ -18,10 +18,27 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
       }
     }
     
+    // Get current camera controller (it's a function that returns the current controller)
+    const currentCameraController = cameraController();
+    const cameraStatus = currentCameraController 
+      ? currentCameraController.getConnectionStatus() 
+      : { connected: false, error: 'No camera available' };
+    
+    // Get discovery status if available
+    let discoveryStatus = null;
+    if (discoveryManager) {
+      try {
+        discoveryStatus = discoveryManager.getStatus();
+      } catch (error) {
+        logger.debug('Failed to get discovery status for broadcast:', error);
+      }
+    }
+    
     const status = {
       type: 'status_update',
       timestamp: new Date().toISOString(),
-      camera: cameraController.getConnectionStatus(),
+      camera: cameraStatus,
+      discovery: discoveryStatus,
       power: {
         ...powerManager.getStatus(),
         uptime: process.uptime() // Add system uptime to power data
@@ -79,7 +96,7 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
       const initialStatus = {
         type: 'welcome',
         timestamp: new Date().toISOString(),
-        camera: cameraController.getConnectionStatus(),
+        camera: cameraController() ? cameraController().getConnectionStatus() : { connected: false, error: 'No camera available' },
         power: powerManager.getStatus(),
         network: networkStatus,
         intervalometer: server.activeIntervalometerSession ? 
@@ -180,7 +197,16 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   
   const handleTakePhoto = async (ws, data) => {
     try {
-      await cameraController.takePhoto();
+      const currentController = cameraController();
+      if (!currentController) {
+        ws.send(JSON.stringify({
+          type: 'photo_result',
+          success: false,
+          error: 'No camera available'
+        }));
+        return;
+      }
+      await currentController.takePhoto();
       sendResponse(ws, 'photo_taken', {
         success: true,
         timestamp: new Date().toISOString()
@@ -196,7 +222,16 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   
   const handleGetCameraSettings = async (ws) => {
     try {
-      const settings = await cameraController.getCameraSettings();
+      const currentController = cameraController();
+      if (!currentController) {
+        ws.send(JSON.stringify({
+          type: 'settings_result',
+          success: false,
+          error: 'No camera available'
+        }));
+        return;
+      }
+      const settings = await currentController.getCameraSettings();
       sendResponse(ws, 'camera_settings', settings);
     } catch (error) {
       sendError(ws, `Failed to get camera settings: ${error.message}`);
@@ -210,7 +245,12 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
         return sendError(ws, 'Invalid interval value');
       }
       
-      const validation = await cameraController.validateInterval(interval);
+      const currentController = cameraController();
+      if (!currentController) {
+        return sendError(ws, 'No camera available');
+      }
+      
+      const validation = await currentController.validateInterval(interval);
       sendResponse(ws, 'interval_validation', validation);
     } catch (error) {
       sendError(ws, `Failed to validate interval: ${error.message}`);
@@ -232,7 +272,12 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
       }
       
       // Validate against camera settings
-      const validation = await cameraController.validateInterval(interval);
+      const currentController = cameraController();
+      if (!currentController) {
+        return sendError(ws, 'No camera available');
+      }
+      
+      const validation = await currentController.validateInterval(interval);
       if (!validation.valid) {
         return sendError(ws, validation.error);
       }
@@ -343,7 +388,7 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
     }
     
     const status = {
-      camera: cameraController.getConnectionStatus(),
+      camera: cameraController() ? cameraController().getConnectionStatus() : { connected: false, error: 'No camera available' },
       power: powerManager.getStatus(),
       network: networkStatus,
       timestamp: new Date().toISOString()
@@ -493,9 +538,36 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
     clients.clear();
   };
   
+  // Function to broadcast discovery events to all clients
+  const broadcastDiscoveryEvent = (eventType, data) => {
+    const discoveryEvent = {
+      type: 'discovery_event',
+      eventType,
+      data,
+      timestamp: new Date().toISOString()
+    };
+    
+    const message = JSON.stringify(discoveryEvent);
+    logger.info(`Broadcasting discovery event ${eventType} to ${clients.size} clients`);
+    
+    for (const client of clients) {
+      try {
+        if (client.readyState === client.OPEN) {
+          client.send(message);
+        }
+      } catch (error) {
+        logger.debug('Failed to broadcast discovery event:', error.message);
+      }
+    }
+    
+    // Also trigger a status update to refresh camera status
+    setTimeout(() => broadcastStatus(), 500);
+  };
+
   // Attach cleanup and broadcast functions to the handler for access from server
   handleConnection.cleanup = cleanup;
   handleConnection.broadcastStatus = broadcastStatus;
+  handleConnection.broadcastDiscoveryEvent = broadcastDiscoveryEvent;
   
   return handleConnection;
 }

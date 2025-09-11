@@ -8,7 +8,11 @@ export function createApiRouter(cameraController, powerManager, server, networkM
   // Camera status and connection
   router.get('/camera/status', (req, res) => {
     try {
-      const status = cameraController.getConnectionStatus();
+      const currentController = cameraController();
+      if (!currentController) {
+        return res.json({ connected: false, error: 'No camera available' });
+      }
+      const status = currentController.getConnectionStatus();
       res.json(status);
     } catch (error) {
       logger.error('Failed to get camera status:', error);
@@ -19,7 +23,11 @@ export function createApiRouter(cameraController, powerManager, server, networkM
   // Camera settings
   router.get('/camera/settings', async (req, res) => {
     try {
-      const settings = await cameraController.getCameraSettings();
+      const currentController = cameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      const settings = await currentController.getCameraSettings();
       res.json(settings);
     } catch (error) {
       logger.error('Failed to get camera settings:', error);
@@ -30,7 +38,11 @@ export function createApiRouter(cameraController, powerManager, server, networkM
   // Camera battery status
   router.get('/camera/battery', async (req, res) => {
     try {
-      const battery = await cameraController.getCameraBattery();
+      const currentController = cameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      const battery = await currentController.getCameraBattery();
       res.json(battery);
     } catch (error) {
       logger.error('Failed to get camera battery:', error);
@@ -41,11 +53,15 @@ export function createApiRouter(cameraController, powerManager, server, networkM
   // Debug endpoint to see all available CCAPI endpoints
   router.get('/camera/debug/endpoints', (req, res) => {
     try {
-      const status = cameraController.getConnectionStatus();
+      const currentController = cameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      const status = currentController.getConnectionStatus();
       res.json({
         connected: status.connected,
         baseUrl: `https://${status.ip}:${status.port}`,
-        capabilities: cameraController.capabilities,
+        capabilities: currentController.capabilities,
         shutterEndpoint: status.shutterEndpoint
       });
     } catch (error) {

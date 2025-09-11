@@ -70,9 +70,30 @@ class CameraManager {
 
     // Connection indicator click (removed from UI, but keeping method for debugging)
 
-    // Manual reconnect button
-    document.getElementById('manual-reconnect-btn').addEventListener('click', () => {
-      this.manualReconnect();
+    // Manual connect button
+    document.getElementById('manual-connect-btn').addEventListener('click', () => {
+      this.showManualConnectModal();
+    });
+
+    // Manual connect modal event listeners
+    document.getElementById('cancel-manual-connect-btn').addEventListener('click', () => {
+      this.hideManualConnectModal();
+    });
+
+    document.getElementById('confirm-manual-connect-btn').addEventListener('click', () => {
+      this.performManualConnect();
+    });
+
+    // Close modal when clicking the X
+    document.querySelector('#manual-connect-modal .modal-close').addEventListener('click', () => {
+      this.hideManualConnectModal();
+    });
+
+    // Close modal when clicking outside
+    document.getElementById('manual-connect-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'manual-connect-modal') {
+        this.hideManualConnectModal();
+      }
     });
 
     // Function menu toggle
@@ -305,25 +326,18 @@ class CameraManager {
       statusDot.className = `status-dot ${status.connected ? 'connected' : 'disconnected'}`;
     }
     
-    // Update camera status text and reconnect button based on connection status
+    // Update camera status text and manual connect button based on connection status
     const statusText = document.getElementById('camera-status-text');
-    const reconnectRow = document.getElementById('reconnect-row');
+    const manualConnectRow = document.getElementById('manual-connect-row');
     
     if (status.connected) {
-      // Connected: hide reconnect button, show connected status
+      // Connected: hide manual connect button, show connected status
       statusText.textContent = 'Connected';
-      reconnectRow.style.display = 'none';
+      manualConnectRow.style.display = 'none';
     } else {
-      // Disconnected: always show reconnect button with appropriate status
-      reconnectRow.style.display = 'flex';
-      
-      if (status.reconnectAttempts >= 22) {
-        statusText.textContent = 'Connection Failed';
-      } else if (status.reconnectAttempts > 0) {
-        statusText.textContent = `Reconnecting... (${status.reconnectAttempts}/22)`;
-      } else {
-        statusText.textContent = 'Disconnected';
-      }
+      // Disconnected: show manual connect button with disconnected status
+      manualConnectRow.style.display = 'flex';
+      statusText.textContent = 'Disconnected';
     }
     
     // Update header status indicators
@@ -797,32 +811,71 @@ class CameraManager {
     }
   }
 
-  async manualReconnect() {
-    this.log('Attempting manual camera reconnect...', 'info');
-    this.setButtonLoading('manual-reconnect-btn', true);
+  showManualConnectModal() {
+    const modal = document.getElementById('manual-connect-modal');
+    const ipInput = document.getElementById('manual-ip-input');
+    const portInput = document.getElementById('manual-port-input');
     
-    // Hide the reconnect button during attempt
-    const reconnectRow = document.getElementById('reconnect-row');
-    const statusText = document.getElementById('camera-status-text');
-    statusText.textContent = 'Reconnecting...';
+    // Clear any previous values
+    ipInput.value = '';
+    portInput.value = '443';
+    
+    modal.style.display = 'flex';
+    ipInput.focus();
+  }
 
+  hideManualConnectModal() {
+    const modal = document.getElementById('manual-connect-modal');
+    modal.style.display = 'none';
+  }
+
+  async performManualConnect() {
+    const ipInput = document.getElementById('manual-ip-input');
+    const portInput = document.getElementById('manual-port-input');
+    const connectBtn = document.getElementById('confirm-manual-connect-btn');
+    
+    const ip = ipInput.value.trim();
+    const port = portInput.value.trim() || '443';
+    
+    if (!ip) {
+      this.handleError('Please enter a camera IP address');
+      return;
+    }
+    
+    // Basic IP validation
+    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    if (!ipRegex.test(ip)) {
+      this.handleError('Please enter a valid IP address (e.g., 192.168.4.3)');
+      return;
+    }
+    
+    this.log(`Connecting to camera at ${ip}:${port}...`, 'info');
+    connectBtn.disabled = true;
+    connectBtn.textContent = 'Connecting...';
+    
     try {
-      const response = await fetch('/api/camera/reconnect', { method: 'POST' });
+      const response = await fetch('/api/discovery/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ip, port })
+      });
+      
       const result = await response.json();
       
       if (result.success) {
-        this.log('Manual reconnect successful', 'success');
-        reconnectRow.style.display = 'none';
+        this.log(`Successfully connected to camera at ${ip}:${port}`, 'success');
+        this.hideManualConnectModal();
         // Status will be updated via WebSocket or next status check
       } else {
-        this.log(`Manual reconnect failed: ${result.error || 'Unknown error'}`, 'error');
-        statusText.textContent = 'Connection Failed';
+        this.handleError(`Connection failed: ${result.error || 'Unknown error'}`);
       }
     } catch (error) {
-      this.log(`Manual reconnect failed: ${error.message}`, 'error');
-      statusText.textContent = 'Connection Failed';
+      this.handleError(`Connection failed: ${error.message}`);
     } finally {
-      this.setButtonLoading('manual-reconnect-btn', false);
+      connectBtn.disabled = false;
+      connectBtn.textContent = 'Connect';
     }
   }
   async refreshIntervalometerStatus() {
@@ -1057,7 +1110,7 @@ class CameraManager {
         'validate-interval-btn': '✓',
         'start-intervalometer-btn': '▶️',
         'stop-intervalometer-btn': '⏹️',
-        'manual-reconnect-btn': '🔄'
+        'manual-connect-btn': '🔗'
       };
       icon.textContent = iconMap[buttonId] || '•';
     }

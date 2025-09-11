@@ -153,8 +153,14 @@ class CameraControlServer {
       });
     });
     
-    // Fallback for SPA routing (Phase 3)
+    // Fallback for SPA routing (Phase 3) - exclude API routes
     this.app.get('*', (req, res) => {
+      // Don't serve HTML for API routes - let them return proper 404
+      if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ error: 'API endpoint not found' });
+      }
+      
+      // Serve index.html for SPA routes
       res.sendFile('index.html', { root: 'public' }, (err) => {
         if (err) {
           res.status(404).json({ error: 'Not found' });
