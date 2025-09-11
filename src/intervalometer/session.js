@@ -3,10 +3,10 @@ import cron from 'node-cron';
 import { logger } from '../utils/logger.js';
 
 export class IntervalometerSession extends EventEmitter {
-  constructor(cameraController, options = {}) {
+  constructor(getCameraController, options = {}) {
     super();
     
-    this.cameraController = cameraController;
+    this.getCameraController = getCameraController;
     this.options = {
       interval: 10, // seconds
       totalShots: null, // infinite if null
@@ -42,19 +42,39 @@ export class IntervalometerSession extends EventEmitter {
     this.nextShotTime = null;
   }
   
+  async getCurrentCameraController(retryCount = 3) {
+    for (let attempt = 1; attempt <= retryCount; attempt++) {
+      const controller = this.getCameraController();
+      if (controller) {
+        return controller;
+      }
+      
+      logger.warn(`Camera controller not available (attempt ${attempt}/${retryCount})`);
+      
+      if (attempt < retryCount) {
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    logger.error('No camera controller available after retries during intervalometer session');
+    throw new Error('No camera controller available');
+  }
+  
   async start() {
     if (this.state === 'running') {
       throw new Error('Session is already running');
     }
     
     // Validate camera connection
-    const cameraStatus = this.cameraController.getConnectionStatus();
+    const cameraController = await this.getCurrentCameraController();
+    const cameraStatus = cameraController.getConnectionStatus();
     if (!cameraStatus.connected) {
       throw new Error('Camera is not connected');
     }
     
     // Validate interval against camera settings
-    const validation = await this.cameraController.validateInterval(this.options.interval);
+    const validation = await cameraController.validateInterval(this.options.interval);
     if (!validation.valid) {
       throw new Error(validation.error || 'Invalid interval settings');
     }
@@ -83,7 +103,11 @@ export class IntervalometerSession extends EventEmitter {
     }
 
     // Pause camera info polling during intervalometer session to avoid interference
-    this.cameraController.pauseInfoPolling();
+    cameraController.pauseInfoPolling();
+    
+    // COMPLETELY disable connection monitoring during intervalometer session
+    // Connection monitoring conflicts with long exposures and photo operations
+    cameraController.pauseConnectionMonitoring();
     
     logger.info('Starting intervalometer session', {
       interval: this.options.interval,
@@ -97,7 +121,7 @@ export class IntervalometerSession extends EventEmitter {
     });
     
     // Start the shooting interval
-    this.scheduleNextShot();
+    await this.scheduleNextShot();
     
     return true;
   }
@@ -120,8 +144,14 @@ export class IntervalometerSession extends EventEmitter {
     this.state = 'stopped';
     this.stats.endTime = new Date();
     
-    // Resume camera info polling after intervalometer session ends
-    this.cameraController.resumeInfoPolling();
+    // Resume camera info polling and connection monitoring after intervalometer session ends
+    try {
+      const cameraController = await this.getCurrentCameraController();
+      cameraController.resumeInfoPolling();
+      cameraController.resumeConnectionMonitoring();
+    } catch (error) {
+      logger.warn('Could not resume camera monitoring, camera controller not available:', error.message);
+    }
     
     this.emit('stopped', { stats: { ...this.stats } });
     
@@ -156,25 +186,25 @@ export class IntervalometerSession extends EventEmitter {
     this.state = 'running';
     this.emit('resumed', { stats: { ...this.stats } });
     
-    this.scheduleNextShot();
+    await this.scheduleNextShot();
     
     return true;
   }
   
-  scheduleNextShot() {
+  async scheduleNextShot() {
     if (this.shouldStop || this.state !== 'running') {
       return;
     }
     
     // Check if we've reached the shot limit
     if (this.options.totalShots && this.stats.shotsTaken >= this.options.totalShots) {
-      this.complete('Shot limit reached');
+      await this.complete('Shot limit reached');
       return;
     }
     
     // Check if we've reached the stop time
     if (this.options.stopTime && new Date() >= this.options.stopTime) {
-      this.complete('Stop time reached');
+      await this.complete('Stop time reached');
       return;
     }
     
@@ -196,7 +226,7 @@ export class IntervalometerSession extends EventEmitter {
     // Schedule the next shot
     this.intervalId = setTimeout(async () => {
       await this.takeShot();
-      this.scheduleNextShot();
+      await this.scheduleNextShot();
     }, delayMs);
   }
   
@@ -211,7 +241,8 @@ export class IntervalometerSession extends EventEmitter {
     logger.debug(`Taking shot ${shotNumber}`);
     
     try {
-      await this.cameraController.takePhoto();
+      const cameraController = await this.getCurrentCameraController();
+      await cameraController.takePhoto();
       
       this.stats.shotsTaken++;
       this.stats.shotsSuccessful++;
@@ -256,7 +287,7 @@ export class IntervalometerSession extends EventEmitter {
     }
   }
   
-  complete(reason = 'Session completed normally') {
+  async complete(reason = 'Session completed normally') {
     logger.info(`Intervalometer session completed: ${reason}`);
     
     this.state = 'completed';
@@ -267,8 +298,14 @@ export class IntervalometerSession extends EventEmitter {
       this.intervalId = null;
     }
     
-    // Resume camera info polling after intervalometer session completes
-    this.cameraController.resumeInfoPolling();
+    // Resume camera info polling and connection monitoring after intervalometer session completes
+    try {
+      const cameraController = await this.getCurrentCameraController();
+      cameraController.resumeInfoPolling();
+      cameraController.resumeConnectionMonitoring();
+    } catch (error) {
+      logger.warn('Could not resume camera monitoring on completion, camera controller not available:', error.message);
+    }
     
     this.emit('completed', {
       reason,

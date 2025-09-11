@@ -73,7 +73,11 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
   // Take a single photo
   router.post('/camera/photo', async (req, res) => {
     try {
-      await cameraController.takePhoto();
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      await currentController.takePhoto();
       res.json({ success: true, timestamp: new Date().toISOString() });
     } catch (error) {
       logger.error('Failed to take photo:', error);
@@ -85,7 +89,11 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
   router.post('/camera/reconnect', async (req, res) => {
     try {
       logger.info('Manual reconnect requested');
-      const result = await cameraController.manualReconnect();
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      const result = await currentController.manualReconnect();
       
       if (result) {
         res.json({ success: true, message: 'Reconnection successful' });
@@ -121,7 +129,11 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
       
       logger.info(`Camera configuration update requested: ${ip}:${port}`);
-      const result = await cameraController.updateConfiguration(ip, port.toString());
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      const result = await currentController.updateConfiguration(ip, port.toString());
       
       if (result) {
         res.json({ 
@@ -150,7 +162,11 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
         return res.status(400).json({ error: 'Invalid interval value' });
       }
       
-      const validation = await cameraController.validateInterval(interval);
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      const validation = await currentController.validateInterval(interval);
       res.json(validation);
     } catch (error) {
       logger.error('Failed to validate interval:', error);
@@ -173,8 +189,14 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
         return res.status(400).json({ error: 'Intervalometer is already running' });
       }
       
+      // Get current camera controller
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      
       // Validate against camera settings
-      const validation = await cameraController.validateInterval(interval);
+      const validation = await currentController.validateInterval(interval);
       if (!validation.valid) {
         return res.status(400).json({ error: validation.error });
       }
@@ -203,7 +225,7 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
         options.stopTime = stopDate;
       }
       
-      server.activeIntervalometerSession = new IntervalometerSession(cameraController, options);
+      server.activeIntervalometerSession = new IntervalometerSession(() => getCameraController(), options);
       
       // Start the session
       await server.activeIntervalometerSession.start();
