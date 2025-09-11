@@ -306,7 +306,7 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
         options.stopTime = stopDate;
       }
       
-      server.activeIntervalometerSession = new IntervalometerSession(cameraController, options);
+      server.activeIntervalometerSession = new IntervalometerSession(() => cameraController(), options);
       
       // Set up event handlers to broadcast updates to all clients
       server.activeIntervalometerSession.on('started', (sessionData) => {

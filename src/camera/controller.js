@@ -17,6 +17,7 @@ export class CameraController {
     // Removed automatic reconnection system
     this.pollingInterval = null;
     this.pollingPaused = false;
+    this.monitoringPaused = false;
     this.onDisconnect = onDisconnect;
     
     // Connection monitoring tolerance
@@ -204,6 +205,8 @@ export class CameraController {
     try {
       logger.debug('Taking photo...');
       
+      // Note: Connection monitoring should be paused by intervalometer session
+      
       // Release any stuck shutter first
       await this.releaseShutter();
       
@@ -218,8 +221,8 @@ export class CameraController {
         throw new Error('Failed to press shutter');
       }
       
-      // Wait for camera processing
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait for camera processing (increased for stability)
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Release shutter
       const releaseResult = await this.releaseShutter();
@@ -234,6 +237,8 @@ export class CameraController {
       logger.error('Failed to take photo:', error);
       await this.releaseShutter(); // Attempt recovery
       throw error;
+    } finally {
+      // Note: Connection monitoring resume handled by intervalometer session
     }
   }
 
@@ -244,10 +249,17 @@ export class CameraController {
     };
 
     try {
-      const response = await this.client.post(`${this.baseUrl}${this.shutterEndpoint}`, payload);
+      // Use longer timeout for photo operations (30 seconds) to handle long exposures
+      const response = await this.client.post(`${this.baseUrl}${this.shutterEndpoint}`, payload, {
+        timeout: 30000
+      });
       return response.status >= 200 && response.status < 300;
     } catch (error) {
-      logger.error('Shutter press failed:', error);
+      if (error.code === 'ECONNABORTED') {
+        logger.warn('Shutter press timed out after 30 seconds - camera may be busy with long exposure');
+      } else {
+        logger.error('Shutter press failed:', error.message);
+      }
       return false;
     }
   }
@@ -259,7 +271,10 @@ export class CameraController {
     };
 
     try {
-      const response = await this.client.post(`${this.baseUrl}${this.shutterEndpoint}`, payload);
+      // Use longer timeout for release operation too
+      const response = await this.client.post(`${this.baseUrl}${this.shutterEndpoint}`, payload, {
+        timeout: 15000
+      });
       return response.status >= 200 && response.status < 300;
     } catch (error) {
       logger.debug('Shutter release failed (may be normal):', error.message);
@@ -317,7 +332,7 @@ export class CameraController {
   startConnectionMonitoring() {
     // Monitor connection every 10 seconds for faster disconnection detection
     this.monitoringInterval = setInterval(async () => {
-      if (!this.connected) return;
+      if (!this.connected || this.monitoringPaused) return;
       
       try {
         await this.client.get(`${this.baseUrl}/ccapi/`, { timeout: 8000 });
@@ -361,6 +376,18 @@ export class CameraController {
   resumeInfoPolling() {
     logger.info('Resuming camera info polling');
     this.pollingPaused = false;
+  }
+
+  pauseConnectionMonitoring() {
+    logger.debug('Pausing camera connection monitoring during photo operation');
+    this.monitoringPaused = true;
+    // Reset failure counter since we're actively using the camera
+    this.consecutiveFailures = 0;
+  }
+
+  resumeConnectionMonitoring() {
+    logger.debug('Resuming camera connection monitoring');
+    this.monitoringPaused = false;
   }
 
   handleDisconnection(error) {
