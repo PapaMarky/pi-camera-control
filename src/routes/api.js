@@ -2,13 +2,13 @@ import { Router } from 'express';
 import { logger } from '../utils/logger.js';
 import { IntervalometerSession } from '../intervalometer/session.js';
 
-export function createApiRouter(cameraController, powerManager, server, networkManager, discoveryManager) {
+export function createApiRouter(getCameraController, powerManager, server, networkManager, discoveryManager) {
   const router = Router();
 
   // Camera status and connection
   router.get('/camera/status', (req, res) => {
     try {
-      const currentController = cameraController();
+      const currentController = getCameraController();
       if (!currentController) {
         return res.json({ connected: false, error: 'No camera available' });
       }
@@ -23,7 +23,7 @@ export function createApiRouter(cameraController, powerManager, server, networkM
   // Camera settings
   router.get('/camera/settings', async (req, res) => {
     try {
-      const currentController = cameraController();
+      const currentController = getCameraController();
       if (!currentController) {
         return res.status(503).json({ error: 'No camera available' });
       }
@@ -38,7 +38,7 @@ export function createApiRouter(cameraController, powerManager, server, networkM
   // Camera battery status
   router.get('/camera/battery', async (req, res) => {
     try {
-      const currentController = cameraController();
+      const currentController = getCameraController();
       if (!currentController) {
         return res.status(503).json({ error: 'No camera available' });
       }
@@ -53,7 +53,7 @@ export function createApiRouter(cameraController, powerManager, server, networkM
   // Debug endpoint to see all available CCAPI endpoints
   router.get('/camera/debug/endpoints', (req, res) => {
     try {
-      const currentController = cameraController();
+      const currentController = getCameraController();
       if (!currentController) {
         return res.status(503).json({ error: 'No camera available' });
       }
