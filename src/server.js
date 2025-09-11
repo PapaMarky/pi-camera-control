@@ -29,17 +29,15 @@ class CameraControlServer {
     this.server = createServer(this.app);
     this.wss = new WebSocketServer({ server: this.server });
     
-    // Initialize discovery manager or fallback to direct camera connection
+    // Initialize discovery manager (camera state is managed within it)
     if (USE_DISCOVERY) {
       this.discoveryManager = new DiscoveryManager();
-      this.cameraController = null; // Will be set by discovery
+      this.fallbackStateManager = null;
       this.setupDiscoveryHandlers();
     } else {
       // Fallback to hardcoded camera connection
       this.discoveryManager = null;
-      this.cameraController = new CameraController(CAMERA_IP, CAMERA_PORT, (status) => {
-        this.broadcastCameraStatusChange(status);
-      });
+      this.fallbackStateManager = null; // Will be initialized in start()
     }
     
     this.powerManager = new PowerManager();
@@ -64,11 +62,7 @@ class CameraControlServer {
     });
 
     this.discoveryManager.on('cameraConnected', ({ uuid, info, controller }) => {
-      // Set as primary camera if none exists
-      if (!this.cameraController) {
-        this.cameraController = controller;
-        logger.info(`Set primary camera: ${info.modelName}`);
-      }
+      logger.info(`Camera connected: ${info.modelName}`);
       this.broadcastDiscoveryEvent('cameraConnected', { uuid, info });
     });
 
@@ -78,7 +72,6 @@ class CameraControlServer {
     });
 
     this.discoveryManager.on('primaryCameraChanged', (primaryCamera) => {
-      this.cameraController = primaryCamera.controller;
       logger.info(`Primary camera changed: ${primaryCamera.info.modelName}`);
       this.broadcastDiscoveryEvent('primaryCameraChanged', {
         uuid: primaryCamera.uuid,
@@ -87,7 +80,6 @@ class CameraControlServer {
     });
 
     this.discoveryManager.on('primaryCameraDisconnected', () => {
-      this.cameraController = null;
       logger.warn('Primary camera disconnected');
       this.broadcastDiscoveryEvent('primaryCameraDisconnected', {});
     });
@@ -127,7 +119,7 @@ class CameraControlServer {
   setupRoutes() {
     // API routes - pass discoveryManager for enhanced functionality
     this.app.use('/api', createApiRouter(
-      () => this.cameraController, // Getter function for dynamic camera controller
+      () => this.getCurrentCameraController(), // Getter function for current camera controller
       this.powerManager, 
       this, 
       this.networkManager,
@@ -139,8 +131,9 @@ class CameraControlServer {
     
     // Health check endpoint
     this.app.get('/health', (req, res) => {
-      const cameraStatus = this.cameraController 
-        ? this.cameraController.getConnectionStatus() 
+      const currentController = this.getCurrentCameraController();
+      const cameraStatus = currentController
+        ? currentController.getConnectionStatus() 
         : { connected: false, error: 'No camera available' };
       
       res.json({
@@ -171,7 +164,7 @@ class CameraControlServer {
 
   setupWebSocket() {
     this.wsHandler = createWebSocketHandler(
-      () => this.cameraController, // Getter function for dynamic camera controller
+      () => this.getCurrentCameraController(), // Getter function for current camera controller
       this.powerManager, 
       this, 
       this.networkManager,
@@ -212,6 +205,16 @@ class CameraControlServer {
     process.on('SIGINT', () => this.shutdown('SIGINT'));
   }
 
+  // Get current camera controller from appropriate source
+  getCurrentCameraController() {
+    if (this.discoveryManager) {
+      return this.discoveryManager.getPrimaryCamera();
+    } else if (this.fallbackStateManager) {
+      return this.fallbackStateManager.getPrimaryController();
+    }
+    return null;
+  }
+
   async start() {
     try {
       // Initialize camera connection or discovery
@@ -229,10 +232,14 @@ class CameraControlServer {
           }
         }
       } else {
-        // Direct camera connection (legacy mode)
-        const cameraInitialized = await this.cameraController.initialize();
-        if (!cameraInitialized) {
-          logger.warn('Camera initialization failed - server will continue with connection attempts');
+        // Initialize fallback state manager and connect to camera
+        const { CameraStateManager } = await import('./camera/state-manager.js');
+        this.fallbackStateManager = new CameraStateManager();
+        try {
+          await this.fallbackStateManager.connectToIP(CAMERA_IP, CAMERA_PORT);
+          logger.info(`Connected to fallback camera at ${CAMERA_IP}:${CAMERA_PORT}`);
+        } catch (error) {
+          logger.warn('Fallback camera connection failed:', error.message);
         }
       }
       
@@ -284,8 +291,8 @@ class CameraControlServer {
     if (this.discoveryManager) {
       await this.discoveryManager.stopDiscovery();
     }
-    if (this.cameraController) {
-      await this.cameraController.cleanup();
+    if (this.fallbackStateManager) {
+      await this.fallbackStateManager.cleanup();
     }
     await this.powerManager.cleanup();
     await this.networkManager.cleanup();
