@@ -1,19 +1,18 @@
 import { EventEmitter } from 'events';
 import { UPnPDiscovery } from './upnp.js';
-import { CameraController } from '../camera/controller.js';
+import { CameraStateManager } from '../camera/state-manager.js';
 import { logger } from '../utils/logger.js';
 import axios from 'axios';
 
 /**
  * Camera Discovery Manager
- * Manages automatic discovery of Canon cameras and provides camera instances
+ * Manages automatic discovery of Canon cameras and delegates to CameraStateManager
  */
 export class DiscoveryManager extends EventEmitter {
   constructor() {
     super();
     this.upnp = new UPnPDiscovery();
-    this.cameras = new Map(); // uuid -> { info, controller, status }
-    this.primaryCamera = null; // Currently active camera controller
+    this.cameraStateManager = new CameraStateManager();
     this.isDiscovering = false;
 
     // Bind UPnP events
@@ -23,6 +22,27 @@ export class DiscoveryManager extends EventEmitter {
 
     this.upnp.on('deviceOffline', (uuid) => {
       this.handleCameraOffline(uuid);
+    });
+
+    // Forward camera state manager events
+    this.cameraStateManager.on('primaryCameraChanged', (data) => {
+      this.emit('primaryCameraChanged', data);
+    });
+
+    this.cameraStateManager.on('primaryCameraDisconnected', (data) => {
+      this.emit('primaryCameraDisconnected', data);
+    });
+
+    this.cameraStateManager.on('cameraRegistered', (data) => {
+      this.emit('cameraDiscovered', data.info);
+    });
+
+    this.cameraStateManager.on('cameraConnectionFailed', (data) => {
+      this.emit('cameraConnectionError', data);
+    });
+
+    this.cameraStateManager.on('cameraStatusChanged', (data) => {
+      this.emit('cameraStatusChanged', data);
     });
   }
 
@@ -63,14 +83,17 @@ export class DiscoveryManager extends EventEmitter {
   logDiscoveryStatus() {
     setInterval(() => {
       const networkInterfaces = this.upnp.getAvailableInterfaces();
+      const cameras = this.cameraStateManager.getAllCameras();
+      const cameraCount = Object.keys(cameras).length;
+      
       logger.debug('Discovery status:', {
         isDiscovering: this.isDiscovering,
-        cameras: this.cameras.size,
+        cameras: cameraCount,
         networkInterfaces: networkInterfaces.map(i => `${i.name}:${i.address}`)
       });
       
-      if (this.cameras.size > 0) {
-        logger.debug('Discovered cameras:', Array.from(this.cameras.keys()));
+      if (cameraCount > 0) {
+        logger.debug('Discovered cameras:', Object.keys(cameras));
       }
     }, 30000); // Log every 30 seconds
   }
@@ -90,14 +113,8 @@ export class DiscoveryManager extends EventEmitter {
       await this.upnp.stopDiscovery();
       this.isDiscovering = false;
       
-      // Cleanup all camera controllers
-      for (const [uuid, cameraData] of this.cameras.entries()) {
-        if (cameraData.controller) {
-          await cameraData.controller.cleanup();
-        }
-      }
-      this.cameras.clear();
-      this.primaryCamera = null;
+      // Cleanup camera state manager
+      await this.cameraStateManager.cleanup();
       
       logger.info('Camera discovery stopped');
       this.emit('discoveryStopped');
@@ -109,61 +126,20 @@ export class DiscoveryManager extends EventEmitter {
   /**
    * Handle newly discovered camera
    */
-  handleCameraDiscovered(deviceInfo) {
+  async handleCameraDiscovered(deviceInfo) {
     const uuid = deviceInfo.uuid;
+    logger.info(`Camera discovered via UPnP: ${deviceInfo.modelName} at ${deviceInfo.ipAddress}`);
     
-    if (this.cameras.has(uuid)) {
-      // Update existing camera info
-      const existing = this.cameras.get(uuid);
-      existing.info = deviceInfo;
-      existing.status = 'discovered';
-      logger.debug(`Updated camera info: ${deviceInfo.modelName}`);
-    } else {
-      // Add new camera
-      this.cameras.set(uuid, {
-        info: deviceInfo,
-        controller: null,
-        status: 'discovered', // discovered, connecting, connected, error
-        lastError: null
-      });
-      
-      logger.info(`New camera discovered: ${deviceInfo.modelName} at ${deviceInfo.ipAddress}`);
-    }
-
-    this.emit('cameraDiscovered', deviceInfo);
-    
-    // Auto-connect to first camera if no primary camera is set
-    if (!this.primaryCamera) {
-      this.connectToCamera(uuid).catch(error => {
-        logger.warn(`Auto-connect failed for discovered camera ${uuid}:`, error.message);
-      });
-    }
+    // Register with camera state manager
+    await this.cameraStateManager.registerCamera(uuid, deviceInfo);
   }
 
   /**
    * Handle camera going offline
    */
   handleCameraOffline(uuid) {
-    const cameraData = this.cameras.get(uuid);
-    if (!cameraData) return;
-
-    logger.info(`Camera going offline: ${cameraData.info.modelName}`);
-    
-    // Cleanup controller
-    if (cameraData.controller) {
-      cameraData.controller.cleanup();
-      cameraData.controller = null;
-    }
-
-    // Update status
-    cameraData.status = 'offline';
-    
-    // Clear primary camera if this was it
-    if (this.primaryCamera && this.primaryCamera.uuid === uuid) {
-      this.primaryCamera = null;
-      this.emit('primaryCameraDisconnected');
-    }
-
+    logger.info(`Camera going offline: ${uuid}`);
+    this.cameraStateManager.removeCamera(uuid);
     this.emit('cameraOffline', uuid);
   }
 
@@ -171,69 +147,7 @@ export class DiscoveryManager extends EventEmitter {
    * Connect to a specific camera
    */
   async connectToCamera(uuid) {
-    const cameraData = this.cameras.get(uuid);
-    if (!cameraData) {
-      throw new Error(`Camera with UUID ${uuid} not found`);
-    }
-
-    if (cameraData.status === 'connecting' || cameraData.status === 'connected') {
-      logger.debug(`Camera ${uuid} already connecting/connected`);
-      return cameraData.controller;
-    }
-
-    logger.info(`Connecting to camera: ${cameraData.info.modelName}`);
-    cameraData.status = 'connecting';
-    cameraData.lastError = null;
-
-    try {
-      let ip, port;
-      
-      try {
-        // Extract IP and port from CCAPI URL
-        const parsed = this.parseBaseUrl(cameraData.info.ccapiUrl);
-        ip = parsed.ip;
-        port = parsed.port;
-      } catch (ccapiError) {
-        // Fallback to using the camera's IP address directly
-        logger.warn(`CCAPI URL parsing failed, using camera IP address: ${cameraData.info.ipAddress}`);
-        ip = cameraData.info.ipAddress;
-        port = '443'; // Default Canon camera port
-      }
-      
-      logger.info(`Connecting to camera at ${ip}:${port}`);
-      
-      // Create camera controller with discovery-provided endpoint
-      const controller = new CameraController(
-        ip, 
-        port, 
-        (status) => this.handleCameraConnectionChange(uuid, status)
-      );
-
-      // Initialize connection with detailed logging
-      logger.debug(`About to initialize camera controller for ${ip}:${port}`);
-      const success = await controller.initialize();
-      logger.debug(`Camera controller initialization result: ${success}`);
-      
-      if (success) {
-        cameraData.controller = controller;
-        cameraData.status = 'connected';
-        
-        logger.info(`Successfully connected to camera: ${cameraData.info.modelName}`);
-        this.emit('cameraConnected', { uuid, info: cameraData.info, controller });
-        
-        return controller;
-      } else {
-        const errorMsg = `Camera controller initialization failed for ${ip}:${port}. Controller connected: ${controller.connected}, last error: ${controller.lastError}`;
-        logger.error(errorMsg);
-        throw new Error(errorMsg);
-      }
-    } catch (error) {
-      logger.error(`Failed to connect to camera ${uuid}:`, error);
-      cameraData.status = 'error';
-      cameraData.lastError = error.message;
-      this.emit('cameraConnectionError', { uuid, error: error.message });
-      throw error;
-    }
+    return await this.cameraStateManager.connectToCamera(uuid);
   }
 
   /**
@@ -267,86 +181,35 @@ export class DiscoveryManager extends EventEmitter {
     }
   }
 
-  /**
-   * Handle camera connection status changes
-   */
-  handleCameraConnectionChange(uuid, status) {
-    const cameraData = this.cameras.get(uuid);
-    if (!cameraData) return;
-
-    logger.debug(`Camera ${uuid} connection status changed:`, status);
-    
-    if (status.connected) {
-      cameraData.status = 'connected';
-      cameraData.lastError = null;
-    } else {
-      cameraData.status = status.lastError ? 'error' : 'disconnected';
-      cameraData.lastError = status.lastError;
-    }
-
-    this.emit('cameraStatusChanged', { uuid, status });
-  }
+  // Camera connection status changes are now handled by CameraStateManager
 
   /**
    * Set primary camera (the one used by the application)
    */
   async setPrimaryCamera(uuid) {
-    const cameraData = this.cameras.get(uuid);
-    if (!cameraData) {
-      throw new Error(`Camera with UUID ${uuid} not found`);
-    }
-
-    // Connect to camera if not already connected
-    if (cameraData.status !== 'connected') {
-      await this.connectToCamera(uuid);
-    }
-
-    // Set as primary
-    this.primaryCamera = {
-      uuid,
-      controller: cameraData.controller,
-      info: cameraData.info
-    };
-
-    logger.info(`Set primary camera: ${cameraData.info.modelName}`);
-    this.emit('primaryCameraChanged', this.primaryCamera);
-    
-    return this.primaryCamera.controller;
+    return await this.cameraStateManager.connectToCamera(uuid);
   }
 
   /**
    * Get primary camera controller (backwards compatibility)
    */
   getPrimaryCamera() {
-    return this.primaryCamera?.controller || null;
+    return this.cameraStateManager.getPrimaryController();
   }
 
   /**
    * Get all discovered cameras
    */
   getDiscoveredCameras() {
-    return Array.from(this.cameras.entries()).map(([uuid, data]) => ({
-      uuid,
-      ...data.info,
-      status: data.status,
-      lastError: data.lastError,
-      connected: data.status === 'connected'
-    }));
+    return Object.values(this.cameraStateManager.getAllCameras());
   }
 
   /**
    * Get camera by UUID
    */
   getCamera(uuid) {
-    const cameraData = this.cameras.get(uuid);
-    return cameraData ? {
-      uuid,
-      ...cameraData.info,
-      status: cameraData.status,
-      lastError: cameraData.lastError,
-      connected: cameraData.status === 'connected',
-      controller: cameraData.controller
-    } : null;
+    const cameras = this.cameraStateManager.getAllCameras();
+    return cameras[uuid] || null;
   }
 
   /**
@@ -365,32 +228,7 @@ export class DiscoveryManager extends EventEmitter {
    * Connect to camera by IP (fallback method for manual configuration)
    */
   async connectToIp(ip, port = '443') {
-    logger.info(`Manually connecting to camera at ${ip}:${port}`);
-    
-    const uuid = `manual-${ip}-${port}`;
-    
-    // Create synthetic device info for manual connection
-    const deviceInfo = {
-      uuid,
-      ipAddress: ip,
-      ccapiUrl: `https://${ip}:${port}/ccapi`,
-      modelName: 'Manual Connection',
-      friendlyName: `Camera at ${ip}`,
-      manufacturer: 'Canon',
-      discoveredAt: new Date(),
-      isManual: true
-    };
-
-    // Add to cameras map
-    this.cameras.set(uuid, {
-      info: deviceInfo,
-      controller: null,
-      status: 'discovered',
-      lastError: null
-    });
-
-    // Connect to it
-    return await this.connectToCamera(uuid);
+    return await this.cameraStateManager.connectToIP(ip, port);
   }
 
   /**
@@ -465,18 +303,8 @@ export class DiscoveryManager extends EventEmitter {
           discoveryMethod: 'ip-scan'
         };
 
-        // Add to cameras if not already present
-        if (!this.cameras.has(uuid)) {
-          this.cameras.set(uuid, {
-            info: deviceInfo,
-            controller: null,
-            status: 'discovered',
-            lastError: null
-          });
-
-          logger.info(`Added camera found via IP scan: ${deviceInfo.friendlyName}`);
-          this.emit('cameraDiscovered', deviceInfo);
-        }
+        // Register with camera state manager
+        await this.cameraStateManager.registerCamera(uuid, deviceInfo);
       }
     } catch (error) {
       // Expected for most IPs - they won't have cameras
@@ -491,15 +319,10 @@ export class DiscoveryManager extends EventEmitter {
    * Get discovery status
    */
   getStatus() {
+    const stateStatus = this.cameraStateManager.getDiscoveryStatus();
     return {
       isDiscovering: this.isDiscovering,
-      cameraCount: this.cameras.size,
-      connectedCameras: Array.from(this.cameras.values()).filter(c => c.status === 'connected').length,
-      primaryCamera: this.primaryCamera ? {
-        uuid: this.primaryCamera.uuid,
-        modelName: this.primaryCamera.info.modelName,
-        ipAddress: this.primaryCamera.info.ipAddress
-      } : null
+      ...stateStatus
     };
   }
 }
