@@ -12,6 +12,7 @@ import { CameraController } from './camera/controller.js';
 import { DiscoveryManager } from './discovery/manager.js';
 import { PowerManager } from './system/power.js';
 import { NetworkManager } from './network/manager.js';
+import { IntervalometerStateManager } from './intervalometer/state-manager.js';
 import { createApiRouter } from './routes/api.js';
 import { createWebSocketHandler } from './websocket/handler.js';
 
@@ -43,7 +44,11 @@ class CameraControlServer {
     this.powerManager = new PowerManager();
     this.networkManager = new NetworkManager();
     
-    // Shared intervalometer session across WebSocket and REST API
+    // Initialize centralized intervalometer state manager
+    this.intervalometerStateManager = new IntervalometerStateManager();
+    this.setupIntervalometerHandlers();
+    
+    // Keep legacy activeIntervalometerSession for backward compatibility
     this.activeIntervalometerSession = null;
     // Store WebSocket handler for broadcasting
     this.wsHandler = null;
@@ -85,6 +90,44 @@ class CameraControlServer {
     });
   }
 
+  setupIntervalometerHandlers() {
+    // Handle intervalometer state manager events
+    this.intervalometerStateManager.on('sessionStarted', (data) => {
+      logger.info(`Timelapse session started: ${data.title}`);
+      this.broadcastTimelapseEvent('session_started', data);
+    });
+
+    this.intervalometerStateManager.on('sessionCompleted', (data) => {
+      logger.info(`Timelapse session completed: ${data.title}`);
+      this.broadcastTimelapseEvent('session_completed', data);
+    });
+
+    this.intervalometerStateManager.on('sessionStopped', (data) => {
+      logger.info(`Timelapse session stopped: ${data.title}`);
+      this.broadcastTimelapseEvent('session_stopped', data);
+    });
+
+    this.intervalometerStateManager.on('sessionError', (data) => {
+      logger.error(`Timelapse session error: ${data.title} - ${data.reason}`);
+      this.broadcastTimelapseEvent('session_error', data);
+    });
+
+    this.intervalometerStateManager.on('reportSaved', (data) => {
+      logger.info(`Timelapse report saved: ${data.title}`);
+      this.broadcastTimelapseEvent('report_saved', data);
+    });
+
+    this.intervalometerStateManager.on('reportDeleted', (data) => {
+      logger.info(`Timelapse report deleted: ${data.reportId}`);
+      this.broadcastTimelapseEvent('report_deleted', data);
+    });
+
+    this.intervalometerStateManager.on('unsavedSessionFound', (data) => {
+      logger.info(`Unsaved session found: ${data.title}`);
+      this.broadcastTimelapseEvent('unsaved_session_found', data);
+    });
+  }
+
   broadcastDiscoveryEvent(eventType, data) {
     if (!this.wsHandler || !this.wsHandler.broadcastDiscoveryEvent) {
       logger.debug('No WebSocket handler available for broadcasting discovery events');
@@ -92,6 +135,15 @@ class CameraControlServer {
     }
     
     this.wsHandler.broadcastDiscoveryEvent(eventType, data);
+  }
+
+  broadcastTimelapseEvent(eventType, data) {
+    if (!this.wsHandler || !this.wsHandler.broadcastTimelapseEvent) {
+      logger.debug('No WebSocket handler available for broadcasting timelapse events');
+      return;
+    }
+    
+    this.wsHandler.broadcastTimelapseEvent(eventType, data);
   }
 
   setupMiddleware() {
@@ -117,13 +169,14 @@ class CameraControlServer {
   }
 
   setupRoutes() {
-    // API routes - pass discoveryManager for enhanced functionality
+    // API routes - pass discoveryManager and intervalometer state manager for enhanced functionality
     this.app.use('/api', createApiRouter(
       () => this.getCurrentCameraController(), // Getter function for current camera controller
       this.powerManager, 
       this, 
       this.networkManager,
-      this.discoveryManager
+      this.discoveryManager,
+      this.intervalometerStateManager
     ));
     
     // Serve static files (Phase 3 - web interface)
@@ -168,7 +221,8 @@ class CameraControlServer {
       this.powerManager, 
       this, 
       this.networkManager,
-      this.discoveryManager
+      this.discoveryManager,
+      this.intervalometerStateManager
     );
     this.wss.on('connection', this.wsHandler);
     
@@ -254,6 +308,14 @@ class CameraControlServer {
         logger.info('Network manager initialized successfully');
       }
       
+      // Initialize intervalometer state manager
+      const intervalometerInitialized = await this.intervalometerStateManager.initialize();
+      if (!intervalometerInitialized) {
+        logger.warn('Intervalometer state manager initialization failed - timelapse reporting may not work');
+      } else {
+        logger.info('Intervalometer state manager initialized successfully');
+      }
+      
       // Start server (IPv4 only when IPv6 is disabled system-wide)
       this.server.listen(PORT, () => {
         const discoveryInfo = this.discoveryManager 
@@ -296,6 +358,9 @@ class CameraControlServer {
     }
     await this.powerManager.cleanup();
     await this.networkManager.cleanup();
+    
+    // Cleanup intervalometer state manager
+    await this.intervalometerStateManager.cleanup();
     
     logger.info('Graceful shutdown complete');
     process.exit(0);

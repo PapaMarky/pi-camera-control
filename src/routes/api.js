@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { logger } from '../utils/logger.js';
 import { IntervalometerSession } from '../intervalometer/session.js';
 
-export function createApiRouter(getCameraController, powerManager, server, networkManager, discoveryManager) {
+export function createApiRouter(getCameraController, powerManager, server, networkManager, discoveryManager, intervalometerStateManager) {
   const router = Router();
 
   // Camera status and connection
@@ -282,6 +282,210 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       });
     } catch (error) {
       logger.error('Failed to get intervalometer status:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Enhanced intervalometer with title support
+  router.post('/intervalometer/start-with-title', async (req, res) => {
+    try {
+      const { interval, shots, stopTime, title } = req.body;
+      
+      // Validation
+      if (!interval || interval <= 0) {
+        return res.status(400).json({ error: 'Invalid interval value' });
+      }
+      
+      // Check if session is already running
+      if (server.activeIntervalometerSession && server.activeIntervalometerSession.state === 'running') {
+        return res.status(400).json({ error: 'Intervalometer is already running' });
+      }
+      
+      // Get current camera controller
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      
+      // Validate against camera settings
+      const validation = await currentController.validateInterval(interval);
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
+      }
+      
+      // Clean up any existing session
+      if (server.activeIntervalometerSession) {
+        server.activeIntervalometerSession.cleanup();
+        server.activeIntervalometerSession = null;
+      }
+      
+      // Create and configure new session with title
+      const options = { interval };
+      if (title && title.trim()) options.title = title.trim();
+      if (shots && shots > 0) options.totalShots = parseInt(shots);
+      if (stopTime) {
+        // Parse time as HH:MM and create a future date
+        const [hours, minutes] = stopTime.split(':').map(Number);
+        const now = new Date();
+        const stopDate = new Date();
+        stopDate.setHours(hours, minutes, 0, 0);
+        
+        // If the time is in the past, assume it's for tomorrow
+        if (stopDate <= now) {
+          stopDate.setDate(stopDate.getDate() + 1);
+        }
+        
+        options.stopTime = stopDate;
+      }
+      
+      server.activeIntervalometerSession = new IntervalometerSession(() => getCameraController(), options);
+      
+      // Start the session
+      await server.activeIntervalometerSession.start();
+      
+      logger.info('Intervalometer started with title support', options);
+      
+      res.json({ 
+        success: true, 
+        message: 'Intervalometer started successfully',
+        status: server.activeIntervalometerSession.getStatus(),
+        sessionId: server.activeIntervalometerSession.getSessionId(),
+        title: server.activeIntervalometerSession.getTitle()
+      });
+    } catch (error) {
+      logger.error('Failed to start intervalometer with title:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Timelapse Reports Management API
+  router.get('/timelapse/reports', async (req, res) => {
+    try {
+      if (!intervalometerStateManager) {
+        return res.status(503).json({ error: 'Timelapse reporting not available' });
+      }
+      
+      const reports = await intervalometerStateManager.getReports();
+      res.json({ reports });
+    } catch (error) {
+      logger.error('Failed to get timelapse reports:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/timelapse/reports/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!intervalometerStateManager) {
+        return res.status(503).json({ error: 'Timelapse reporting not available' });
+      }
+      
+      const report = await intervalometerStateManager.getReport(id);
+      if (!report) {
+        return res.status(404).json({ error: 'Report not found' });
+      }
+      
+      res.json(report);
+    } catch (error) {
+      logger.error('Failed to get timelapse report:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.put('/timelapse/reports/:id/title', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { title } = req.body;
+      
+      if (!title || title.trim() === '') {
+        return res.status(400).json({ error: 'Title cannot be empty' });
+      }
+      
+      if (!intervalometerStateManager) {
+        return res.status(503).json({ error: 'Timelapse reporting not available' });
+      }
+      
+      const updatedReport = await intervalometerStateManager.updateReportTitle(id, title.trim());
+      res.json(updatedReport);
+    } catch (error) {
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ error: 'Report not found' });
+      }
+      logger.error('Failed to update report title:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.delete('/timelapse/reports/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!intervalometerStateManager) {
+        return res.status(503).json({ error: 'Timelapse reporting not available' });
+      }
+      
+      await intervalometerStateManager.deleteReport(id);
+      res.json({ success: true, message: 'Report deleted successfully' });
+    } catch (error) {
+      logger.error('Failed to delete report:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.post('/timelapse/sessions/:id/save', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { title } = req.body;
+      
+      if (!intervalometerStateManager) {
+        return res.status(503).json({ error: 'Timelapse reporting not available' });
+      }
+      
+      const savedReport = await intervalometerStateManager.saveSessionReport(id, title);
+      res.json({ 
+        success: true, 
+        message: 'Session saved as report successfully',
+        report: savedReport 
+      });
+    } catch (error) {
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+      logger.error('Failed to save session as report:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.post('/timelapse/sessions/:id/discard', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      if (!intervalometerStateManager) {
+        return res.status(503).json({ error: 'Timelapse reporting not available' });
+      }
+      
+      await intervalometerStateManager.discardSession(id);
+      res.json({ success: true, message: 'Session discarded successfully' });
+    } catch (error) {
+      logger.error('Failed to discard session:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/timelapse/unsaved-session', async (req, res) => {
+    try {
+      if (!intervalometerStateManager) {
+        return res.status(503).json({ error: 'Timelapse reporting not available' });
+      }
+      
+      const state = intervalometerStateManager.getState();
+      res.json({ 
+        unsavedSession: state.hasUnsavedSession ? {
+          sessionId: state.currentSessionId,
+          // Additional unsaved session data would be added here
+        } : null 
+      });
+    } catch (error) {
+      logger.error('Failed to get unsaved session:', error);
       res.status(500).json({ error: error.message });
     }
   });

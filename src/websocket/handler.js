@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger.js';
 import { IntervalometerSession } from '../intervalometer/session.js';
 
-export function createWebSocketHandler(cameraController, powerManager, server, networkManager, discoveryManager) {
+export function createWebSocketHandler(cameraController, powerManager, server, networkManager, discoveryManager, intervalometerStateManager) {
   const clients = new Set();
   
   // Set up network event listeners for real-time updates
@@ -237,6 +237,38 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
           
         case 'network_mode_switch':
           await handleNetworkModeSwitch(ws, data);
+          break;
+          
+        case 'start_intervalometer_with_title':
+          await handleStartIntervalometerWithTitle(ws, data);
+          break;
+          
+        case 'get_timelapse_reports':
+          await handleGetTimelapseReports(ws);
+          break;
+          
+        case 'get_timelapse_report':
+          await handleGetTimelapseReport(ws, data);
+          break;
+          
+        case 'update_report_title':
+          await handleUpdateReportTitle(ws, data);
+          break;
+          
+        case 'delete_timelapse_report':
+          await handleDeleteTimelapseReport(ws, data);
+          break;
+          
+        case 'save_session_as_report':
+          await handleSaveSessionAsReport(ws, data);
+          break;
+          
+        case 'discard_session':
+          await handleDiscardSession(ws, data);
+          break;
+          
+        case 'get_unsaved_session':
+          await handleGetUnsavedSession(ws);
           break;
           
         case 'ping':
@@ -535,6 +567,285 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
       sendError(ws, `Mode switch failed: ${error.message}`);
     }
   };
+
+  // Timelapse reporting WebSocket handlers
+  const handleStartIntervalometerWithTitle = async (ws, data) => {
+    try {
+      const { interval, shots, stopTime, title } = data;
+      
+      // Validation
+      if (!interval || interval <= 0) {
+        return sendError(ws, 'Invalid interval value');
+      }
+      
+      // Check if session is already running
+      if (server.activeIntervalometerSession && server.activeIntervalometerSession.state === 'running') {
+        return sendError(ws, 'Intervalometer is already running');
+      }
+      
+      // Validate against camera settings
+      const currentController = cameraController();
+      if (!currentController) {
+        return sendError(ws, 'No camera available');
+      }
+      
+      const validation = await currentController.validateInterval(interval);
+      if (!validation.valid) {
+        return sendError(ws, validation.error);
+      }
+      
+      // Clean up any existing session
+      if (server.activeIntervalometerSession) {
+        server.activeIntervalometerSession.cleanup();
+        server.activeIntervalometerSession = null;
+      }
+      
+      // Create and configure new session with title
+      const options = { interval };
+      if (title && title.trim()) options.title = title.trim();
+      if (shots && shots > 0) options.totalShots = parseInt(shots);
+      if (stopTime) {
+        // Parse time as HH:MM and create a future date
+        const [hours, minutes] = stopTime.split(':').map(Number);
+        const now = new Date();
+        const stopDate = new Date();
+        stopDate.setHours(hours, minutes, 0, 0);
+        
+        // If the time is in the past, assume it's for tomorrow
+        if (stopDate <= now) {
+          stopDate.setDate(stopDate.getDate() + 1);
+        }
+        
+        options.stopTime = stopDate;
+      }
+      
+      server.activeIntervalometerSession = new IntervalometerSession(() => cameraController(), options);
+      
+      // Set up event handlers with enhanced events for reporting
+      server.activeIntervalometerSession.on('started', (sessionData) => {
+        logger.info('Session started event received, broadcasting...');
+        broadcastEvent('intervalometer_started', {
+          ...sessionData,
+          sessionId: server.activeIntervalometerSession.getSessionId(),
+          title: server.activeIntervalometerSession.getTitle()
+        });
+      });
+      
+      server.activeIntervalometerSession.on('photo_taken', (photoData) => {
+        logger.info('Photo taken event received, broadcasting:', photoData);
+        broadcastEvent('intervalometer_photo', photoData);
+      });
+      
+      server.activeIntervalometerSession.on('photo_failed', (errorData) => {
+        logger.info('Photo failed event received, broadcasting:', errorData);
+        broadcastEvent('intervalometer_error', errorData);
+      });
+      
+      server.activeIntervalometerSession.on('completed', (completionData) => {
+        logger.info('Session completed event received, broadcasting:', completionData);
+        broadcastEvent('intervalometer_completed', completionData);
+        // Broadcast that there's an unsaved session needing user decision
+        broadcastEvent('timelapse_session_needs_decision', {
+          sessionId: completionData.sessionId,
+          title: completionData.title,
+          completionData
+        });
+      });
+      
+      server.activeIntervalometerSession.on('stopped', (stopData) => {
+        logger.info('Session stopped event received, broadcasting:', stopData);
+        broadcastEvent('intervalometer_stopped', stopData);
+        // Broadcast that there's an unsaved session needing user decision
+        broadcastEvent('timelapse_session_needs_decision', {
+          sessionId: stopData.sessionId,
+          title: stopData.title,
+          completionData: stopData
+        });
+      });
+      
+      server.activeIntervalometerSession.on('error', (errorData) => {
+        logger.info('Session error event received, broadcasting:', errorData);
+        broadcastEvent('intervalometer_error', errorData);
+        // Broadcast that there's an unsaved session needing user decision
+        broadcastEvent('timelapse_session_needs_decision', {
+          sessionId: errorData.sessionId,
+          title: errorData.title,
+          completionData: errorData
+        });
+      });
+      
+      // Start the session
+      await server.activeIntervalometerSession.start();
+      
+      logger.info('Intervalometer started with title via WebSocket', options);
+      
+      sendResponse(ws, 'intervalometer_start', {
+        success: true,
+        message: 'Intervalometer started successfully',
+        status: server.activeIntervalometerSession.getStatus(),
+        sessionId: server.activeIntervalometerSession.getSessionId(),
+        title: server.activeIntervalometerSession.getTitle()
+      });
+    } catch (error) {
+      logger.error('Failed to start intervalometer with title via WebSocket:', error);
+      sendError(ws, `Failed to start intervalometer: ${error.message}`);
+    }
+  };
+
+  const handleGetTimelapseReports = async (ws) => {
+    try {
+      if (!intervalometerStateManager) {
+        return sendError(ws, 'Timelapse reporting not available');
+      }
+      
+      const reports = await intervalometerStateManager.getReports();
+      sendResponse(ws, 'timelapse_reports', { reports });
+    } catch (error) {
+      logger.error('Failed to get timelapse reports via WebSocket:', error);
+      sendError(ws, `Failed to get timelapse reports: ${error.message}`);
+    }
+  };
+
+  const handleGetTimelapseReport = async (ws, data) => {
+    try {
+      const { id } = data;
+      if (!id) {
+        return sendError(ws, 'Report ID is required');
+      }
+      
+      if (!intervalometerStateManager) {
+        return sendError(ws, 'Timelapse reporting not available');
+      }
+      
+      const report = await intervalometerStateManager.getReport(id);
+      if (!report) {
+        return sendError(ws, 'Report not found');
+      }
+      
+      sendResponse(ws, 'timelapse_report', { report });
+    } catch (error) {
+      logger.error('Failed to get timelapse report via WebSocket:', error);
+      sendError(ws, `Failed to get timelapse report: ${error.message}`);
+    }
+  };
+
+  const handleUpdateReportTitle = async (ws, data) => {
+    try {
+      const { id, title } = data;
+      if (!id || !title) {
+        return sendError(ws, 'Report ID and title are required');
+      }
+      
+      if (title.trim() === '') {
+        return sendError(ws, 'Title cannot be empty');
+      }
+      
+      if (!intervalometerStateManager) {
+        return sendError(ws, 'Timelapse reporting not available');
+      }
+      
+      const updatedReport = await intervalometerStateManager.updateReportTitle(id, title.trim());
+      sendResponse(ws, 'report_title_updated', { report: updatedReport });
+      
+      // Broadcast the update to all clients
+      broadcastTimelapseEvent('report_updated', { reportId: id, title: title.trim() });
+    } catch (error) {
+      logger.error('Failed to update report title via WebSocket:', error);
+      sendError(ws, `Failed to update report title: ${error.message}`);
+    }
+  };
+
+  const handleDeleteTimelapseReport = async (ws, data) => {
+    try {
+      const { id } = data;
+      if (!id) {
+        return sendError(ws, 'Report ID is required');
+      }
+      
+      if (!intervalometerStateManager) {
+        return sendError(ws, 'Timelapse reporting not available');
+      }
+      
+      await intervalometerStateManager.deleteReport(id);
+      sendResponse(ws, 'report_deleted', { reportId: id });
+      
+      // Broadcast the deletion to all clients
+      broadcastTimelapseEvent('report_deleted', { reportId: id });
+    } catch (error) {
+      logger.error('Failed to delete timelapse report via WebSocket:', error);
+      sendError(ws, `Failed to delete timelapse report: ${error.message}`);
+    }
+  };
+
+  const handleSaveSessionAsReport = async (ws, data) => {
+    try {
+      const { sessionId, title } = data;
+      if (!sessionId) {
+        return sendError(ws, 'Session ID is required');
+      }
+      
+      if (!intervalometerStateManager) {
+        return sendError(ws, 'Timelapse reporting not available');
+      }
+      
+      const savedReport = await intervalometerStateManager.saveSessionReport(sessionId, title);
+      sendResponse(ws, 'session_saved', { 
+        sessionId, 
+        report: savedReport,
+        message: 'Session saved as report successfully' 
+      });
+      
+      // Broadcast the new report to all clients
+      broadcastTimelapseEvent('report_saved', { report: savedReport });
+    } catch (error) {
+      logger.error('Failed to save session as report via WebSocket:', error);
+      sendError(ws, `Failed to save session as report: ${error.message}`);
+    }
+  };
+
+  const handleDiscardSession = async (ws, data) => {
+    try {
+      const { sessionId } = data;
+      if (!sessionId) {
+        return sendError(ws, 'Session ID is required');
+      }
+      
+      if (!intervalometerStateManager) {
+        return sendError(ws, 'Timelapse reporting not available');
+      }
+      
+      await intervalometerStateManager.discardSession(sessionId);
+      sendResponse(ws, 'session_discarded', { 
+        sessionId, 
+        message: 'Session discarded successfully' 
+      });
+      
+      // Broadcast the discard action to all clients
+      broadcastTimelapseEvent('session_discarded', { sessionId });
+    } catch (error) {
+      logger.error('Failed to discard session via WebSocket:', error);
+      sendError(ws, `Failed to discard session: ${error.message}`);
+    }
+  };
+
+  const handleGetUnsavedSession = async (ws) => {
+    try {
+      if (!intervalometerStateManager) {
+        return sendError(ws, 'Timelapse reporting not available');
+      }
+      
+      const state = intervalometerStateManager.getState();
+      sendResponse(ws, 'unsaved_session', { 
+        unsavedSession: state.hasUnsavedSession ? {
+          sessionId: state.currentSessionId,
+          // Additional unsaved session data would be added here
+        } : null 
+      });
+    } catch (error) {
+      logger.error('Failed to get unsaved session via WebSocket:', error);
+      sendError(ws, `Failed to get unsaved session: ${error.message}`);
+    }
+  };
   
   const sendResponse = (ws, type, data) => {
     try {
@@ -622,10 +933,34 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
     setTimeout(() => broadcastStatus(), 500);
   };
 
+  // Function to broadcast timelapse reporting events to all clients
+  const broadcastTimelapseEvent = (eventType, data) => {
+    const timelapseEvent = {
+      type: 'timelapse_event',
+      eventType,
+      data,
+      timestamp: new Date().toISOString()
+    };
+    
+    const message = JSON.stringify(timelapseEvent);
+    logger.info(`Broadcasting timelapse event ${eventType} to ${clients.size} clients`);
+    
+    for (const client of clients) {
+      try {
+        if (client.readyState === client.OPEN) {
+          client.send(message);
+        }
+      } catch (error) {
+        logger.debug('Failed to broadcast timelapse event:', error.message);
+      }
+    }
+  };
+
   // Attach cleanup and broadcast functions to the handler for access from server
   handleConnection.cleanup = cleanup;
   handleConnection.broadcastStatus = broadcastStatus;
   handleConnection.broadcastDiscoveryEvent = broadcastDiscoveryEvent;
+  handleConnection.broadcastTimelapseEvent = broadcastTimelapseEvent;
   
   return handleConnection;
 }
