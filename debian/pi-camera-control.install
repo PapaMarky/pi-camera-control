@@ -1,0 +1,23 @@
+# Pi Camera Control Installation File
+# Specifies which files from the source tree are installed where
+
+# Main application files
+src/* opt/pi-camera-control/src/
+public/* opt/pi-camera-control/public/
+package.json opt/pi-camera-control/
+package-lock.json opt/pi-camera-control/
+README.md opt/pi-camera-control/
+CLAUDE.md opt/pi-camera-control/
+
+# Runtime files (systemd service and network script)
+runtime/pi-camera-control.service etc/systemd/system/
+runtime/camera-network-mode usr/local/bin/
+
+# Documentation
+docs/* opt/pi-camera-control/docs/
+
+# Debug tools (optional, for development)
+debug/* opt/pi-camera-control/debug/
+
+# Archive (reference only, not critical for operation)
+archive/* opt/pi-camera-control/archive/

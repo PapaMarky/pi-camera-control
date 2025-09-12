@@ -2,6 +2,20 @@
 # Emergency network fix script for Pi Camera Control
 # Run this directly on the Pi if network issues occur
 
+# SAFETY CHECK: Ensure we're running on a Raspberry Pi
+if ! grep -q "Raspberry Pi\|BCM" /proc/cpuinfo 2>/dev/null && ! uname -m | grep -q "arm" && [ ! -f "/boot/config.txt" ]; then
+    echo "ERROR: This script is designed for Raspberry Pi only!"
+    echo "Detected system: $(uname -a)"
+    echo "This emergency script modifies network services and configuration."
+    echo "Running this on a desktop/laptop could severely disrupt your network!"
+    echo ""
+    read -p "Are you ABSOLUTELY SURE you want to continue? [type 'YES' to proceed]: " confirm
+    if [ "$confirm" != "YES" ]; then
+        echo "Network recovery cancelled for safety."
+        exit 1
+    fi
+fi
+
 echo "=== Pi Camera Control Network Recovery ==="
 
 # Stop all network services first

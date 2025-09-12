@@ -1,0 +1,117 @@
+#!/bin/bash
+# Pi Camera Control - Pre Removal Script
+# This script runs before package removal to clean up the system
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${GREEN}[PI-CAMERA-CONTROL]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[PI-CAMERA-CONTROL]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[PI-CAMERA-CONTROL]${NC} $1"
+}
+
+# Stop and disable pi-camera-control service
+stop_service() {
+    log_info "Stopping Pi Camera Control service..."
+    
+    systemctl stop pi-camera-control 2>/dev/null || true
+    systemctl disable pi-camera-control 2>/dev/null || true
+    
+    log_info "Service stopped and disabled"
+}
+
+# Stop network services that were managed by pi-camera-control
+stop_network_services() {
+    log_info "Stopping network services..."
+    
+    # Stop services we might have started
+    systemctl stop hostapd 2>/dev/null || true
+    systemctl stop dnsmasq 2>/dev/null || true
+    
+    log_info "Network services stopped"
+}
+
+# Remove ap0 interface if it exists
+cleanup_network_interface() {
+    log_info "Cleaning up network interfaces..."
+    
+    # Remove ap0 interface if it exists
+    if ip link show ap0 >/dev/null 2>&1; then
+        ip link set ap0 down 2>/dev/null || true
+        iw dev ap0 del 2>/dev/null || true
+        log_info "Removed ap0 interface"
+    fi
+}
+
+# Restore network configuration files
+restore_network_config() {
+    log_info "Preparing to restore network configuration..."
+    
+    # Note: We don't automatically restore configs during removal
+    # as this could break user's custom configurations
+    # Instead, we provide information about backup files
+    
+    if [ -f /etc/dnsmasq.conf.pi-camera-control.backup ]; then
+        log_info "dnsmasq backup available at /etc/dnsmasq.conf.pi-camera-control.backup"
+        log_info "To restore: sudo mv /etc/dnsmasq.conf.pi-camera-control.backup /etc/dnsmasq.conf"
+    fi
+    
+    if [ -f /boot/cmdline.txt.pi-camera-control.backup ]; then
+        log_info "cmdline.txt backup available at /boot/cmdline.txt.pi-camera-control.backup"
+        log_info "To restore: sudo mv /boot/cmdline.txt.pi-camera-control.backup /boot/cmdline.txt"
+    fi
+}
+
+# Main removal function
+main() {
+    case "$1" in
+        remove|upgrade|deconfigure)
+            log_info "Preparing Pi Camera Control for removal..."
+            
+            stop_service
+            stop_network_services
+            cleanup_network_interface
+            restore_network_config
+            
+            log_info "=== Pi Camera Control Pre-Removal Complete ==="
+            echo ""
+            log_warn "Note: Network configuration files have been left in place"
+            log_warn "to avoid disrupting your system. Backup files are available"
+            log_warn "if you need to restore original configurations."
+            echo ""
+            log_info "To completely remove all configuration:"
+            echo "- Remove /etc/hostapd/hostapd.conf if no longer needed"
+            echo "- Remove ap0 configuration from /etc/dhcpcd.conf"
+            echo "- Remove /etc/sysctl.d/99-pi-camera-control-ipv6.conf"
+            echo "- Restore backup files if desired"
+            ;;
+        
+        failed-upgrade)
+            log_warn "Pre-removal called due to failed upgrade"
+            ;;
+        
+        *)
+            log_error "Unknown prerm action: $1"
+            exit 1
+            ;;
+    esac
+}
+
+# Run main function with all arguments
+main "$@"
+
+#DEBHELPER#
+
+exit 0

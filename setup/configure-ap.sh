@@ -1,6 +1,20 @@
 #!/bin/bash
 
 # Configure Raspberry Pi for Access Point + WiFi Client dual mode operation
+
+# SAFETY CHECK: Ensure we're running on a Raspberry Pi
+if ! grep -q "Raspberry Pi\|BCM" /proc/cpuinfo 2>/dev/null && ! uname -m | grep -q "arm" && [ ! -f "/boot/config.txt" ]; then
+    echo "ERROR: This script is designed for Raspberry Pi only!"
+    echo "Detected system: $(uname -a)"
+    echo "This script modifies network configuration and should not be run on desktop/laptop systems."
+    echo ""
+    read -p "Are you ABSOLUTELY SURE you want to continue? [type 'YES' to proceed]: " confirm
+    if [ "$confirm" != "YES" ]; then
+        echo "Setup cancelled for safety."
+        exit 1
+    fi
+fi
+
 echo "Configuring Pi Camera Control Access Point functionality..."
 
 # Create hostapd configuration

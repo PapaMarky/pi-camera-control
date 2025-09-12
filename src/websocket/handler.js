@@ -4,6 +4,64 @@ import { IntervalometerSession } from '../intervalometer/session.js';
 export function createWebSocketHandler(cameraController, powerManager, server, networkManager, discoveryManager) {
   const clients = new Set();
   
+  // Set up network event listeners for real-time updates
+  if (networkManager && networkManager.stateManager) {
+    networkManager.stateManager.on('modeChanged', (data) => {
+      broadcastNetworkEvent('network_mode_changed', data);
+    });
+    
+    networkManager.stateManager.on('serviceStateChanged', (data) => {
+      broadcastNetworkEvent('network_service_changed', data);
+    });
+    
+    networkManager.stateManager.on('interfaceStateChanged', (data) => {
+      broadcastNetworkEvent('network_interface_changed', data);
+    });
+    
+    networkManager.stateManager.on('accessPointConfigured', (data) => {
+      broadcastNetworkEvent('access_point_configured', data);
+    });
+    
+    networkManager.stateManager.on('wifiConnectionStarted', (data) => {
+      broadcastNetworkEvent('wifi_connection_started', data);
+    });
+    
+    networkManager.stateManager.on('wifiConnectionFailed', (data) => {
+      broadcastNetworkEvent('wifi_connection_failed', data);
+    });
+  }
+  
+  // Broadcast network-specific events to all connected clients
+  const broadcastNetworkEvent = (eventType, data) => {
+    if (clients.size === 0) return;
+    
+    const message = JSON.stringify({
+      type: eventType,
+      timestamp: new Date().toISOString(),
+      data: data
+    });
+    
+    const deadClients = new Set();
+    
+    for (const client of clients) {
+      try {
+        if (client.readyState === client.OPEN) {
+          client.send(message);
+        } else {
+          deadClients.add(client);
+        }
+      } catch (error) {
+        logger.debug('Failed to send network event to WebSocket client:', error.message);
+        deadClients.add(client);
+      }
+    }
+    
+    // Clean up dead connections
+    for (const deadClient of deadClients) {
+      clients.delete(deadClient);
+    }
+  };
+  
   // Broadcast status updates to all connected clients
   const broadcastStatus = async () => {
     if (clients.size === 0) return;

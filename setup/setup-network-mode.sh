@@ -3,6 +3,19 @@
 # Setup script for Pi Camera Control network mode functionality
 # This creates the network mode script and basic AP configuration
 
+# SAFETY CHECK: Ensure we're running on a Raspberry Pi
+if ! grep -q "Raspberry Pi\|BCM" /proc/cpuinfo 2>/dev/null && ! uname -m | grep -q "arm" && [ ! -f "/boot/config.txt" ]; then
+    echo "ERROR: This script is designed for Raspberry Pi only!"
+    echo "Detected system: $(uname -a)"
+    echo "This script creates system scripts and should not be run on desktop/laptop systems."
+    echo ""
+    read -p "Are you ABSOLUTELY SURE you want to continue? [type 'YES' to proceed]: " confirm
+    if [ "$confirm" != "YES" ]; then
+        echo "Setup cancelled for safety."
+        exit 1
+    fi
+fi
+
 echo "Setting up Pi Camera Control network functionality..."
 
 # Create the network mode control script

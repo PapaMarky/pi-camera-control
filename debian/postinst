@@ -1,0 +1,264 @@
+#!/bin/bash
+# Pi Camera Control - Post Installation Script
+# This script runs after package installation to configure the system
+
+set -e
+
+# Source debconf library for interactive configuration
+. /usr/share/debconf/confmodule
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${GREEN}[PI-CAMERA-CONTROL]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[PI-CAMERA-CONTROL]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[PI-CAMERA-CONTROL]${NC} $1"
+}
+
+# Check if we're running on a Raspberry Pi
+check_raspberry_pi() {
+    local is_pi=false
+    
+    if grep -q "Raspberry Pi\|BCM" /proc/cpuinfo 2>/dev/null; then
+        is_pi=true
+    fi
+    
+    if uname -m | grep -q "arm"; then
+        is_pi=true
+    fi
+    
+    if [ -d "/boot/firmware" ] || [ -f "/boot/config.txt" ]; then
+        is_pi=true
+    fi
+    
+    if [ "$is_pi" = false ]; then
+        log_warn "This package is designed for Raspberry Pi hardware."
+        log_warn "Some features may not work correctly on other systems."
+    else
+        log_info "Raspberry Pi detected - configuring for optimal operation"
+    fi
+}
+
+# Configure hostapd for access point
+configure_hostapd() {
+    log_info "Configuring hostapd for access point..."
+    
+    # Create hostapd configuration if it doesn't exist
+    if [ ! -f /etc/hostapd/hostapd.conf ]; then
+        cat > /etc/hostapd/hostapd.conf <<EOF
+# Pi Camera Control Access Point Configuration
+interface=ap0
+driver=nl80211
+ssid=PiCameraController
+hw_mode=g
+channel=7
+wmm_enabled=0
+macaddr_acl=0
+auth_algs=1
+ignore_broadcast_ssid=0
+
+# Security configuration
+wpa=2
+wpa_passphrase=camera123
+wpa_key_mgmt=WPA-PSK
+wpa_pairwise=TKIP
+rsn_pairwise=CCMP
+EOF
+        log_info "Created hostapd configuration"
+    else
+        log_info "hostapd configuration already exists"
+    fi
+    
+    # Configure hostapd daemon
+    sed -i 's/#DAEMON_CONF=""/DAEMON_CONF="\/etc\/hostapd\/hostapd.conf"/' /etc/default/hostapd 2>/dev/null || true
+}
+
+# Configure dnsmasq for DHCP and DNS
+configure_dnsmasq() {
+    log_info "Configuring dnsmasq for DHCP and DNS..."
+    
+    # Backup original dnsmasq.conf if it exists and we haven't backed it up yet
+    if [ -f /etc/dnsmasq.conf ] && [ ! -f /etc/dnsmasq.conf.pi-camera-control.backup ]; then
+        cp /etc/dnsmasq.conf /etc/dnsmasq.conf.pi-camera-control.backup
+        log_info "Backed up original dnsmasq.conf"
+    fi
+    
+    # Create dnsmasq configuration
+    cat > /etc/dnsmasq.conf <<EOF
+# Pi Camera Control dnsmasq Configuration
+# Basic configuration
+interface=ap0
+bind-interfaces
+
+# DHCP configuration for AP clients
+dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
+
+# DNS configuration
+address=/#/192.168.4.1
+address=/picontrol.local/192.168.4.1
+address=/camera.local/192.168.4.1
+address=/pi-camera-control.local/192.168.4.1
+
+# Disable DNS forwarding for local network
+no-resolv
+server=8.8.8.8
+server=8.8.4.4
+EOF
+    
+    log_info "dnsmasq configuration complete"
+}
+
+# Configure network interfaces
+configure_network_interfaces() {
+    log_info "Configuring network interfaces..."
+    
+    # Configure ap0 interface in dhcpcd.conf
+    if ! grep -q "interface ap0" /etc/dhcpcd.conf; then
+        cat >> /etc/dhcpcd.conf <<EOF
+
+# Pi Camera Control AP configuration
+interface ap0
+static ip_address=192.168.4.1/24
+nohook wpa_supplicant
+EOF
+        log_info "Added ap0 interface configuration to dhcpcd.conf"
+    else
+        log_info "ap0 interface already configured in dhcpcd.conf"
+    fi
+}
+
+# Disable IPv6 system-wide for simplified networking
+disable_ipv6() {
+    log_info "Disabling IPv6 for simplified networking..."
+    
+    # Add sysctl configuration
+    cat > /etc/sysctl.d/99-pi-camera-control-ipv6.conf <<EOF
+# Disable IPv6 for Pi Camera Control
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+EOF
+    
+    # Apply sysctl changes immediately
+    sysctl -p /etc/sysctl.d/99-pi-camera-control-ipv6.conf 2>/dev/null || true
+    
+    # Add IPv6 disable to kernel command line if not present
+    if [ -f /boot/cmdline.txt ] && ! grep -q "ipv6.disable=1" /boot/cmdline.txt; then
+        cp /boot/cmdline.txt /boot/cmdline.txt.pi-camera-control.backup
+        sed -i 's/$/ ipv6.disable=1/' /boot/cmdline.txt
+        log_info "Added IPv6 disable to kernel command line"
+    fi
+    
+    log_info "IPv6 disabled system-wide"
+}
+
+# Configure systemd services
+configure_services() {
+    log_info "Configuring systemd services..."
+    
+    # Enable pi-camera-control service
+    systemctl daemon-reload
+    systemctl enable pi-camera-control
+    
+    # Configure network services (initially disabled, managed by network mode script)
+    systemctl disable hostapd 2>/dev/null || true
+    systemctl disable dnsmasq 2>/dev/null || true
+    
+    # Enable wpa_supplicant for wlan0
+    systemctl enable wpa_supplicant@wlan0 2>/dev/null || true
+    
+    log_info "System services configured"
+}
+
+# Install Node.js dependencies
+install_node_dependencies() {
+    log_info "Installing Node.js dependencies..."
+    
+    if [ -f /opt/pi-camera-control/package.json ]; then
+        cd /opt/pi-camera-control
+        # Install dependencies as the pi-camera-control user if it exists, otherwise as root
+        if id "pi-camera-control" &>/dev/null; then
+            sudo -u pi-camera-control npm install --production
+        else
+            npm install --production
+        fi
+        log_info "Node.js dependencies installed"
+    else
+        log_warn "package.json not found - Node.js dependencies not installed"
+    fi
+}
+
+# Create pi-camera-control user for service
+create_user() {
+    if ! id "pi-camera-control" &>/dev/null; then
+        log_info "Creating pi-camera-control user..."
+        useradd --system --home /opt/pi-camera-control --shell /bin/false \
+                --comment "Pi Camera Control Service" pi-camera-control
+        
+        # Set ownership of application directory
+        chown -R pi-camera-control:pi-camera-control /opt/pi-camera-control
+        log_info "Created pi-camera-control user"
+    else
+        log_info "pi-camera-control user already exists"
+    fi
+}
+
+# Main installation function
+main() {
+    case "$1" in
+        configure)
+            log_info "Configuring Pi Camera Control system..."
+            
+            # Run configuration steps
+            check_raspberry_pi
+            create_user
+            configure_hostapd
+            configure_dnsmasq
+            configure_network_interfaces
+            disable_ipv6
+            configure_services
+            install_node_dependencies
+            
+            log_info "=== Pi Camera Control Installation Complete ==="
+            echo ""
+            log_info "Next steps:"
+            echo "1. Reboot the Pi to apply all network changes: sudo reboot"
+            echo "2. After reboot, the access point 'PiCameraController' will be available"
+            echo "3. Default password: camera123"
+            echo "4. Connect to http://192.168.4.1:3000 for the web interface"
+            echo ""
+            echo "Network modes can be controlled with:"
+            echo "  sudo /usr/local/bin/camera-network-mode field       # AP only"
+            echo "  sudo /usr/local/bin/camera-network-mode development # AP + WiFi"
+            echo "  sudo /usr/local/bin/camera-network-mode wifi-only   # WiFi only"
+            echo ""
+            log_warn "A reboot is required for all network changes to take effect."
+            ;;
+        
+        abort-upgrade|abort-remove|abort-deconfigure)
+            log_info "Installation aborted"
+            ;;
+        
+        *)
+            log_error "Unknown postinst action: $1"
+            exit 1
+            ;;
+    esac
+}
+
+# Run main function with all arguments
+main "$@"
+
+#DEBHELPER#
+
+exit 0

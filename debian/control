@@ -1,0 +1,48 @@
+Source: pi-camera-control
+Section: electronics
+Priority: optional
+Maintainer: PapaMarky <mark@papamarky.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+Homepage: https://github.com/PapaMarky/pi-camera-control
+Vcs-Git: https://github.com/PapaMarky/pi-camera-control.git
+Vcs-Browser: https://github.com/PapaMarky/pi-camera-control
+
+Package: pi-camera-control
+Architecture: all
+Depends: ${misc:Depends},
+         nodejs (>= 16.0.0),
+         npm,
+         hostapd,
+         dnsmasq,
+         wpasupplicant,
+         dhcpcd5,
+         iptables,
+         iw,
+         systemd
+Recommends: wireless-tools,
+           rfkill
+Suggests: screen
+Description: Raspberry Pi Canon Camera Control System
+ Pi Camera Control is an intervalometer and remote control system for Canon
+ cameras that support the Canon Camera API (CCAPI). It provides a web-based
+ interface for controlling camera settings, taking photos, and creating
+ timelapse sequences.
+ .
+ Key features:
+  * Web-based camera control interface
+  * Intervalometer for automated photo sequences
+  * Dual WiFi mode (Access Point + Client)
+  * Real-time camera status monitoring
+  * Battery and thermal monitoring
+  * Automatic network configuration
+  * Systemd service for reliable operation
+ .
+ This package is specifically designed for Raspberry Pi hardware and
+ automatically configures the system for dual WiFi operation, allowing
+ the Pi to act as both an access point for direct camera control and
+ a WiFi client for internet connectivity.
+ .
+ Supported cameras include Canon EOS R series and other CCAPI-compatible
+ Canon cameras. The system is optimized for astrophotography and long
+ exposure timelapse photography.
