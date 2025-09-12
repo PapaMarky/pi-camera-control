@@ -348,101 +348,15 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   };
   
   const handleStartIntervalometer = async (ws, data) => {
-    try {
-      const { interval, shots, stopTime } = data;
-      
-      // Validation
-      if (!interval || interval <= 0) {
-        return sendError(ws, 'Invalid interval value');
-      }
-      
-      // Check if session is already running
-      if (server.activeIntervalometerSession && server.activeIntervalometerSession.state === 'running') {
-        return sendError(ws, 'Intervalometer is already running');
-      }
-      
-      // Validate against camera settings
-      const currentController = cameraController();
-      if (!currentController) {
-        return sendError(ws, 'No camera available');
-      }
-      
-      const validation = await currentController.validateInterval(interval);
-      if (!validation.valid) {
-        return sendError(ws, validation.error);
-      }
-      
-      // Clean up any existing session
-      if (server.activeIntervalometerSession) {
-        server.activeIntervalometerSession.cleanup();
-        server.activeIntervalometerSession = null;
-      }
-      
-      // Create and configure new session
-      const options = { interval };
-      if (shots && shots > 0) options.totalShots = parseInt(shots);
-      if (stopTime) {
-        // Parse time as HH:MM and create a future date
-        const [hours, minutes] = stopTime.split(':').map(Number);
-        const now = new Date();
-        const stopDate = new Date();
-        stopDate.setHours(hours, minutes, 0, 0);
-        
-        // If the time is in the past, assume it's for tomorrow
-        if (stopDate <= now) {
-          stopDate.setDate(stopDate.getDate() + 1);
-        }
-        
-        options.stopTime = stopDate;
-      }
-      
-      server.activeIntervalometerSession = new IntervalometerSession(() => cameraController(), options);
-      
-      // Set up event handlers to broadcast updates to all clients
-      server.activeIntervalometerSession.on('started', (sessionData) => {
-        logger.info('Session started event received, broadcasting...');
-        broadcastEvent('intervalometer_started', sessionData);
-      });
-      
-      server.activeIntervalometerSession.on('photo_taken', (photoData) => {
-        logger.info('Photo taken event received, broadcasting:', photoData);
-        broadcastEvent('intervalometer_photo', photoData);
-      });
-      
-      server.activeIntervalometerSession.on('photo_failed', (errorData) => {
-        logger.info('Photo failed event received, broadcasting:', errorData);
-        broadcastEvent('intervalometer_error', errorData);
-      });
-      
-      server.activeIntervalometerSession.on('completed', (completionData) => {
-        logger.info('Session completed event received, broadcasting:', completionData);
-        broadcastEvent('intervalometer_completed', completionData);
-      });
-      
-      server.activeIntervalometerSession.on('stopped', (stopData) => {
-        logger.info('Session stopped event received, broadcasting:', stopData);
-        broadcastEvent('intervalometer_stopped', stopData);
-      });
-      
-      server.activeIntervalometerSession.on('error', (errorData) => {
-        logger.info('Session error event received, broadcasting:', errorData);
-        broadcastEvent('intervalometer_error', errorData);
-      });
-      
-      // Start the session
-      await server.activeIntervalometerSession.start();
-      
-      logger.info('Intervalometer started via WebSocket', options);
-      
-      sendResponse(ws, 'intervalometer_start', {
-        success: true,
-        message: 'Intervalometer started successfully',
-        status: server.activeIntervalometerSession.getStatus()
-      });
-    } catch (error) {
-      logger.error('Failed to start intervalometer via WebSocket:', error);
-      sendError(ws, `Failed to start intervalometer: ${error.message}`);
-    }
+    // Delegate to the new timelapse system for all intervalometer sessions
+    // This ensures backward compatibility while using the enhanced timelapse reporting
+    const enhancedData = {
+      ...data,
+      title: data.title || null // Use provided title or let system auto-generate
+    };
+    
+    logger.info('Legacy intervalometer request, delegating to timelapse system');
+    return await handleStartIntervalometerWithTitle(ws, enhancedData);
   };
   
   const handleStopIntervalometer = async (ws) => {
