@@ -1,0 +1,577 @@
+import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
+import cron from 'node-cron';
+import { logger } from '../utils/logger.js';
+
+/**
+ * Enhanced Timelapse Session Class
+ * Individual session with metadata support and title management
+ * Based on original IntervalometerSession but with enhanced features
+ */
+export class TimelapseSession extends EventEmitter {
+  constructor(getCameraController, options = {}) {
+    super();
+    
+    // Session identity and metadata
+    this.id = randomUUID();
+    this.title = options.title || this.generateDefaultTitle();
+    this.createdAt = new Date();
+    
+    // Camera controller
+    this.getCameraController = getCameraController;
+    
+    // Session options with defaults
+    this.options = {
+      interval: 10, // seconds
+      totalShots: null, // infinite if null
+      stopTime: null, // Date object
+      ...options
+    };
+
+    // Calculate totalShots if we have stopTime but no explicit totalShots
+    if (this.options.stopTime && !this.options.totalShots) {
+      const now = new Date();
+      const durationMs = this.options.stopTime.getTime() - now.getTime();
+      const intervalMs = this.options.interval * 1000;
+      if (durationMs > 0) {
+        this.options.totalShots = Math.ceil(durationMs / intervalMs);
+        logger.info(`Calculated totalShots: ${this.options.totalShots} based on stopTime and interval`, {
+          sessionId: this.id,
+          title: this.title
+        });
+      }
+    }
+    
+    // Session state and statistics
+    this.state = 'created'; // created, running, paused, completed, stopped, error
+    this.stats = {
+      startTime: null,
+      endTime: null,
+      shotsTaken: 0,
+      shotsSuccessful: 0,
+      shotsFailed: 0,
+      currentShot: 0,
+      errors: []
+    };
+    
+    // Session control
+    this.intervalId = null;
+    this.cronJob = null;
+    this.shouldStop = false;
+    this.nextShotTime = null;
+  }
+  
+  /**
+   * Generate default title based on creation timestamp
+   */
+  generateDefaultTitle() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    
+    return `${year}${month}${day}-${hours}${minutes}${seconds}`;
+  }
+  
+  /**
+   * Update session title
+   */
+  updateTitle(newTitle) {
+    if (!newTitle || newTitle.trim() === '') {
+      throw new Error('Title cannot be empty');
+    }
+    
+    const oldTitle = this.title;
+    this.title = newTitle.trim();
+    
+    logger.info(`Updated session title`, {
+      sessionId: this.id,
+      oldTitle,
+      newTitle: this.title
+    });
+    
+    this.emit('titleUpdated', {
+      sessionId: this.id,
+      oldTitle,
+      newTitle: this.title
+    });
+  }
+  
+  /**
+   * Get session metadata
+   */
+  getMetadata() {
+    return {
+      id: this.id,
+      title: this.title,
+      createdAt: this.createdAt,
+      state: this.state,
+      options: { ...this.options },
+      stats: { ...this.stats }
+    };
+  }
+  
+  /**
+   * Get current camera controller with retries
+   */
+  async getCurrentCameraController(retryCount = 3) {
+    for (let attempt = 1; attempt <= retryCount; attempt++) {
+      const controller = this.getCameraController();
+      if (controller) {
+        return controller;
+      }
+      
+      logger.warn(`Camera controller not available (attempt ${attempt}/${retryCount})`, {
+        sessionId: this.id,
+        title: this.title
+      });
+      
+      if (attempt < retryCount) {
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    logger.error('No camera controller available after retries during timelapse session', {
+      sessionId: this.id,
+      title: this.title
+    });
+    throw new Error('No camera controller available');
+  }
+  
+  /**
+   * Start the timelapse session
+   */
+  async start() {
+    if (this.state === 'running') {
+      throw new Error('Session is already running');
+    }
+    
+    logger.info('Starting timelapse session', {
+      sessionId: this.id,
+      title: this.title,
+      options: this.options
+    });
+    
+    // Validate camera connection
+    const cameraController = await this.getCurrentCameraController();
+    const cameraStatus = cameraController.getConnectionStatus();
+    if (!cameraStatus.connected) {
+      throw new Error('Camera is not connected');
+    }
+    
+    // Validate interval against camera settings
+    const validation = await cameraController.validateInterval(this.options.interval);
+    if (!validation.valid) {
+      throw new Error(validation.error || 'Invalid interval settings');
+    }
+    
+    // Reset state for new start
+    this.shouldStop = false;
+    this.state = 'running';
+    this.stats = {
+      startTime: new Date(),
+      endTime: null,
+      shotsTaken: 0,
+      shotsSuccessful: 0,
+      shotsFailed: 0,
+      currentShot: 0,
+      errors: []
+    };
+
+    // Recalculate totalShots based on actual start time if using stopTime
+    if (this.options.stopTime && !this.options.totalShots) {
+      const durationMs = this.options.stopTime.getTime() - this.stats.startTime.getTime();
+      const intervalMs = this.options.interval * 1000;
+      if (durationMs > 0) {
+        this.options.totalShots = Math.ceil(durationMs / intervalMs);
+        logger.info(`Recalculated totalShots: ${this.options.totalShots} based on actual startTime`, {
+          sessionId: this.id,
+          title: this.title
+        });
+      }
+    }
+
+    // Pause camera info polling during timelapse session to avoid interference
+    cameraController.pauseInfoPolling();
+    
+    // COMPLETELY disable connection monitoring during timelapse session
+    // Connection monitoring conflicts with long exposures and photo operations
+    cameraController.pauseConnectionMonitoring();
+    
+    logger.info('Timelapse session started', {
+      sessionId: this.id,
+      title: this.title,
+      interval: this.options.interval,
+      totalShots: this.options.totalShots,
+      stopTime: this.options.stopTime
+    });
+    
+    this.emit('started', { 
+      sessionId: this.id,
+      title: this.title,
+      options: this.options, 
+      stats: { ...this.stats } 
+    });
+    
+    // Start the shooting interval
+    await this.scheduleNextShot();
+    
+    return true;
+  }
+  
+  /**
+   * Stop the timelapse session
+   */
+  async stop() {
+    logger.info('Stopping timelapse session', {
+      sessionId: this.id,
+      title: this.title
+    });
+    
+    this.shouldStop = true;
+    
+    if (this.intervalId) {
+      clearTimeout(this.intervalId);
+      this.intervalId = null;
+    }
+    
+    if (this.cronJob) {
+      this.cronJob.stop();
+      this.cronJob = null;
+    }
+    
+    this.state = 'stopped';
+    this.stats.endTime = new Date();
+    
+    // Resume camera info polling and connection monitoring after session ends
+    try {
+      const cameraController = await this.getCurrentCameraController();
+      cameraController.resumeInfoPolling();
+      cameraController.resumeConnectionMonitoring();
+    } catch (error) {
+      logger.warn('Could not resume camera monitoring, camera controller not available', {
+        sessionId: this.id,
+        title: this.title,
+        error: error.message
+      });
+    }
+    
+    this.emit('stopped', { 
+      sessionId: this.id,
+      title: this.title,
+      stats: { ...this.stats } 
+    });
+    
+    return true;
+  }
+  
+  /**
+   * Pause the timelapse session
+   */
+  async pause() {
+    if (this.state !== 'running') {
+      return false;
+    }
+    
+    logger.info('Pausing timelapse session', {
+      sessionId: this.id,
+      title: this.title
+    });
+    
+    if (this.intervalId) {
+      clearTimeout(this.intervalId);
+      this.intervalId = null;
+    }
+    
+    this.state = 'paused';
+    this.emit('paused', { 
+      sessionId: this.id,
+      title: this.title,
+      stats: { ...this.stats } 
+    });
+    
+    return true;
+  }
+  
+  /**
+   * Resume the timelapse session
+   */
+  async resume() {
+    if (this.state !== 'paused') {
+      return false;
+    }
+    
+    logger.info('Resuming timelapse session', {
+      sessionId: this.id,
+      title: this.title
+    });
+    
+    this.state = 'running';
+    this.emit('resumed', { 
+      sessionId: this.id,
+      title: this.title,
+      stats: { ...this.stats } 
+    });
+    
+    await this.scheduleNextShot();
+    
+    return true;
+  }
+  
+  /**
+   * Schedule the next shot
+   */
+  async scheduleNextShot() {
+    if (this.shouldStop || this.state !== 'running') {
+      return;
+    }
+    
+    // Check if we've reached the shot limit
+    if (this.options.totalShots && this.stats.shotsTaken >= this.options.totalShots) {
+      await this.complete('Shot limit reached');
+      return;
+    }
+    
+    // Check if we've reached the stop time
+    if (this.options.stopTime && new Date() >= this.options.stopTime) {
+      await this.complete('Stop time reached');
+      return;
+    }
+    
+    // Calculate the exact time for the next shot
+    const now = new Date();
+    if (!this.nextShotTime) {
+      // First shot - take it immediately, then schedule the next
+      this.nextShotTime = now;
+    } else {
+      // Subsequent shots - calculate based on interval from start time
+      // shotsTaken has already been incremented in takeShot(), so use it directly
+      const nextShotInterval = this.stats.shotsTaken;
+      this.nextShotTime = new Date(this.stats.startTime.getTime() + (nextShotInterval * this.options.interval * 1000));
+    }
+    
+    // Calculate delay until next shot time
+    const delayMs = Math.max(0, this.nextShotTime.getTime() - now.getTime());
+    
+    // Schedule the next shot
+    this.intervalId = setTimeout(async () => {
+      await this.takeShot();
+      await this.scheduleNextShot();
+    }, delayMs);
+  }
+  
+  /**
+   * Take a single shot
+   */
+  async takeShot() {
+    if (this.shouldStop || this.state !== 'running') {
+      return;
+    }
+    
+    this.stats.currentShot++;
+    const shotNumber = this.stats.currentShot;
+    
+    logger.debug(`Taking shot ${shotNumber}`, {
+      sessionId: this.id,
+      title: this.title
+    });
+    
+    try {
+      const cameraController = await this.getCurrentCameraController();
+      await cameraController.takePhoto();
+      
+      this.stats.shotsTaken++;
+      this.stats.shotsSuccessful++;
+      
+      logger.info(`Shot ${shotNumber} completed successfully`, {
+        sessionId: this.id,
+        title: this.title,
+        shotNumber,
+        totalTaken: this.stats.shotsTaken
+      });
+      
+      const photoData = {
+        sessionId: this.id,
+        title: this.title,
+        shotNumber,
+        success: true,
+        timestamp: new Date().toISOString(),
+        stats: { ...this.stats }
+      };
+      
+      this.emit('photo_taken', photoData);
+      
+    } catch (error) {
+      this.stats.shotsTaken++;
+      this.stats.shotsFailed++;
+      this.stats.errors.push({
+        shotNumber,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+      
+      logger.error(`Shot ${shotNumber} failed`, {
+        sessionId: this.id,
+        title: this.title,
+        shotNumber,
+        error: error.message
+      });
+      
+      this.emit('photo_failed', {
+        sessionId: this.id,
+        title: this.title,
+        shotNumber,
+        error: error.message,
+        timestamp: new Date().toISOString(),
+        stats: { ...this.stats }
+      });
+      
+      // Check if we should abort due to too many failures
+      const failureRate = this.stats.shotsFailed / this.stats.shotsTaken;
+      if (this.stats.shotsTaken > 5 && failureRate > 0.5) {
+        logger.error('High failure rate detected, stopping session', {
+          sessionId: this.id,
+          title: this.title,
+          failureRate,
+          totalShots: this.stats.shotsTaken
+        });
+        this.error('High failure rate detected');
+        return;
+      }
+    }
+  }
+  
+  /**
+   * Complete the timelapse session
+   */
+  async complete(reason = 'Session completed normally') {
+    logger.info('Timelapse session completed', {
+      sessionId: this.id,
+      title: this.title,
+      reason
+    });
+    
+    this.state = 'completed';
+    this.stats.endTime = new Date();
+    
+    if (this.intervalId) {
+      clearTimeout(this.intervalId);
+      this.intervalId = null;
+    }
+    
+    // Resume camera info polling and connection monitoring after completion
+    try {
+      const cameraController = await this.getCurrentCameraController();
+      cameraController.resumeInfoPolling();
+      cameraController.resumeConnectionMonitoring();
+    } catch (error) {
+      logger.warn('Could not resume camera monitoring on completion, camera controller not available', {
+        sessionId: this.id,
+        title: this.title,
+        error: error.message
+      });
+    }
+    
+    this.emit('completed', {
+      sessionId: this.id,
+      title: this.title,
+      reason,
+      stats: { ...this.stats }
+    });
+  }
+  
+  /**
+   * Handle session error
+   */
+  error(reason) {
+    logger.error('Timelapse session error', {
+      sessionId: this.id,
+      title: this.title,
+      reason
+    });
+    
+    this.state = 'error';
+    this.stats.endTime = new Date();
+    
+    if (this.intervalId) {
+      clearTimeout(this.intervalId);
+      this.intervalId = null;
+    }
+    
+    this.emit('error', {
+      sessionId: this.id,
+      title: this.title,
+      reason,
+      stats: { ...this.stats }
+    });
+  }
+  
+  /**
+   * Get comprehensive session status
+   */
+  getStatus() {
+    const duration = this.stats.startTime ? 
+      (this.stats.endTime || new Date()) - this.stats.startTime : 0;
+    
+    const remainingShots = this.options.totalShots ? 
+      Math.max(0, this.options.totalShots - this.stats.shotsTaken) : null;
+    
+    const estimatedEndTime = this.options.totalShots && this.state === 'running' ?
+      new Date(this.stats.startTime.getTime() + (this.options.totalShots * this.options.interval * 1000)) : null;
+    
+    const successRate = this.stats.shotsTaken > 0 ? 
+      (this.stats.shotsSuccessful / this.stats.shotsTaken) : 1;
+    
+    return {
+      // Session identity
+      sessionId: this.id,
+      title: this.title,
+      createdAt: this.createdAt,
+      
+      // Current state
+      state: this.state,
+      
+      // Configuration
+      options: { ...this.options },
+      
+      // Statistics
+      stats: { ...this.stats },
+      
+      // Calculated fields
+      duration,
+      remainingShots,
+      estimatedEndTime,
+      nextShotTime: this.nextShotTime,
+      successRate
+    };
+  }
+  
+  /**
+   * Cleanup session resources
+   */
+  cleanup() {
+    if (this.state === 'running') {
+      this.stop();
+    }
+    
+    // Clear any remaining timeouts
+    if (this.intervalId) {
+      clearTimeout(this.intervalId);
+      this.intervalId = null;
+    }
+    
+    if (this.cronJob) {
+      this.cronJob.stop();
+      this.cronJob = null;
+    }
+    
+    logger.debug('Timelapse session cleanup completed', {
+      sessionId: this.id,
+      title: this.title
+    });
+  }
+}

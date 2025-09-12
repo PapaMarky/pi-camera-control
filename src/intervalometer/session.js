@@ -1,31 +1,26 @@
 import { EventEmitter } from 'events';
-import cron from 'node-cron';
 import { logger } from '../utils/logger.js';
+import { TimelapseSession } from './timelapse-session.js';
 
+/**
+ * IntervalometerSession - Legacy Compatibility Layer
+ * Maintains existing API while delegating to new centralized architecture
+ * Ensures zero breaking changes during migration to centralized system
+ */
 export class IntervalometerSession extends EventEmitter {
   constructor(getCameraController, options = {}) {
     super();
     
+    // Store original parameters for delegation
     this.getCameraController = getCameraController;
-    this.options = {
-      interval: 10, // seconds
-      totalShots: null, // infinite if null
-      stopTime: null, // Date object
-      ...options
-    };
-
-    // Calculate totalShots if we have stopTime but no explicit totalShots
-    if (this.options.stopTime && !this.options.totalShots) {
-      const now = new Date();
-      const durationMs = this.options.stopTime.getTime() - now.getTime();
-      const intervalMs = this.options.interval * 1000;
-      if (durationMs > 0) {
-        this.options.totalShots = Math.ceil(durationMs / intervalMs);
-        logger.info(`Calculated totalShots: ${this.options.totalShots} based on stopTime and interval`);
-      }
-    }
+    this.originalOptions = { ...options };
     
-    this.state = 'stopped'; // stopped, running, paused, completed, error
+    // Create underlying timelapse session
+    this.timelapseSession = null;
+    this.initialized = false;
+    
+    // Legacy state properties for backward compatibility
+    this.state = 'stopped';
     this.stats = {
       startTime: null,
       endTime: null,
@@ -35,102 +30,270 @@ export class IntervalometerSession extends EventEmitter {
       currentShot: 0,
       errors: []
     };
+    this.options = {
+      interval: 10,
+      totalShots: null,
+      stopTime: null,
+      ...options
+    };
     
+    // Legacy properties
     this.intervalId = null;
     this.cronJob = null;
     this.shouldStop = false;
     this.nextShotTime = null;
+    
+    // Initialize lazily to maintain compatibility
+    this.initializeLazy();
   }
   
+  /**
+   * Lazy initialization to maintain compatibility
+   */
+  async initializeLazy() {
+    if (this.initialized) return;
+    
+    try {
+      // Create the underlying timelapse session
+      this.timelapseSession = new TimelapseSession(this.getCameraController, this.originalOptions);
+      
+      // Forward all events to maintain compatibility
+      this.bindTimelapseEvents();
+      
+      this.initialized = true;
+      
+      logger.debug('IntervalometerSession compatibility layer initialized', {
+        sessionId: this.timelapseSession.id,
+        title: this.timelapseSession.title
+      });
+      
+    } catch (error) {
+      logger.error('Failed to initialize IntervalometerSession compatibility layer:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Bind events from timelapse session for compatibility
+   */
+  bindTimelapseEvents() {
+    if (!this.timelapseSession) return;
+    
+    // Forward all events to maintain existing API
+    this.timelapseSession.on('started', (data) => {
+      this.updateLegacyState(data);
+      this.emit('started', data);
+    });
+    
+    this.timelapseSession.on('stopped', (data) => {
+      this.updateLegacyState(data);
+      this.emit('stopped', data);
+    });
+    
+    this.timelapseSession.on('completed', (data) => {
+      this.updateLegacyState(data);
+      this.emit('completed', data);
+    });
+    
+    this.timelapseSession.on('error', (data) => {
+      this.updateLegacyState(data);
+      this.emit('error', data);
+    });
+    
+    this.timelapseSession.on('paused', (data) => {
+      this.updateLegacyState(data);
+      this.emit('paused', data);
+    });
+    
+    this.timelapseSession.on('resumed', (data) => {
+      this.updateLegacyState(data);
+      this.emit('resumed', data);
+    });
+    
+    // Photo events
+    this.timelapseSession.on('photo_taken', (data) => {
+      this.updateLegacyState(data);
+      this.emit('photo_taken', data);
+    });
+    
+    this.timelapseSession.on('photo_failed', (data) => {
+      this.updateLegacyState(data);
+      this.emit('photo_failed', data);
+    });
+  }
+  
+  /**
+   * Update legacy state properties from timelapse session
+   */
+  updateLegacyState(data) {
+    if (!this.timelapseSession) return;
+    
+    const status = this.timelapseSession.getStatus();
+    
+    // Update legacy state
+    this.state = status.state;
+    this.stats = { ...status.stats };
+    this.options = { ...status.options };
+    this.nextShotTime = status.nextShotTime;
+  }
+  
+  /**
+   * Legacy method: getCurrentCameraController
+   */
   async getCurrentCameraController(retryCount = 3) {
-    for (let attempt = 1; attempt <= retryCount; attempt++) {
-      const controller = this.getCameraController();
-      if (controller) {
-        return controller;
-      }
-      
-      logger.warn(`Camera controller not available (attempt ${attempt}/${retryCount})`);
-      
-      if (attempt < retryCount) {
-        // Wait a bit before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-    
-    logger.error('No camera controller available after retries during intervalometer session');
-    throw new Error('No camera controller available');
+    await this.initializeLazy();
+    return this.timelapseSession.getCurrentCameraController(retryCount);
   }
   
+  /**
+   * Legacy method: start
+   */
   async start() {
-    if (this.state === 'running') {
-      throw new Error('Session is already running');
-    }
+    await this.initializeLazy();
     
-    // Validate camera connection
-    const cameraController = await this.getCurrentCameraController();
-    const cameraStatus = cameraController.getConnectionStatus();
-    if (!cameraStatus.connected) {
-      throw new Error('Camera is not connected');
-    }
-    
-    // Validate interval against camera settings
-    const validation = await cameraController.validateInterval(this.options.interval);
-    if (!validation.valid) {
-      throw new Error(validation.error || 'Invalid interval settings');
-    }
-    
-    // Reset state
-    this.shouldStop = false;
-    this.state = 'running';
-    this.stats = {
-      startTime: new Date(),
-      endTime: null,
-      shotsTaken: 0,
-      shotsSuccessful: 0,
-      shotsFailed: 0,
-      currentShot: 0,
-      errors: []
-    };
-
-    // Recalculate totalShots based on actual start time if using stopTime
-    if (this.options.stopTime && !this.options.totalShots) {
-      const durationMs = this.options.stopTime.getTime() - this.stats.startTime.getTime();
-      const intervalMs = this.options.interval * 1000;
-      if (durationMs > 0) {
-        this.options.totalShots = Math.ceil(durationMs / intervalMs);
-        logger.info(`Recalculated totalShots: ${this.options.totalShots} based on actual startTime`);
-      }
-    }
-
-    // Pause camera info polling during intervalometer session to avoid interference
-    cameraController.pauseInfoPolling();
-    
-    // COMPLETELY disable connection monitoring during intervalometer session
-    // Connection monitoring conflicts with long exposures and photo operations
-    cameraController.pauseConnectionMonitoring();
-    
-    logger.info('Starting intervalometer session', {
-      interval: this.options.interval,
-      totalShots: this.options.totalShots,
-      stopTime: this.options.stopTime
+    logger.debug('Starting intervalometer session via compatibility layer', {
+      sessionId: this.timelapseSession.id,
+      title: this.timelapseSession.title
     });
     
-    this.emit('started', { 
-      options: this.options, 
-      stats: { ...this.stats } 
-    });
-    
-    // Start the shooting interval
-    await this.scheduleNextShot();
-    
-    return true;
+    const result = await this.timelapseSession.start();
+    this.updateLegacyState({});
+    return result;
   }
   
+  /**
+   * Legacy method: stop
+   */
   async stop() {
-    logger.info('Stopping intervalometer session');
+    if (!this.initialized || !this.timelapseSession) {
+      return false;
+    }
     
-    this.shouldStop = true;
+    logger.debug('Stopping intervalometer session via compatibility layer', {
+      sessionId: this.timelapseSession.id,
+      title: this.timelapseSession.title
+    });
     
+    const result = await this.timelapseSession.stop();
+    this.updateLegacyState({});
+    return result;
+  }
+  
+  /**
+   * Legacy method: pause
+   */
+  async pause() {
+    if (!this.initialized || !this.timelapseSession) {
+      return false;
+    }
+    
+    const result = await this.timelapseSession.pause();
+    this.updateLegacyState({});
+    return result;
+  }
+  
+  /**
+   * Legacy method: resume
+   */
+  async resume() {
+    if (!this.initialized || !this.timelapseSession) {
+      return false;
+    }
+    
+    const result = await this.timelapseSession.resume();
+    this.updateLegacyState({});
+    return result;
+  }
+  
+  /**
+   * Legacy method: scheduleNextShot (internal method, maintain for compatibility)
+   */
+  async scheduleNextShot() {
+    // This is now handled internally by TimelapseSession
+    // Just update legacy state
+    if (this.timelapseSession) {
+      this.updateLegacyState({});
+    }
+  }
+  
+  /**
+   * Legacy method: takeShot (internal method, maintain for compatibility)  
+   */
+  async takeShot() {
+    // This is now handled internally by TimelapseSession
+    // Just update legacy state
+    if (this.timelapseSession) {
+      this.updateLegacyState({});
+    }
+  }
+  
+  /**
+   * Legacy method: complete (internal method, maintain for compatibility)
+   */
+  async complete(reason = 'Session completed normally') {
+    if (!this.initialized || !this.timelapseSession) {
+      return;
+    }
+    
+    await this.timelapseSession.complete(reason);
+    this.updateLegacyState({});
+  }
+  
+  /**
+   * Legacy method: error (internal method, maintain for compatibility)
+   */
+  error(reason) {
+    if (!this.initialized || !this.timelapseSession) {
+      return;
+    }
+    
+    this.timelapseSession.error(reason);
+    this.updateLegacyState({});
+  }
+  
+  /**
+   * Legacy method: getStatus
+   */
+  getStatus() {
+    if (!this.initialized || !this.timelapseSession) {
+      // Return legacy default status
+      return {
+        state: this.state,
+        options: { ...this.options },
+        stats: { ...this.stats },
+        duration: 0,
+        remainingShots: null,
+        estimatedEndTime: null,
+        nextShotTime: this.nextShotTime,
+        successRate: 1
+      };
+    }
+    
+    // Get status from underlying timelapse session
+    const status = this.timelapseSession.getStatus();
+    
+    // Convert to legacy format (remove new fields that might break existing clients)
+    return {
+      state: status.state,
+      options: status.options,
+      stats: status.stats,
+      duration: status.duration,
+      remainingShots: status.remainingShots,
+      estimatedEndTime: status.estimatedEndTime,
+      nextShotTime: status.nextShotTime,
+      successRate: status.successRate
+    };
+  }
+  
+  /**
+   * Legacy method: cleanup
+   */
+  cleanup() {
+    if (this.timelapseSession && typeof this.timelapseSession.cleanup === 'function') {
+      this.timelapseSession.cleanup();
+    }
+    
+    // Clean up legacy properties
     if (this.intervalId) {
       clearTimeout(this.intervalId);
       this.intervalId = null;
@@ -141,221 +304,68 @@ export class IntervalometerSession extends EventEmitter {
       this.cronJob = null;
     }
     
-    this.state = 'stopped';
-    this.stats.endTime = new Date();
-    
-    // Resume camera info polling and connection monitoring after intervalometer session ends
-    try {
-      const cameraController = await this.getCurrentCameraController();
-      cameraController.resumeInfoPolling();
-      cameraController.resumeConnectionMonitoring();
-    } catch (error) {
-      logger.warn('Could not resume camera monitoring, camera controller not available:', error.message);
-    }
-    
-    this.emit('stopped', { stats: { ...this.stats } });
-    
-    return true;
+    logger.debug('IntervalometerSession compatibility layer cleanup completed');
   }
   
-  async pause() {
-    if (this.state !== 'running') {
-      return false;
-    }
-    
-    logger.info('Pausing intervalometer session');
-    
-    if (this.intervalId) {
-      clearTimeout(this.intervalId);
-      this.intervalId = null;
-    }
-    
-    this.state = 'paused';
-    this.emit('paused', { stats: { ...this.stats } });
-    
-    return true;
+  /**
+   * New methods - Access to enhanced functionality (optional, backward compatible)
+   */
+  
+  /**
+   * Get the underlying timelapse session for enhanced functionality
+   */
+  getTimelapseSession() {
+    return this.timelapseSession;
   }
   
-  async resume() {
-    if (this.state !== 'paused') {
-      return false;
-    }
-    
-    logger.info('Resuming intervalometer session');
-    
-    this.state = 'running';
-    this.emit('resumed', { stats: { ...this.stats } });
-    
-    await this.scheduleNextShot();
-    
-    return true;
-  }
-  
-  async scheduleNextShot() {
-    if (this.shouldStop || this.state !== 'running') {
-      return;
-    }
-    
-    // Check if we've reached the shot limit
-    if (this.options.totalShots && this.stats.shotsTaken >= this.options.totalShots) {
-      await this.complete('Shot limit reached');
-      return;
-    }
-    
-    // Check if we've reached the stop time
-    if (this.options.stopTime && new Date() >= this.options.stopTime) {
-      await this.complete('Stop time reached');
-      return;
-    }
-    
-    // Calculate the exact time for the next shot
-    const now = new Date();
-    if (!this.nextShotTime) {
-      // First shot - take it immediately, then schedule the next
-      this.nextShotTime = now;
-    } else {
-      // Subsequent shots - calculate based on interval from start time
-      // shotsTaken has already been incremented in takeShot(), so use it directly
-      const nextShotInterval = this.stats.shotsTaken;
-      this.nextShotTime = new Date(this.stats.startTime.getTime() + (nextShotInterval * this.options.interval * 1000));
-    }
-    
-    // Calculate delay until next shot time
-    const delayMs = Math.max(0, this.nextShotTime.getTime() - now.getTime());
-    
-    // Schedule the next shot
-    this.intervalId = setTimeout(async () => {
-      await this.takeShot();
-      await this.scheduleNextShot();
-    }, delayMs);
-  }
-  
-  async takeShot() {
-    if (this.shouldStop || this.state !== 'running') {
-      return;
-    }
-    
-    this.stats.currentShot++;
-    const shotNumber = this.stats.currentShot;
-    
-    logger.debug(`Taking shot ${shotNumber}`);
-    
-    try {
-      const cameraController = await this.getCurrentCameraController();
-      await cameraController.takePhoto();
-      
-      this.stats.shotsTaken++;
-      this.stats.shotsSuccessful++;
-      
-      logger.info(`Shot ${shotNumber} completed successfully`);
-      
-      const photoData = {
-        shotNumber,
-        success: true,
-        timestamp: new Date().toISOString(),
+  /**
+   * Get session metadata (new functionality)
+   */
+  getMetadata() {
+    if (!this.initialized || !this.timelapseSession) {
+      return {
+        id: 'unknown',
+        title: 'Unknown Session',
+        createdAt: new Date(),
+        state: this.state,
+        options: { ...this.options },
         stats: { ...this.stats }
       };
-      
-      logger.info('Emitting photo_taken event:', photoData);
-      this.emit('photo_taken', photoData);
-      
-    } catch (error) {
-      this.stats.shotsTaken++;
-      this.stats.shotsFailed++;
-      this.stats.errors.push({
-        shotNumber,
-        error: error.message,
-        timestamp: new Date().toISOString()
-      });
-      
-      logger.error(`Shot ${shotNumber} failed:`, error);
-      
-      this.emit('photo_failed', {
-        shotNumber,
-        error: error.message,
-        timestamp: new Date().toISOString(),
-        stats: { ...this.stats }
-      });
-      
-      // Check if we should abort due to too many failures
-      const failureRate = this.stats.shotsFailed / this.stats.shotsTaken;
-      if (this.stats.shotsTaken > 5 && failureRate > 0.5) {
-        logger.error('High failure rate detected, stopping session');
-        this.error('High failure rate detected');
-        return;
-      }
     }
+    
+    return this.timelapseSession.getMetadata();
   }
   
-  async complete(reason = 'Session completed normally') {
-    logger.info(`Intervalometer session completed: ${reason}`);
-    
-    this.state = 'completed';
-    this.stats.endTime = new Date();
-    
-    if (this.intervalId) {
-      clearTimeout(this.intervalId);
-      this.intervalId = null;
+  /**
+   * Update session title (new functionality)
+   */
+  updateTitle(newTitle) {
+    if (!this.initialized || !this.timelapseSession) {
+      throw new Error('Session not initialized');
     }
     
-    // Resume camera info polling and connection monitoring after intervalometer session completes
-    try {
-      const cameraController = await this.getCurrentCameraController();
-      cameraController.resumeInfoPolling();
-      cameraController.resumeConnectionMonitoring();
-    } catch (error) {
-      logger.warn('Could not resume camera monitoring on completion, camera controller not available:', error.message);
-    }
-    
-    this.emit('completed', {
-      reason,
-      stats: { ...this.stats }
-    });
+    return this.timelapseSession.updateTitle(newTitle);
   }
   
-  error(reason) {
-    logger.error(`Intervalometer session error: ${reason}`);
-    
-    this.state = 'error';
-    this.stats.endTime = new Date();
-    
-    if (this.intervalId) {
-      clearTimeout(this.intervalId);
-      this.intervalId = null;
+  /**
+   * Get session ID (new functionality)
+   */
+  getSessionId() {
+    if (!this.initialized || !this.timelapseSession) {
+      return 'unknown';
     }
     
-    this.emit('error', {
-      reason,
-      stats: { ...this.stats }
-    });
+    return this.timelapseSession.id;
   }
   
-  getStatus() {
-    const duration = this.stats.startTime ? 
-      (this.stats.endTime || new Date()) - this.stats.startTime : 0;
-    
-    const remainingShots = this.options.totalShots ? 
-      Math.max(0, this.options.totalShots - this.stats.shotsTaken) : null;
-    
-    const estimatedEndTime = this.options.totalShots && this.state === 'running' ?
-      new Date(this.stats.startTime.getTime() + (this.options.totalShots * this.options.interval * 1000)) : null;
-    
-    return {
-      state: this.state,
-      options: { ...this.options },
-      stats: { ...this.stats },
-      duration,
-      remainingShots,
-      estimatedEndTime,
-      nextShotTime: this.nextShotTime,
-      successRate: this.stats.shotsTaken > 0 ? 
-        (this.stats.shotsSuccessful / this.stats.shotsTaken) : 1
-    };
-  }
-  
-  cleanup() {
-    if (this.state === 'running') {
-      this.stop();
+  /**
+   * Get session title (new functionality)
+   */
+  getTitle() {
+    if (!this.initialized || !this.timelapseSession) {
+      return 'Unknown Session';
     }
+    
+    return this.timelapseSession.title;
   }
 }
