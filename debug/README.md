@@ -55,6 +55,21 @@ sudo ./uninstall-service.sh
 - Network mode control script
 - Restores IPv6 settings
 
+### `validate-debian-package.sh`
+Validates the Debian package structure and configuration files.
+
+**Usage:**
+```bash
+./validate-debian-package.sh
+```
+
+**What it validates:**
+- Required Debian package files exist
+- File permissions are correct
+- Control file format and dependencies
+- Install file configuration
+- Source files availability
+
 ## When to Use
 
 ### During Development

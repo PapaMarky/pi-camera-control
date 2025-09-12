@@ -268,3 +268,11 @@ CanonDocs/
 # Working files
 discovery.txt
 *.log~
+
+# Debian package build artifacts
+debian/pi-camera-control/
+debian/.debhelper/
+debian/files
+debian/debhelper-build-stamp
+debian/*.substvars
+debian/*.log

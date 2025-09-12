@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+# Pi Camera Control Debian Package Rules
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+%:
+	dh $@
+
+# Override build step - we don't need to build anything for this Node.js package
+override_dh_auto_build:
+	# No build step needed - this is a Node.js application
+
+# Override test step - skip automatic tests during package build
+override_dh_auto_test:
+	# Tests can be run manually with 'npm test' after installation
+
+# Override install step to ensure correct permissions
+override_dh_auto_install:
+	dh_auto_install
+	# Ensure network script is executable
+	chmod 755 debian/pi-camera-control/usr/local/bin/camera-network-mode
+
+# Ensure postinst and prerm scripts are executable
+override_dh_fixperms:
+	dh_fixperms
+	chmod 755 debian/pi-camera-control/DEBIAN/postinst
+	chmod 755 debian/pi-camera-control/DEBIAN/prerm

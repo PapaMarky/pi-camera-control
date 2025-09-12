@@ -1,0 +1,13 @@
+pi-camera-control (1.0.0-1) unstable; urgency=medium
+
+  * Initial Debian package release
+  * Intervalometer and remote control for Canon CCAPI cameras
+  * Web-based interface for camera control
+  * Dual WiFi mode support (Access Point + Client)
+  * Real-time camera status monitoring
+  * Battery and thermal monitoring
+  * Automatic network configuration for Raspberry Pi
+  * Systemd service for reliable operation
+  * Optimized for astrophotography and timelapse
+
+ -- PapaMarky <mark@papamarky.com>  Wed, 11 Sep 2025 17:00:00 -0700
