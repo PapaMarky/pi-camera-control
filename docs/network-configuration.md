@@ -24,6 +24,7 @@ sudo apt install hostapd dnsmasq iptables-persistent
 ### 1. Virtual Interface Creation
 
 Create `/etc/udev/rules.d/70-persistent-net.rules`:
+
 ```bash
 SUBSYSTEM=="ieee80211", ACTION=="add|change", ATTR{macaddress}=="b8:27:eb:*", KERNEL=="phy0", \
   RUN+="/sbin/iw phy phy0 interface add ap0 type __ap", \
@@ -33,6 +34,7 @@ SUBSYSTEM=="ieee80211", ACTION=="add|change", ATTR{macaddress}=="b8:27:eb:*", KE
 ### 2. Network Interface Configuration
 
 Add to `/etc/dhcpcd.conf`:
+
 ```bash
 # Static IP for access point interface
 interface ap0
@@ -47,6 +49,7 @@ interface wlan0
 ### 3. Access Point Configuration
 
 Create `/etc/hostapd/hostapd.conf`:
+
 ```bash
 interface=ap0
 driver=nl80211
@@ -103,6 +106,7 @@ network={
 ### Network Mode Control Script
 
 Create `/usr/local/bin/camera-network-mode`:
+
 ```bash
 #!/bin/bash
 
@@ -158,6 +162,7 @@ sudo chmod +x /usr/local/bin/camera-network-mode
 ## Service Configuration
 
 Enable required services:
+
 ```bash
 # Enable hostapd and dnsmasq to start at boot
 sudo systemctl enable hostapd

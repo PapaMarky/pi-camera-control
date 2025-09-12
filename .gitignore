@@ -265,3 +265,6 @@ Thumbs.db
 
 # Documentation from Canon Cannot be published
 CanonDocs/
+# Working files
+discovery.txt
+*.log~

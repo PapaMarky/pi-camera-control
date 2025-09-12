@@ -27,17 +27,19 @@ sudo apt install screen avahi-utils npm hostapd dnsmasq -y
 npm install
 ```
 
-### Access Point Setup
-For full field operation (Access Point functionality):
+### System Setup
+For complete Pi Camera Control setup (Access Point, services, dependencies):
 ```commandline
-# Run the AP configuration script
-chmod +x configure-ap.sh
-sudo ./configure-ap.sh
-
-# Setup network mode switching
-chmod +x setup-network-mode.sh
-sudo ./setup-network-mode.sh
+# Run the consolidated system setup script
+cd setup/
+sudo ./configure-system.sh
 ```
+
+This single script handles all setup requirements:
+- Installs required packages (hostapd, dnsmasq, nodejs, etc.)
+- Configures access point and networking
+- Sets up systemd services
+- Installs Node.js dependencies
 
 ## Deploy / Setup PiCameraControl
 `rsync -avz --exclude node_modules --exclude .git --exclude logs . pi@picontrol-002.local:~/pi-camera-control/`
