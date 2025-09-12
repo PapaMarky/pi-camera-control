@@ -700,8 +700,14 @@ class CameraManager {
   async startIntervalometer() {
     const interval = parseFloat(document.getElementById('interval-input').value);
     const stopCondition = document.querySelector('input[name="stop-condition"]:checked').value;
+    const title = document.getElementById('session-title-input').value.trim();
     
     const options = { interval };
+    
+    // Add title if provided
+    if (title) {
+      options.title = title;
+    }
     let logMessage = `Starting intervalometer: ${interval}s intervals`;
     
     // Handle stop condition based on radio selection

@@ -62,6 +62,7 @@
                             <button class="menu-item" data-card="test-shot" disabled>Test Shot</button>
                             <button class="menu-item" data-card="camera-settings" disabled>Camera Settings</button>
                             <button class="menu-item" data-card="intervalometer" disabled>Intervalometer</button>
+                            <button class="menu-item" data-card="timelapse-reports">Timelapse Reports</button>
                             <button class="menu-item" data-card="activity-log">Activity Log</button>
                         </div>
                     </div>
@@ -345,6 +346,12 @@
                     <div class="intervalometer-setup" id="intervalometer-setup">
                         <div class="intervalometer-controls">
                             <div class="input-group">
+                                <label for="session-title-input">Session Title:</label>
+                                <input type="text" id="session-title-input" placeholder="Auto-generated (YYYYMMDD-HHMMSS)" maxlength="100">
+                                <small>Leave blank for automatic timestamp</small>
+                            </div>
+                            
+                            <div class="input-group">
                                 <label for="interval-input">Interval (seconds):</label>
                                 <input type="number" id="interval-input" value="10" min="1" max="3600">
                             </div>
@@ -429,6 +436,89 @@
                         <div class="log-entry info">
                             <span class="log-time">--:--:--</span>
                             <span class="log-message">Initializing camera control interface...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timelapse Reports Card -->
+            <div class="function-card" id="timelapse-reports-card" style="display: none;">
+                <div class="card-header">
+                    <h3>Timelapse Reports</h3>
+                </div>
+                <div class="card-content">
+                    <!-- Reports List -->
+                    <div class="reports-section" id="reports-list-section">
+                        <div class="section-header">
+                            <h4>Saved Reports</h4>
+                            <button id="refresh-reports-btn" class="icon-btn" title="Refresh reports">
+                                <span class="btn-icon">🔄</span>
+                            </button>
+                        </div>
+                        
+                        <div class="reports-container" id="reports-container">
+                            <div class="loading-message" id="reports-loading">Loading reports...</div>
+                            <div class="empty-state" id="reports-empty" style="display: none;">
+                                <p>No timelapse reports found.</p>
+                                <p>Complete an intervalometer session to create your first report.</p>
+                            </div>
+                            <div class="reports-list" id="reports-list" style="display: none;">
+                                <!-- Reports will be populated via JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Report Details View -->
+                    <div class="report-details-section" id="report-details-section" style="display: none;">
+                        <div class="section-header">
+                            <button id="back-to-reports-btn" class="icon-btn" title="Back to reports list">
+                                <span class="btn-icon">←</span>
+                            </button>
+                            <h4 id="report-title">Report Details</h4>
+                            <div class="header-actions">
+                                <button id="edit-report-title-btn" class="icon-btn" title="Edit title">
+                                    <span class="btn-icon">✏️</span>
+                                </button>
+                                <button id="delete-report-btn" class="icon-btn danger" title="Delete report">
+                                    <span class="btn-icon">🗑️</span>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="report-content" id="report-content">
+                            <!-- Report details will be populated via JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session Completion Card -->
+            <div class="function-card" id="session-completion-card" style="display: none;">
+                <div class="card-header">
+                    <h3>Timelapse Session Complete</h3>
+                </div>
+                <div class="card-content">
+                    <div class="completion-summary" id="completion-summary">
+                        <!-- Session summary will be populated via JavaScript -->
+                    </div>
+                    
+                    <div class="title-edit-section">
+                        <div class="input-group">
+                            <label for="completion-title-input">Session Title:</label>
+                            <input type="text" id="completion-title-input" placeholder="Enter title for this session" maxlength="100">
+                        </div>
+                    </div>
+                    
+                    <div class="completion-actions">
+                        <div class="button-grid">
+                            <button id="discard-session-btn" class="secondary-btn">
+                                <span class="btn-icon">❌</span>
+                                <span class="btn-text">Discard</span>
+                            </button>
+                            <button id="save-session-btn" class="primary-btn">
+                                <span class="btn-icon">💾</span>
+                                <span class="btn-text">Save Report</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -565,6 +655,7 @@
     <script src="js/camera.js"></script>
     <script src="js/network.js"></script>
     <script src="js/utilities.js"></script>
+    <script src="js/timelapse.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
