@@ -415,17 +415,17 @@ export class NetworkStateManager extends EventEmitter {
     try {
       // Update configuration
       await this.configManager.updateAccessPointConfig(config);
-      
-      // Restart AP services if they're currently running
-      if (this.networkState.services.get('hostapd')?.active) {
-        await this.serviceManager.restartAccessPoint();
-      }
-      
+
+      // Always restart hostapd to apply new configuration
+      // Don't rely on state detection as it may be stale or unreliable
+      logger.info('Restarting hostapd to apply new access point configuration...');
+      await this.serviceManager.restartAccessPoint();
+
       await this.updateNetworkState();
-      
+
       this.emit('accessPointConfigured', { config });
       return { success: true, config };
-      
+
     } catch (error) {
       logger.error('Failed to configure access point:', error);
       throw error;

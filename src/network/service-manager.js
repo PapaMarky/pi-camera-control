@@ -507,12 +507,14 @@ export class NetworkServiceManager extends EventEmitter {
           baseState.ssid = ssid;
           baseState.ip = ipAddress;
           baseState.clients = clients;
-          logger.debug(`ap0 enhanced with ssid: ${ssid}, clients: ${clients.length}, ip: ${baseState.ip}`);
+          baseState.status = baseState.active ? 'Active' : 'Inactive';
+          logger.debug(`ap0 enhanced with ssid: ${ssid}, clients: ${clients.length}, ip: ${baseState.ip}, status: ${baseState.status}`);
         } catch (error) {
           logger.debug(`Failed to get AP info for ap0: ${error.message}`);
           baseState.ssid = null;
           baseState.ip = ipAddress;
           baseState.clients = [];
+          baseState.status = 'Error';
         }
       }
 

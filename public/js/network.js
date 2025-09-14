@@ -260,18 +260,18 @@ class NetworkUI {
         const ssidElement = document.getElementById('ap-ssid');
 
         if (apData) {
-            const { active, clients, ip, ssid } = apData;
+            const { active, clients, ip, ssid, status } = apData;
             const clientCount = clients ? clients.length : 0;
 
-            // Show SSID if available and active, otherwise show status
-            const displayStatus = active ? (ssid || 'Active') : 'Inactive';
+            // Use backend-provided status if available, otherwise derive from active state
+            const displayStatus = status || (active ? 'Active' : 'Inactive');
 
-            // Update settings page
+            // Update settings page - Status shows active/inactive, SSID shows SSID
             if (statusElement) statusElement.textContent = displayStatus;
             if (clientsDetailElement) clientsDetailElement.textContent = `${clientCount} connected`;
 
-            // Update main page - show SSID for AP status
-            if (mainStatusElement) mainStatusElement.textContent = displayStatus;
+            // Update main page - show SSID for AP status (main page shows SSID, not status)
+            if (mainStatusElement) mainStatusElement.textContent = ssid || 'Unknown';
             if (headerClientsElement) headerClientsElement.textContent = clientCount.toString();
 
             // Update SSID if element exists
@@ -723,14 +723,20 @@ class NetworkUI {
         .then(data => {
             if (data.success) {
                 this.showToast(`Access point configured successfully! SSID: ${data.config.ssid}`, 'success');
-                
-                // Update the UI with new settings
+
+                // Immediately update the UI with new settings
+                const ssidElement = document.getElementById('ap-ssid');
+                const statusElement = document.getElementById('ap-status-text');
+
+                if (ssidElement) ssidElement.textContent = data.config.ssid;
+                if (statusElement) statusElement.textContent = 'Active';
+
+                // Also refresh network status for complete data
                 setTimeout(() => {
-                    // Refresh network status to show updated AP info
                     if (this.ws && this.ws.send) {
                         this.ws.send('get_status');
                     }
-                }, 2000);
+                }, 1000);
             } else {
                 this.showToast(`Configuration failed: ${data.error || 'Unknown error'}`, 'error');
             }
