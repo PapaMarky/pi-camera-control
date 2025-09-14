@@ -1,50 +1,50 @@
-# Network Configuration - Dual Mode WiFi
+# Network Configuration - NetworkManager-Based WiFi Management
 
-This document describes the manual configuration approach for setting up the Raspberry Pi Zero W to operate as both a WiFi access point and WiFi client simultaneously (AP+STA mode).
+This document describes the current NetworkManager-based approach for WiFi management in the Pi Camera Control system. The Raspberry Pi operates as both a WiFi access point and WiFi client simultaneously (AP+STA mode).
 
 ## Overview
 
-The Canon Camera Controller requires flexible network operation:
+The Canon Camera Controller provides flexible network operation:
 - **Development Mode**: Connect to home WiFi (internet access) while serving camera AP
 - **Field Mode**: Access point only (battery optimized for off-grid operation)
+- **Dynamic WiFi Switching**: Real-time network switching via web interface
 
-## Security-First Approach
+## Current Architecture
 
-This configuration uses only standard Debian packages installed via `apt` - no curl|bash scripts or third-party repositories required.
+The system uses **NetworkManager** for WiFi operations, not manual wpa_supplicant configuration:
+- **WiFi Scanning**: `nmcli dev wifi list` with real-time signal strength
+- **WiFi Connection**: `nmcli dev wifi connect` with automatic profile management
+- **Status Detection**: NetworkManager active connection monitoring
+- **Persistence**: NetworkManager connection profiles survive reboots
 
 ## Required Packages
 
 ```bash
 sudo apt update
-sudo apt install hostapd dnsmasq iptables-persistent
+sudo apt install hostapd dnsmasq network-manager
 ```
 
-## Configuration Files
+## System Configuration
 
-### 1. Virtual Interface Creation
+### 1. NetworkManager Configuration
 
-Create `/etc/udev/rules.d/70-persistent-net.rules`:
+NetworkManager manages WiFi connections automatically. The system requires:
 
+**NetworkManager Service**:
 ```bash
-SUBSYSTEM=="ieee80211", ACTION=="add|change", ATTR{macaddress}=="b8:27:eb:*", KERNEL=="phy0", \
-  RUN+="/sbin/iw phy phy0 interface add ap0 type __ap", \
-  RUN+="/bin/ip link set ap0 address b8:27:eb:ff:ff:ff"
+sudo systemctl enable NetworkManager
+sudo systemctl start NetworkManager
 ```
 
-### 2. Network Interface Configuration
+**Access Point Interface**: Created automatically when hostapd starts
+- Interface: `ap0` (virtual interface)
+- IP Address: `192.168.4.1/24`
+- SSID: `PiCameraController`
 
-Add to `/etc/dhcpcd.conf`:
-
-```bash
-# Static IP for access point interface
-interface ap0
-static ip_address=192.168.4.1/24
-nohook wpa_supplicant
-
-# Client mode interface for development
-interface wlan0
-# Configuration handled by wpa_supplicant when in development mode
-```
+**WiFi Client Interface**:
+- Interface: `wlan0` (managed by NetworkManager)
+- Connections: Managed via `nmcli` commands and web interface
+- Profiles: Stored in NetworkManager configuration
 
 ### 3. Access Point Configuration
 
@@ -101,62 +101,60 @@ network={
 }
 ```
 
-## Mode Switching
+## Network Management APIs
 
-### Network Mode Control Script
+### Web Interface WiFi Management
 
-Create `/usr/local/bin/camera-network-mode`:
+The system provides a web-based interface for WiFi management:
 
+**WiFi Network Scanning**:
+- Accessible via "Switch Network" button in web interface
+- Shows available networks with signal strength percentages
+- Real-time scanning with NetworkManager integration
+
+**Network Connection**:
+- Select network from scan results
+- Enter password if required (secured networks)
+- Automatic connection profile creation and management
+- Real-time connection status updates via WebSocket
+
+### REST API Endpoints
+
+**Scan for WiFi Networks**:
 ```bash
-#!/bin/bash
-
-MODE="$1"
-
-case "$MODE" in
-    field)
-        echo "Switching to field mode (AP only)..."
-        # Stop client WiFi to save battery
-        systemctl stop wpa_supplicant@wlan0
-        # Ensure access point is running
-        systemctl start hostapd
-        systemctl start dnsmasq
-        echo "Field mode active - AP only"
-        ;;
-    development)
-        echo "Switching to development mode (AP + Client)..."
-        # Start client WiFi for internet access
-        systemctl start wpa_supplicant@wlan0
-        # Ensure access point is running
-        systemctl start hostapd
-        systemctl start dnsmasq
-        echo "Development mode active - AP + Client"
-        ;;
-    status)
-        echo "Network Status:"
-        echo "AP Interface (ap0):"
-        ip addr show ap0 2>/dev/null || echo "  Not configured"
-        echo "Client Interface (wlan0):"
-        ip addr show wlan0 2>/dev/null || echo "  Not active"
-        echo "Services:"
-        systemctl is-active hostapd
-        systemctl is-active dnsmasq
-        systemctl is-active wpa_supplicant@wlan0
-        ;;
-    *)
-        echo "Usage: $0 {field|development|status}"
-        echo ""
-        echo "Modes:"
-        echo "  field       - Access point only (battery optimized)"
-        echo "  development - Access point + WiFi client (internet access)"
-        echo "  status      - Show current network configuration"
-        exit 1
-        ;;
-esac
+curl http://pi-ip:3000/api/network/wifi/scan
 ```
 
-Make executable:
+**Connect to WiFi Network**:
 ```bash
-sudo chmod +x /usr/local/bin/camera-network-mode
+curl -X POST http://pi-ip:3000/api/network/wifi/connect \
+  -H "Content-Type: application/json" \
+  -d '{"ssid": "NetworkName", "password": "password123"}'
+```
+
+**Get Current Network Status**:
+```bash
+curl http://pi-ip:3000/api/network/status
+```
+
+**Get Saved WiFi Networks**:
+```bash
+curl http://pi-ip:3000/api/network/wifi/saved
+```
+
+### Mode Switching via API
+
+**Switch Network Mode**:
+```bash
+# Switch to development mode (AP + WiFi client)
+curl -X POST http://pi-ip:3000/api/network/mode \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "development"}'
+
+# Switch to field mode (AP only)
+curl -X POST http://pi-ip:3000/api/network/mode \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "field"}'
 ```
 
 ## Service Configuration
@@ -172,32 +170,53 @@ sudo systemctl enable dnsmasq
 sudo systemctl disable wpa_supplicant@wlan0
 ```
 
-## Camera Controller Integration
+## Current Implementation Architecture
 
-Your camera controller can detect network mode programmatically:
+### NetworkManager Integration
+
+The system uses NetworkManager for all WiFi operations:
 
 ```javascript
-const fs = require('fs');
-
-function detectNetworkMode() {
-    // Check if wlan0 client connection is active
-    const clientActive = fs.existsSync('/var/run/wpa_supplicant/wlan0');
-    return clientActive ? 'development' : 'field';
+// WiFi scanning using NetworkManager
+async scanWiFiNetworks() {
+    const { stdout } = await execAsync('nmcli -t -f IN-USE,SSID,MODE,CHAN,RATE,SIGNAL,BARS,SECURITY dev wifi list');
+    return this.parseNMWiFiScan(stdout);
 }
 
-function configureForMode(mode) {
-    if (mode === 'development') {
-        // Enable internet-dependent features
-        enableUpdateChecks();
-        enableCloudLogging();
-        enableRemoteMonitoring();
-    } else {
-        // Field mode - local operation only
-        disableInternetFeatures();
-        enableBatteryOptimizations();
-    }
+// WiFi connection using NetworkManager
+async connectToWiFi(ssid, password) {
+    const connectCmd = password
+        ? `nmcli dev wifi connect "${ssid}" password "${password}"`
+        : `nmcli dev wifi connect "${ssid}"`;
+    await execAsync(connectCmd);
+}
+
+// Network status detection
+async getWiFiStatus() {
+    const { stdout } = await execAsync('nmcli -t -f NAME,TYPE,DEVICE con show --active');
+    // Parse active connections and extract actual SSID
 }
 ```
+
+### System Components
+
+**NetworkStateManager**: High-level network mode management
+- Mode detection and switching (field/development)
+- Interface state monitoring
+- Service coordination
+
+**NetworkServiceManager**: Low-level NetworkManager operations
+- WiFi scanning and connection
+- Signal strength monitoring
+- Connection verification
+
+### Real-time Updates
+
+**WebSocket Integration**:
+- Live network status updates
+- Connection state changes
+- Signal strength monitoring
+- User interface synchronization
 
 ## Network Topology
 
@@ -219,15 +238,44 @@ iPhone/MacBook ──WiFi──┘
 
 ### Common Issues
 
-**Both interfaces use same channel**: This is a hardware limitation of the Pi Zero W's single WiFi chip. The access point and client connection must use the same WiFi channel.
+**WiFi Switching Fails**:
+- Check if NetworkManager is running: `systemctl status NetworkManager`
+- Verify nmcli accessibility: `nmcli general status`
+- Force WiFi rescan: `sudo nmcli dev wifi rescan`
 
-**Interface conflicts**: Ensure `ap0` comes up before `wlan0` attempts connection.
+**Network Not Found**:
+- Ensure network is in range: `nmcli dev wifi list`
+- Check signal strength and security type
+- Verify SSID spelling and case sensitivity
 
-**Power issues**: Ensure adequate power supply (5V/3A minimum) especially when both interfaces are active.
+**Connection Fails**:
+- Verify password correctness
+- Check for existing connection profiles: `nmcli con show`
+- Remove conflicting profiles: `nmcli con delete "SSID"`
 
-### Diagnostic Commands
+**Status Not Updating**:
+- Check pi-camera-control service logs
+- Verify WebSocket connection in browser console
+- Restart service: `sudo systemctl restart pi-camera-control`
+
+### NetworkManager Diagnostic Commands
 
 ```bash
+# Check NetworkManager status
+systemctl status NetworkManager
+
+# List available WiFi networks
+nmcli dev wifi list
+
+# Show active connections
+nmcli -t -f NAME,TYPE,DEVICE con show --active
+
+# Check saved connection profiles
+nmcli con show
+
+# Monitor NetworkManager logs
+sudo journalctl -u NetworkManager -f
+
 # Check interface status
 ip addr show ap0
 ip addr show wlan0
@@ -235,14 +283,22 @@ ip addr show wlan0
 # Check service status
 systemctl status hostapd
 systemctl status dnsmasq
-systemctl status wpa_supplicant@wlan0
+systemctl status pi-camera-control
+```
 
-# View logs
-sudo journalctl -u hostapd -f
-sudo journalctl -u dnsmasq -f
+### Web Interface Debugging
 
-# Test access point
-sudo hostapd -d /etc/hostapd/hostapd.conf
+```bash
+# Check camera control service logs
+sudo journalctl -u pi-camera-control -f
+
+# Test API endpoints
+curl http://localhost:3000/api/network/status
+curl http://localhost:3000/api/network/wifi/scan
+
+# Check WebSocket connection
+# Open browser console on camera interface page
+# Look for WebSocket connection messages
 ```
 
 ## Security Considerations
@@ -261,10 +317,51 @@ For extended field operation:
 - Monitor power consumption with both modes
 - Implement automatic mode switching based on power levels
 
-## Integration with Debian Package
+## Key Differences from Legacy Configuration
 
-This configuration will be automated in the camera controller debian package:
-- Configuration files installed during package installation
-- Mode switching integrated with camera controller service
-- Automatic detection of network environment
-- Graceful fallback between modes
+### NetworkManager vs wpa_supplicant
+
+**Previous Approach** (Manual Configuration):
+- Required manual wpa_supplicant configuration files
+- Manual service management and mode switching scripts
+- Static configuration files for network profiles
+- Command-line only network management
+
+**Current Approach** (NetworkManager Integration):
+- Automatic WiFi management via NetworkManager
+- Dynamic network switching through web interface
+- Real-time network scanning and connection
+- Persistent connection profiles managed automatically
+- WebSocket-based status updates
+
+### Why NetworkManager?
+
+**Benefits**:
+- **Simplified Management**: No manual configuration file editing
+- **Dynamic Connection**: Real-time WiFi switching without service restarts
+- **Better Persistence**: Connection profiles survive reboots automatically
+- **User-Friendly**: Web interface for network management
+- **Robust Error Handling**: Built-in connection retry and fallback mechanisms
+
+**System Requirements**:
+- NetworkManager service must be active
+- Pi Camera Control service runs as root (for network management permissions)
+- Access Point (hostapd/dnsmasq) runs independently alongside NetworkManager
+
+### Migration Notes
+
+If upgrading from manual wpa_supplicant configuration:
+1. **NetworkManager Installation**: Ensure NetworkManager is installed and running
+2. **Service Conflicts**: Disable manual wpa_supplicant services
+3. **Profile Migration**: Existing network profiles will be detected automatically
+4. **Configuration Cleanup**: Manual configuration files are no longer used
+
+```bash
+# Enable NetworkManager
+sudo systemctl enable NetworkManager
+sudo systemctl start NetworkManager
+
+# Disable conflicting services
+sudo systemctl disable wpa_supplicant@wlan0
+sudo systemctl stop wpa_supplicant@wlan0
+```
