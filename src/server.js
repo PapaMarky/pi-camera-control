@@ -11,7 +11,8 @@ import { logger } from './utils/logger.js';
 import { CameraController } from './camera/controller.js';
 import { DiscoveryManager } from './discovery/manager.js';
 import { PowerManager } from './system/power.js';
-import { NetworkManager } from './network/manager.js';
+import { NetworkStateManager } from './network/state-manager.js';
+import { NetworkServiceManager } from './network/service-manager.js';
 import { IntervalometerStateManager } from './intervalometer/state-manager.js';
 import { createApiRouter } from './routes/api.js';
 import { createWebSocketHandler } from './websocket/handler.js';
@@ -42,7 +43,7 @@ class CameraControlServer {
     }
     
     this.powerManager = new PowerManager();
-    this.networkManager = new NetworkManager();
+    this.networkManager = new NetworkStateManager();
     
     // Initialize centralized intervalometer state manager
     this.intervalometerStateManager = new IntervalometerStateManager();
@@ -172,8 +173,8 @@ class CameraControlServer {
     // API routes - pass discoveryManager and intervalometer state manager for enhanced functionality
     this.app.use('/api', createApiRouter(
       () => this.getCurrentCameraController(), // Getter function for current camera controller
-      this.powerManager, 
-      this, 
+      this.powerManager,
+      this,
       this.networkManager,
       this.discoveryManager,
       this.intervalometerStateManager

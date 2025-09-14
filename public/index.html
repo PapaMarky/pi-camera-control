@@ -195,8 +195,8 @@
                         
                         <div class="button-grid">
                             <button id="scan-wifi-btn" class="secondary-btn">
-                                <span class="btn-icon">🔍</span>
-                                <span class="btn-text">Scan Networks</span>
+                                <span class="btn-icon">📶</span>
+                                <span class="btn-text">Switch Network</span>
                             </button>
                             <button id="disconnect-wifi-btn" class="danger-btn" disabled>
                                 <span class="btn-icon">❌</span>
@@ -596,6 +596,30 @@
                     <div class="button-grid">
                         <button id="cancel-manual-connect-btn" class="secondary-btn">Cancel</button>
                         <button id="confirm-manual-connect-btn" class="primary-btn">Connect</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- WiFi Connectivity Warning Modal -->
+        <div id="wifi-connectivity-warning-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>⚠️ Connectivity Warning</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="warning-message">
+                        <p><strong>You're currently connected via WiFi.</strong></p>
+                        <p>Changing WiFi networks will disconnect you from the camera controller.</p>
+                        <p>We recommend connecting to the Access Point first:</p>
+                        <div class="ap-info">
+                            <span class="ap-ssid-display" id="warning-ap-ssid">PiCameraController</span>
+                        </div>
+                    </div>
+                    <div class="button-grid">
+                        <button id="cancel-wifi-setup-btn" class="secondary-btn">Cancel</button>
+                        <button id="proceed-wifi-setup-btn" class="danger-btn">Continue Anyway</button>
                     </div>
                 </div>
             </div>

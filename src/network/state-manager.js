@@ -17,7 +17,7 @@ export class NetworkStateManager extends EventEmitter {
     this.configManager = new NetworkConfigManager();
     
     // Current network state
-    this.currentMode = null; // 'field', 'development', 'wifi-only'
+    this.currentMode = null; // 'field', 'development'
     this.networkState = {
       interfaces: new Map(), // ap0, wlan0 states
       services: new Map(),   // hostapd, dnsmasq, wpa_supplicant states
@@ -45,26 +45,29 @@ export class NetworkStateManager extends EventEmitter {
   async initialize() {
     try {
       logger.info('Initializing NetworkStateManager...');
-      
+
       // Initialize sub-managers
       await this.serviceManager.initialize();
       await this.configManager.initialize();
-      
+
       // Detect current network mode
       await this.detectCurrentMode();
-      
+
+      // Ensure Access Point is always running (camera controller requirement)
+      await this.ensureAccessPointRunning();
+
       // Start status monitoring
       this.startStatusMonitoring();
-      
+
       logger.info('NetworkStateManager initialized successfully', {
         mode: this.currentMode,
         interfaces: Object.fromEntries(this.networkState.interfaces),
         services: Object.fromEntries(this.networkState.services)
       });
-      
+
       this.emit('initialized', { mode: this.currentMode });
       return true;
-      
+
     } catch (error) {
       logger.error('NetworkStateManager initialization failed:', error);
       this.emit('initializationFailed', { error: error.message });
@@ -72,6 +75,50 @@ export class NetworkStateManager extends EventEmitter {
     }
   }
   
+  /**
+   * Ensure Access Point is running (critical for camera controller connectivity)
+   */
+  async ensureAccessPointRunning() {
+    try {
+      logger.info('Ensuring Access Point is running...');
+
+      // Update current state to check AP status
+      await this.updateNetworkState();
+
+      const ap0Active = this.networkState.interfaces.get('ap0')?.active || false;
+      const hostapdActive = this.networkState.services.get('hostapd')?.active || false;
+
+      if (hostapdActive && ap0Active) {
+        logger.info('Access Point already running');
+        return;
+      }
+
+      // Configure and start Access Point
+      logger.info('Access Point not fully active, starting...');
+      await this.configManager.ensureAccessPointConfig();
+      await this.serviceManager.startAccessPoint();
+
+      // Verify it started successfully
+      await this.updateNetworkState();
+
+      const verifyAp0Active = this.networkState.interfaces.get('ap0')?.active || false;
+      const verifyHostapdActive = this.networkState.services.get('hostapd')?.active || false;
+
+      if (verifyHostapdActive && verifyAp0Active) {
+        logger.info('Access Point started successfully');
+        this.emit('accessPointEnsured', { active: true });
+      } else {
+        logger.error('Failed to start Access Point - camera controller may be unreachable');
+        this.emit('accessPointEnsured', { active: false, error: 'Failed to start' });
+      }
+
+    } catch (error) {
+      logger.error('Failed to ensure Access Point is running:', error);
+      this.emit('accessPointEnsured', { active: false, error: error.message });
+      throw error;
+    }
+  }
+
   /**
    * Bind events from service manager
    */
@@ -100,16 +147,20 @@ export class NetworkStateManager extends EventEmitter {
       const hostapdActive = this.networkState.services.get('hostapd')?.active || false;
       
       // Determine mode based on current state
+      // Note: AP is ensured to be running during initialization
       if (hostapdActive && ap0Active && wlan0Active) {
         this.currentMode = 'development';
       } else if (hostapdActive && ap0Active && !wlan0Active) {
         this.currentMode = 'field';
       } else if (!hostapdActive && !ap0Active && wlan0Active) {
-        this.currentMode = 'wifi-only';
+        // Unusual state - WiFi client active but no AP
+        // Mode detection happens before AP is ensured, so we can see this temporarily
+        logger.info('WiFi client active, AP will be started during initialization');
+        this.currentMode = 'development';
       } else {
-        // Default to field mode if unclear
+        // Default to field mode - AP will be ensured during initialization
         this.currentMode = 'field';
-        logger.warn('Network mode unclear from current state, defaulting to field mode');
+        logger.info(`Network services not yet active, defaulting to ${this.currentMode} mode`);
       }
       
       logger.info(`Detected network mode: ${this.currentMode}`);
@@ -125,8 +176,8 @@ export class NetworkStateManager extends EventEmitter {
    * Switch network mode with atomic operations
    */
   async switchMode(targetMode) {
-    if (!['field', 'development', 'wifi-only'].includes(targetMode)) {
-      throw new Error(`Invalid network mode: ${targetMode}`);
+    if (!['field', 'development'].includes(targetMode)) {
+      throw new Error(`Invalid network mode: ${targetMode}. Valid modes are 'field' and 'development'`);
     }
     
     if (this.currentMode === targetMode) {
@@ -185,9 +236,6 @@ export class NetworkStateManager extends EventEmitter {
         await this.serviceManager.stopAccessPoint();
         await this.serviceManager.stopWiFiClient();
         break;
-      case 'wifi-only':
-        await this.serviceManager.stopWiFiClient();
-        break;
     }
   }
   
@@ -203,9 +251,6 @@ export class NetworkStateManager extends EventEmitter {
         await this.configManager.ensureAccessPointConfig();
         await this.configManager.ensureWiFiClientConfig();
         break;
-      case 'wifi-only':
-        await this.configManager.ensureWiFiClientConfig();
-        break;
     }
   }
   
@@ -219,9 +264,6 @@ export class NetworkStateManager extends EventEmitter {
         break;
       case 'development':
         await this.serviceManager.startAccessPoint();
-        await this.serviceManager.startWiFiClient();
-        break;
-      case 'wifi-only':
         await this.serviceManager.startWiFiClient();
         break;
     }
@@ -285,9 +327,10 @@ export class NetworkStateManager extends EventEmitter {
   updateInterfaceState(iface, state) {
     const currentState = this.networkState.interfaces.get(iface);
     const newState = { ...currentState, ...state, lastUpdate: new Date() };
-    
+
+
     this.networkState.interfaces.set(iface, newState);
-    
+
     // Emit change if state actually changed
     if (!currentState || currentState.active !== newState.active) {
       this.emit('interfaceStateChanged', { interface: iface, state: newState });
@@ -340,33 +383,29 @@ export class NetworkStateManager extends EventEmitter {
    * Get current network status
    */
   getNetworkStatus() {
-    return {
+    const status = {
       mode: this.currentMode,
       interfaces: Object.fromEntries(this.networkState.interfaces),
       services: Object.fromEntries(this.networkState.services),
       lastUpdate: this.networkState.lastUpdate
     };
+
+
+    logger.debug('getNetworkStatus returning:', {
+      mode: status.mode,
+      interfaceKeys: Object.keys(status.interfaces),
+      wlan0: status.interfaces.wlan0,
+      ap0: status.interfaces.ap0
+    });
+
+    return status;
   }
   
   /**
-   * Get available WiFi networks
+   * Switch network mode (API compatibility)
    */
-  async scanWiFiNetworks(forceRefresh = false) {
-    return await this.serviceManager.scanWiFiNetworks(forceRefresh);
-  }
-  
-  /**
-   * Connect to WiFi network
-   */
-  async connectToWiFi(ssid, password, priority = 1) {
-    return await this.serviceManager.connectToWiFi(ssid, password, priority);
-  }
-  
-  /**
-   * Disconnect from WiFi
-   */
-  async disconnectWiFi() {
-    return await this.serviceManager.disconnectWiFi();
+  async switchNetworkMode(mode) {
+    return await this.switchMode(mode);
   }
   
   /**

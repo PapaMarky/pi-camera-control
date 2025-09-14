@@ -71,9 +71,12 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
     if (networkManager) {
       try {
         networkStatus = await networkManager.getNetworkStatus();
+        logger.debug('Network status for broadcast:', networkStatus ? 'SUCCESS' : 'NULL', networkStatus);
       } catch (error) {
-        logger.debug('Failed to get network status for broadcast:', error);
+        logger.error('Failed to get network status for broadcast:', error);
       }
+    } else {
+      logger.error('NetworkManager not available for broadcast');
     }
     
     // Get current camera controller (it's a function that returns the current controller)
@@ -103,6 +106,8 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
       },
       network: networkStatus
     };
+
+    logger.debug('Broadcasting status with network:', networkStatus ? 'PRESENT' : 'NULL');
     
     const message = JSON.stringify(status);
     const deadClients = new Set();
@@ -127,7 +132,10 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   };
   
   // Start periodic status broadcasts (every 10 seconds for real-time UI)
-  const statusInterval = setInterval(broadcastStatus, 10000);
+  const statusInterval = setInterval(() => {
+    console.log('Broadcasting status at:', new Date().toISOString());
+    broadcastStatus();
+  }, 10000);
   
   // Handle individual WebSocket connections
   const handleConnection = async (ws, req) => {
@@ -402,13 +410,14 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   };
 
   const handleNetworkScan = async (ws, data) => {
-    if (!networkManager) {
+    if (!networkManager || !networkManager.serviceManager) {
       return sendError(ws, 'Network management not available');
     }
-    
+
     try {
       const forceRefresh = data?.refresh || false;
-      const networks = await networkManager.scanWiFiNetworks(forceRefresh);
+      // Use ServiceManager directly for low-level WiFi operations
+      const networks = await networkManager.serviceManager.scanWiFiNetworks(forceRefresh);
       sendResponse(ws, 'network_scan_result', { networks });
     } catch (error) {
       logger.error('Network scan failed via WebSocket:', error);
@@ -417,23 +426,29 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   };
 
   const handleNetworkConnect = async (ws, data) => {
-    if (!networkManager) {
+    if (!networkManager || !networkManager.serviceManager) {
       return sendError(ws, 'Network management not available');
     }
-    
+
     try {
       const { ssid, password, priority } = data;
-      
+
       if (!ssid) {
         return sendError(ws, 'SSID is required');
       }
 
-      const result = await networkManager.connectToWiFi(ssid, password, priority);
+      // Use ServiceManager directly for low-level WiFi operations
+      const result = await networkManager.serviceManager.connectToWiFi(ssid, password, priority);
       sendResponse(ws, 'network_connect_result', result);
-      
+
       // Broadcast network status change to all clients
-      setTimeout(() => broadcastStatus(), 2000);
-      
+      // Give more time for network changes to propagate
+      setTimeout(async () => {
+        logger.info('Broadcasting status after network connection change');
+        await networkManager.updateNetworkState(); // Force state refresh
+        broadcastStatus();
+      }, 5000);
+
     } catch (error) {
       logger.error('Network connection failed via WebSocket:', error);
       sendError(ws, `Connection failed: ${error.message}`);
@@ -441,17 +456,23 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   };
 
   const handleNetworkDisconnect = async (ws) => {
-    if (!networkManager) {
+    if (!networkManager || !networkManager.serviceManager) {
       return sendError(ws, 'Network management not available');
     }
-    
+
     try {
-      const result = await networkManager.disconnectWiFi();
+      // Use ServiceManager directly for low-level WiFi operations
+      const result = await networkManager.serviceManager.disconnectWiFi();
       sendResponse(ws, 'network_disconnect_result', result);
-      
+
       // Broadcast network status change to all clients
-      setTimeout(() => broadcastStatus(), 2000);
-      
+      // Give more time for network changes to propagate
+      setTimeout(async () => {
+        logger.info('Broadcasting status after network disconnection');
+        await networkManager.updateNetworkState(); // Force state refresh
+        broadcastStatus();
+      }, 5000);
+
     } catch (error) {
       logger.error('Network disconnection failed via WebSocket:', error);
       sendError(ws, `Disconnection failed: ${error.message}`);

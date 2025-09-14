@@ -469,24 +469,55 @@ export class NetworkServiceManager extends EventEmitter {
   async getInterfaceState(iface) {
     try {
       const { stdout } = await execAsync(`ip addr show ${iface}`);
-      
+
       const isUp = stdout.includes('state UP');
       const hasIp = /inet \d+\.\d+\.\d+\.\d+/.test(stdout);
-      
-      // Get additional info
+
+      // Get IP address
       let ipAddress = null;
       const ipMatch = stdout.match(/inet (\d+\.\d+\.\d+\.\d+\/\d+)/);
       if (ipMatch) {
         ipAddress = ipMatch[1];
       }
-      
-      return {
+
+      const baseState = {
         active: isUp,
         hasIp,
         ipAddress,
         lastUpdate: new Date()
       };
-      
+
+      // Add interface-specific information
+      if (iface === 'wlan0') {
+        // Add WiFi-specific information
+        try {
+          const wifiStatus = await this.getWiFiStatus();
+          baseState.network = wifiStatus.ssid;
+          baseState.ip = ipAddress;
+        } catch (error) {
+          logger.error(`Failed to get WiFi status for wlan0: ${error.message}`, error);
+          baseState.network = null;
+          baseState.ip = ipAddress;
+        }
+      } else if (iface === 'ap0') {
+        // Add AP-specific information
+        try {
+          const ssid = await this.getAPSSID();
+          const clients = await this.getAPClients();
+          baseState.ssid = ssid;
+          baseState.ip = ipAddress;
+          baseState.clients = clients;
+          logger.debug(`ap0 enhanced with ssid: ${ssid}, clients: ${clients.length}, ip: ${baseState.ip}`);
+        } catch (error) {
+          logger.debug(`Failed to get AP info for ap0: ${error.message}`);
+          baseState.ssid = null;
+          baseState.ip = ipAddress;
+          baseState.clients = [];
+        }
+      }
+
+      return baseState;
+
     } catch (error) {
       return {
         active: false,
@@ -695,11 +726,17 @@ export class NetworkServiceManager extends EventEmitter {
       await execAsync(`wpa_cli -i wlan0 set_network ${netId} psk '"${password}"'`);
       await execAsync(`wpa_cli -i wlan0 set_network ${netId} priority ${priority}`);
       
-      // Enable network
+      // Enable network and select it for connection
       await execAsync(`wpa_cli -i wlan0 enable_network ${netId}`);
-      
+
+      // Force connection to the new network
+      await execAsync(`wpa_cli -i wlan0 select_network ${netId}`);
+
       // Save configuration
       await execAsync(`wpa_cli -i wlan0 save_config`);
+
+      // Trigger reassociation to force connection
+      await execAsync(`wpa_cli -i wlan0 reassociate`);
       
       logger.info(`WiFi connection initiated for ${ssid}`);
       this.emit('wifiConnectionStarted', { ssid });
@@ -738,33 +775,287 @@ export class NetworkServiceManager extends EventEmitter {
    */
   async getWiFiStatus() {
     try {
-      const { stdout } = await execAsync('wpa_cli -i wlan0 status');
-      
-      const status = {};
-      stdout.trim().split('\n').forEach(line => {
-        const [key, value] = line.split('=');
-        if (key && value) {
-          status[key] = value;
-        }
-      });
-      
+      // Try iw command first (more reliable on modern systems)
+      const { stdout } = await execAsync('/sbin/iw dev wlan0 link');
+
+      if (stdout.includes('Not connected')) {
+        return {
+          connected: false,
+          ssid: null,
+          state: 'DISCONNECTED'
+        };
+      }
+
+      // Parse iw output for connection info
+      const ssidMatch = stdout.match(/SSID: (.+)/);
+      const freqMatch = stdout.match(/freq: (\d+)/);
+      const signalMatch = stdout.match(/signal: ([-\d.]+) dBm/);
+
       return {
-        connected: status.wpa_state === 'COMPLETED',
-        ssid: status.ssid || null,
-        bssid: status.bssid || null,
-        ipAddress: status.ip_address || null,
-        state: status.wpa_state || 'UNKNOWN'
+        connected: ssidMatch ? true : false,
+        ssid: ssidMatch ? ssidMatch[1].trim() : null,
+        frequency: freqMatch ? parseInt(freqMatch[1]) : null,
+        signal: signalMatch ? parseFloat(signalMatch[1]) : null,
+        state: ssidMatch ? 'CONNECTED' : 'UNKNOWN'
       };
-      
+
     } catch (error) {
-      logger.error('Failed to get WiFi status:', error);
-      return {
-        connected: false,
-        error: error.message
-      };
+      // Fallback to wpa_cli if available
+      try {
+        const { stdout } = await execAsync('wpa_cli -i wlan0 status');
+
+        const status = {};
+        stdout.trim().split('\n').forEach(line => {
+          const [key, value] = line.split('=');
+          if (key && value) {
+            status[key] = value;
+          }
+        });
+
+        return {
+          connected: status.wpa_state === 'COMPLETED',
+          ssid: status.ssid || null,
+          bssid: status.bssid || null,
+          ipAddress: status.ip_address || null,
+          state: status.wpa_state || 'UNKNOWN'
+        };
+
+      } catch (fallbackError) {
+        // Final fallback to iwconfig
+        try {
+          const { stdout } = await execAsync('/sbin/iwconfig wlan0');
+          const ssidMatch = stdout.match(/ESSID:"([^"]+)"/);
+          const isConnected = !stdout.includes('ESSID:off');
+
+          return {
+            connected: isConnected && ssidMatch ? true : false,
+            ssid: ssidMatch ? ssidMatch[1] : null,
+            state: isConnected ? 'CONNECTED' : 'DISCONNECTED'
+          };
+        } catch (iwconfigError) {
+          logger.error('Failed to get WiFi status via iw, wpa_cli, and iwconfig:', error.message, fallbackError.message, iwconfigError.message);
+          return {
+            connected: false,
+            ssid: null,
+            error: error.message
+          };
+        }
+      }
     }
   }
   
+  /**
+   * Get Access Point SSID from config
+   */
+  async getAPSSID() {
+    try {
+      const { stdout } = await execAsync('grep -E "^ssid=" /etc/hostapd/hostapd.conf');
+      const match = stdout.match(/ssid=(.+)/);
+      return match ? match[1].trim() : 'PiCameraControl';
+    } catch (error) {
+      return 'PiCameraControl'; // Default fallback
+    }
+  }
+
+  /**
+   * Get connected AP clients
+   */
+  async getAPClients() {
+    try {
+      // Try to get clients from hostapd_cli
+      const { stdout } = await execAsync('hostapd_cli list_sta 2>/dev/null');
+      const clients = stdout.trim().split('\n').filter(line => line.length > 0);
+      return clients.map(mac => ({ mac, connected: true }));
+    } catch (error) {
+      // Fallback: check ARP table for devices in AP subnet
+      try {
+        const { stdout } = await execAsync('arp -a | grep 192.168.4');
+        const clients = stdout.trim().split('\n')
+          .filter(line => line.includes('192.168.4'))
+          .map(line => {
+            const ipMatch = line.match(/\((\d+\.\d+\.\d+\.\d+)\)/);
+            const macMatch = line.match(/([a-fA-F0-9:]{17})/);
+            return {
+              ip: ipMatch ? ipMatch[1] : null,
+              mac: macMatch ? macMatch[1] : null,
+              connected: true
+            };
+          })
+          .filter(client => client.ip && client.mac);
+        return clients;
+      } catch (arpError) {
+        return [];
+      }
+    }
+  }
+
+  /**
+   * Get saved WiFi networks from wpa_supplicant config
+   */
+  async getSavedNetworks() {
+    try {
+      const { stdout } = await execAsync('wpa_cli -i wlan0 list_networks');
+      const networks = [];
+      const lines = stdout.trim().split('\n');
+
+      for (let i = 1; i < lines.length; i++) { // Skip header line
+        const line = lines[i];
+        if (!line.trim()) continue;
+
+        const parts = line.split('\t');
+        if (parts.length >= 4) {
+          const [id, ssid, bssid, flags] = parts;
+          networks.push({
+            id: parseInt(id),
+            ssid: ssid.trim(),
+            bssid: bssid === 'any' ? null : bssid,
+            flags: flags.trim(),
+            enabled: !flags.includes('DISABLED'),
+            current: flags.includes('CURRENT')
+          });
+        }
+      }
+
+      return networks;
+    } catch (error) {
+      logger.warn('Failed to get saved networks:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Remove saved WiFi network
+   */
+  async removeSavedNetwork(networkId) {
+    try {
+      await execAsync(`wpa_cli -i wlan0 remove_network ${networkId}`);
+      await execAsync('wpa_cli -i wlan0 save_config');
+
+      logger.info(`Removed saved network ${networkId}`);
+      return { success: true };
+
+    } catch (error) {
+      logger.error(`Failed to remove saved network ${networkId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Set WiFi regulatory country
+   */
+  async setWiFiCountry(countryCode) {
+    try {
+      // Set country in wpa_supplicant
+      await execAsync(`wpa_cli -i wlan0 set country ${countryCode}`);
+      await execAsync('wpa_cli -i wlan0 save_config');
+
+      // Also set in /etc/wpa_supplicant/wpa_supplicant.conf if file exists
+      try {
+        const configPath = '/etc/wpa_supplicant/wpa_supplicant.conf';
+        const { stdout } = await execAsync(`cat ${configPath}`);
+
+        let newConfig;
+        if (stdout.includes('country=')) {
+          // Replace existing country
+          newConfig = stdout.replace(/country=\w+/g, `country=${countryCode}`);
+        } else {
+          // Add country line after ctrl_interface
+          newConfig = stdout.replace(
+            /(ctrl_interface=.*\n)/,
+            `$1country=${countryCode}\n`
+          );
+        }
+
+        await execAsync(`echo '${newConfig}' > ${configPath}`);
+      } catch (configError) {
+        logger.warn('Could not update wpa_supplicant.conf:', configError.message);
+      }
+
+      logger.info(`WiFi country set to ${countryCode}`);
+      return { success: true, country: countryCode };
+
+    } catch (error) {
+      logger.error(`Failed to set WiFi country to ${countryCode}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get current WiFi country
+   */
+  async getWiFiCountry() {
+    try {
+      // Try to get from wpa_cli first
+      try {
+        const { stdout } = await execAsync('wpa_cli -i wlan0 get country');
+        const country = stdout.trim();
+        if (country && country !== 'FAIL' && country.length === 2) {
+          return { country: country.toUpperCase() };
+        }
+      } catch (cliError) {
+        logger.debug('wpa_cli get country failed:', cliError.message);
+      }
+
+      // Fallback: check wpa_supplicant.conf
+      try {
+        const { stdout } = await execAsync('grep -E "^country=" /etc/wpa_supplicant/wpa_supplicant.conf');
+        const match = stdout.match(/country=(\w+)/);
+        if (match) {
+          return { country: match[1].toUpperCase() };
+        }
+      } catch (grepError) {
+        logger.debug('Could not read country from wpa_supplicant.conf:', grepError.message);
+      }
+
+      // Default fallback
+      return { country: 'US' };
+
+    } catch (error) {
+      logger.warn('Failed to get WiFi country:', error.message);
+      return { country: 'US' };
+    }
+  }
+
+  /**
+   * Get available country codes
+   */
+  getCountryCodes() {
+    return [
+      { code: 'AD', name: 'Andorra' },
+      { code: 'AE', name: 'United Arab Emirates' },
+      { code: 'AR', name: 'Argentina' },
+      { code: 'AT', name: 'Austria' },
+      { code: 'AU', name: 'Australia' },
+      { code: 'BE', name: 'Belgium' },
+      { code: 'BG', name: 'Bulgaria' },
+      { code: 'BR', name: 'Brazil' },
+      { code: 'CA', name: 'Canada' },
+      { code: 'CH', name: 'Switzerland' },
+      { code: 'CN', name: 'China' },
+      { code: 'CZ', name: 'Czech Republic' },
+      { code: 'DE', name: 'Germany' },
+      { code: 'DK', name: 'Denmark' },
+      { code: 'ES', name: 'Spain' },
+      { code: 'FI', name: 'Finland' },
+      { code: 'FR', name: 'France' },
+      { code: 'GB', name: 'United Kingdom' },
+      { code: 'GR', name: 'Greece' },
+      { code: 'HU', name: 'Hungary' },
+      { code: 'IE', name: 'Ireland' },
+      { code: 'IT', name: 'Italy' },
+      { code: 'JP', name: 'Japan' },
+      { code: 'KR', name: 'South Korea' },
+      { code: 'NL', name: 'Netherlands' },
+      { code: 'NO', name: 'Norway' },
+      { code: 'NZ', name: 'New Zealand' },
+      { code: 'PL', name: 'Poland' },
+      { code: 'PT', name: 'Portugal' },
+      { code: 'RU', name: 'Russia' },
+      { code: 'SE', name: 'Sweden' },
+      { code: 'US', name: 'United States' }
+    ];
+  }
+
   /**
    * Cleanup resources
    */

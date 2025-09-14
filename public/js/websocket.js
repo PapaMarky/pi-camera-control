@@ -103,6 +103,10 @@ class WebSocketManager {
     }
   }
 
+  isConnected() {
+    return this.connected && this.ws && this.ws.readyState === WebSocket.OPEN;
+  }
+
   handleMessage(message) {
     const { type, data, eventType } = message;
     
@@ -157,12 +161,36 @@ class WebSocketManager {
       case 'pong':
         this.emit('pong', data);
         break;
-        
+
+      case 'network_scan_result':
+        this.emit('network_scan_result', data);
+        break;
+
+      case 'network_mode_result':
+        this.emit('network_mode_result', data);
+        break;
+
+      case 'network_connect_result':
+        this.emit('network_connect_result', data);
+        break;
+
+      case 'network_disconnect_result':
+        this.emit('network_disconnect_result', data);
+        break;
+
+      case 'timelapse_reports':
+        this.emit('timelapse_reports', data);
+        break;
+
+      case 'unsaved_session':
+        this.emit('unsaved_session', data);
+        break;
+
       case 'error':
         console.error('WebSocket error response:', data);
         this.emit('error_response', data);
         break;
-        
+
       default:
         console.log('Unknown WebSocket message type:', type, data);
     }
