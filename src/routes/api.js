@@ -681,6 +681,17 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
+    // Get saved WiFi networks - LOW-LEVEL SERVICE OPERATION
+    router.get('/network/wifi/saved', async (req, res) => {
+      try {
+        const networks = await networkServiceManager.getSavedNetworks();
+        res.json({ networks });
+      } catch (error) {
+        logger.error('Failed to get saved WiFi networks:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
     // Remove saved WiFi network - LOW-LEVEL SERVICE OPERATION
     router.delete('/network/wifi/saved/:id', async (req, res) => {
       try {

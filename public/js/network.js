@@ -263,14 +263,15 @@ class NetworkUI {
             const { active, clients, ip, ssid } = apData;
             const clientCount = clients ? clients.length : 0;
 
-            const status = active ? 'Active' : 'Inactive';
+            // Show SSID if available and active, otherwise show status
+            const displayStatus = active ? (ssid || 'Active') : 'Inactive';
 
             // Update settings page
-            if (statusElement) statusElement.textContent = status;
+            if (statusElement) statusElement.textContent = displayStatus;
             if (clientsDetailElement) clientsDetailElement.textContent = `${clientCount} connected`;
 
-            // Update main page
-            if (mainStatusElement) mainStatusElement.textContent = status;
+            // Update main page - show SSID for AP status
+            if (mainStatusElement) mainStatusElement.textContent = displayStatus;
             if (headerClientsElement) headerClientsElement.textContent = clientCount.toString();
 
             // Update SSID if element exists

@@ -528,81 +528,102 @@ export class NetworkServiceManager extends EventEmitter {
   }
   
   /**
-   * Scan for available WiFi networks
+   * Scan for available WiFi networks using NetworkManager
    */
   async scanWiFiNetworks(forceRefresh = false) {
     const now = Date.now();
-    
+
     // Use cache if recent and not forcing refresh
-    if (!forceRefresh && 
-        this.wifiScanCache.lastScan && 
+    if (!forceRefresh &&
+        this.wifiScanCache.lastScan &&
         (now - this.wifiScanCache.lastScan) < this.wifiScanCache.cacheTimeout) {
       logger.debug('Using cached WiFi scan results');
       return this.wifiScanCache.networks;
     }
-    
+
     try {
-      logger.info('Scanning for WiFi networks...');
-      
-      // Try iw first (preferred)
-      try {
-        // Trigger scan
-        await execAsync('iw dev wlan0 scan trigger').catch(() => {
-          // May fail if scan already in progress, that's ok
-        });
-        
-        // Wait for scan to complete
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // Get scan results
-        const { stdout } = await execAsync('iw dev wlan0 scan');
-        
-        // Parse scan results
-        const networks = this.parseWiFiScan(stdout);
-        
-        // Update cache
-        this.wifiScanCache.networks = networks;
-        this.wifiScanCache.lastScan = now;
-        
-        logger.info(`Found ${networks.length} WiFi networks`);
-        return networks;
-        
-      } catch (iwError) {
-        logger.debug('iw scan failed, trying wpa_cli fallback:', iwError.message);
-        
-        // Fallback to wpa_cli scan
-        await execAsync('wpa_cli -i wlan0 scan').catch(() => {
-          // May fail if interface not available
-        });
-        
-        // Wait for scan
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // Get results via wpa_cli
-        const { stdout } = await execAsync('wpa_cli -i wlan0 scan_results');
-        const networks = this.parseWpaCliScan(stdout);
-        
-        // Update cache
-        this.wifiScanCache.networks = networks;
-        this.wifiScanCache.lastScan = now;
-        
-        logger.info(`Found ${networks.length} WiFi networks (via wpa_cli)`);
-        return networks;
+      logger.info('Scanning for WiFi networks using NetworkManager...');
+
+      // Force a fresh scan
+      if (forceRefresh) {
+        try {
+          await execAsync('nmcli dev wifi rescan');
+          // Wait for scan to complete
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (error) {
+          logger.debug('nmcli rescan failed, proceeding with existing scan data:', error.message);
+        }
       }
-      
+
+      // Get scan results
+      const { stdout } = await execAsync('nmcli -t -f IN-USE,SSID,MODE,CHAN,RATE,SIGNAL,BARS,SECURITY dev wifi list');
+
+      // Parse NetworkManager scan results
+      const networks = this.parseNMWiFiScan(stdout);
+
+      // Update cache
+      this.wifiScanCache.networks = networks;
+      this.wifiScanCache.lastScan = now;
+
+      logger.info(`Found ${networks.length} WiFi networks via NetworkManager`);
+      return networks;
+
     } catch (error) {
-      logger.error('WiFi scan failed:', error);
-      
+      logger.error('NetworkManager WiFi scan failed:', error);
+
       // Return cached results if available
       if (this.wifiScanCache.networks.length > 0) {
         logger.debug('Returning cached WiFi networks due to scan failure');
         return this.wifiScanCache.networks;
       }
-      
+
       throw error;
     }
   }
   
+  /**
+   * Parse NetworkManager WiFi scan output into network list
+   */
+  parseNMWiFiScan(output) {
+    const networks = [];
+    const lines = output.split('\n');
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      // Format: IN-USE:SSID:MODE:CHAN:RATE:SIGNAL:BARS:SECURITY
+      const parts = line.split(':');
+      if (parts.length >= 7) {
+        const inUse = parts[0] === '*';
+        const ssid = parts[1];
+        const mode = parts[2];
+        const channel = parseInt(parts[3]) || 0;
+        const rate = parts[4];
+        const signal = parseInt(parts[5]) || 0;
+        const bars = parts[6];
+        const security = parts[7] || '';
+
+        // Skip empty SSIDs (hidden networks)
+        if (!ssid || ssid.trim() === '') continue;
+
+        networks.push({
+          ssid: ssid,
+          signal: signal,
+          channel: channel,
+          security: security,
+          bars: bars,
+          rate: rate,
+          mode: mode,
+          inUse: inUse,
+          method: 'NetworkManager'
+        });
+      }
+    }
+
+    // Sort by signal strength (descending)
+    return networks.sort((a, b) => b.signal - a.signal);
+  }
+
   /**
    * Parse wpa_cli scan_results output into network list
    */
@@ -714,35 +735,66 @@ export class NetworkServiceManager extends EventEmitter {
    */
   async connectToWiFi(ssid, password, priority = 1) {
     try {
-      logger.info(`Connecting to WiFi network: ${ssid}`);
-      
-      // Use wpa_cli to add network
-      const addCmd = `wpa_cli -i wlan0 add_network`;
-      const { stdout: networkId } = await execAsync(addCmd);
-      const netId = networkId.trim();
-      
-      // Configure network
-      await execAsync(`wpa_cli -i wlan0 set_network ${netId} ssid '"${ssid}"'`);
-      await execAsync(`wpa_cli -i wlan0 set_network ${netId} psk '"${password}"'`);
-      await execAsync(`wpa_cli -i wlan0 set_network ${netId} priority ${priority}`);
-      
-      // Enable network and select it for connection
-      await execAsync(`wpa_cli -i wlan0 enable_network ${netId}`);
+      logger.info(`Connecting to WiFi network: ${ssid} using NetworkManager`);
 
-      // Force connection to the new network
-      await execAsync(`wpa_cli -i wlan0 select_network ${netId}`);
+      // Check if NetworkManager is available
+      try {
+        await execAsync('which nmcli');
+      } catch (error) {
+        throw new Error('NetworkManager (nmcli) not available on this system');
+      }
 
-      // Save configuration
-      await execAsync(`wpa_cli -i wlan0 save_config`);
+      // Remove any existing connections with the same SSID to avoid conflicts
+      try {
+        const { stdout: connections } = await execAsync('nmcli -t -f NAME,TYPE con show');
+        const lines = connections.split('\n');
+        for (const line of lines) {
+          if (line.includes('wifi') || line.includes('wireless')) {
+            const connectionName = line.split(':')[0];
+            if (connectionName === ssid) {
+              logger.info(`Removing existing NetworkManager connection: ${connectionName}`);
+              await execAsync(`nmcli con delete "${connectionName}"`);
+            }
+          }
+        }
+      } catch (error) {
+        logger.debug('Could not check/remove existing connections:', error.message);
+      }
 
-      // Trigger reassociation to force connection
-      await execAsync(`wpa_cli -i wlan0 reassociate`);
-      
-      logger.info(`WiFi connection initiated for ${ssid}`);
+      // Create new WiFi connection
+      let connectCmd;
+      if (password && password.length > 0) {
+        // Secured network
+        connectCmd = `nmcli dev wifi connect "${ssid}" password "${password}"`;
+      } else {
+        // Open network
+        connectCmd = `nmcli dev wifi connect "${ssid}"`;
+      }
+
+      logger.debug(`Executing: ${connectCmd.replace(/password "[^"]*"/, 'password "***"')}`);
+      await execAsync(connectCmd);
+
+      logger.info(`WiFi connection initiated for ${ssid} via NetworkManager`);
       this.emit('wifiConnectionStarted', { ssid });
-      
-      return { success: true, networkId: netId };
-      
+
+      // Wait a moment and verify connection
+      setTimeout(async () => {
+        try {
+          const status = await this.verifyWiFiConnectionNM(ssid);
+          if (status.connected) {
+            logger.info(`WiFi connection to ${ssid} verified successfully`);
+            this.emit('wifiConnectionVerified', { ssid, status });
+          } else {
+            logger.warn(`WiFi connection to ${ssid} could not be verified`);
+            this.emit('wifiConnectionUnverified', { ssid, status });
+          }
+        } catch (error) {
+          logger.debug('WiFi connection verification failed:', error.message);
+        }
+      }, 5000); // Check after 5 seconds
+
+      return { success: true, method: 'NetworkManager' };
+
     } catch (error) {
       logger.error(`Failed to connect to WiFi ${ssid}:`, error);
       this.emit('wifiConnectionFailed', { ssid, error: error.message });
@@ -750,6 +802,182 @@ export class NetworkServiceManager extends EventEmitter {
     }
   }
   
+  /**
+   * NetworkManager-based WiFi connection verification
+   */
+  async verifyWiFiConnectionNM(expectedSSID) {
+    try {
+      // Get current active connection
+      const { stdout } = await execAsync('nmcli -t -f NAME,TYPE,DEVICE con show --active');
+      const lines = stdout.split('\n');
+
+      for (const line of lines) {
+        if (line.includes('wifi') || line.includes('wireless')) {
+          const parts = line.split(':');
+          const connectionName = parts[0];
+          const device = parts[2];
+
+          if (device === 'wlan0' && connectionName === expectedSSID) {
+            // Get signal strength
+            try {
+              const { stdout: signalInfo } = await execAsync(`nmcli -t -f IN-USE,SIGNAL,SSID dev wifi list`);
+              const wifiLines = signalInfo.split('\n');
+              let signal = null;
+
+              for (const wifiLine of wifiLines) {
+                if (wifiLine.startsWith('*')) {
+                  const wifiParts = wifiLine.split(':');
+                  if (wifiParts[2] === expectedSSID) {
+                    signal = parseInt(wifiParts[1]) || null;
+                    break;
+                  }
+                }
+              }
+
+              return {
+                connected: true,
+                currentSSID: connectionName,
+                expectedSSID,
+                signal,
+                method: 'NetworkManager'
+              };
+            } catch (error) {
+              return {
+                connected: true,
+                currentSSID: connectionName,
+                expectedSSID,
+                method: 'NetworkManager'
+              };
+            }
+          }
+        }
+      }
+
+      return {
+        connected: false,
+        currentSSID: null,
+        expectedSSID,
+        method: 'NetworkManager'
+      };
+
+    } catch (error) {
+      return {
+        connected: false,
+        currentSSID: null,
+        expectedSSID,
+        error: error.message,
+        method: 'NetworkManager'
+      };
+    }
+  }
+
+  /**
+   * Get all saved WiFi networks and their priorities (NetworkManager version)
+   */
+  async getSavedNetworks() {
+    try {
+      const { stdout } = await execAsync('nmcli -t -f NAME,TYPE con show');
+      const lines = stdout.split('\n');
+      const networks = [];
+
+      for (const line of lines) {
+        if (line.trim() && (line.includes('wifi') || line.includes('wireless'))) {
+          const parts = line.split(':');
+          if (parts.length >= 2) {
+            networks.push({
+              name: parts[0],
+              type: parts[1],
+              method: 'NetworkManager'
+            });
+          }
+        }
+      }
+
+      return networks;
+    } catch (error) {
+      logger.error('Failed to get saved networks:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Verify WiFi connection to specific SSID
+   */
+  async verifyWiFiConnection(expectedSSID) {
+    try {
+      // Check using iw command for most reliable status
+      try {
+        const { stdout } = await execAsync('iw dev wlan0 link');
+        const match = stdout.match(/SSID:\s*(.+)/);
+        if (match) {
+          const currentSSID = match[1].trim();
+          const connected = currentSSID === expectedSSID;
+
+          // Get additional connection details
+          const signalMatch = stdout.match(/signal:\s*(-?\d+)\s*dBm/);
+          const freqMatch = stdout.match(/freq:\s*(\d+)/);
+
+          return {
+            connected,
+            currentSSID,
+            expectedSSID,
+            signal: signalMatch ? parseInt(signalMatch[1]) : null,
+            frequency: freqMatch ? parseInt(freqMatch[1]) : null,
+            method: 'iw'
+          };
+        }
+      } catch (error) {
+        logger.debug('iw link check failed:', error.message);
+      }
+
+      // Fallback to wpa_cli status
+      try {
+        const { stdout } = await execAsync('wpa_cli -i wlan0 status');
+        const lines = stdout.split('\n');
+        let currentSSID = null;
+        let wpaState = null;
+
+        for (const line of lines) {
+          if (line.startsWith('ssid=')) {
+            currentSSID = line.split('=')[1];
+          }
+          if (line.startsWith('wpa_state=')) {
+            wpaState = line.split('=')[1];
+          }
+        }
+
+        const connected = currentSSID === expectedSSID && wpaState === 'COMPLETED';
+
+        return {
+          connected,
+          currentSSID,
+          expectedSSID,
+          wpaState,
+          method: 'wpa_cli'
+        };
+      } catch (error) {
+        logger.debug('wpa_cli status check failed:', error.message);
+      }
+
+      return {
+        connected: false,
+        currentSSID: null,
+        expectedSSID,
+        error: 'Unable to verify connection',
+        method: 'none'
+      };
+
+    } catch (error) {
+      return {
+        connected: false,
+        currentSSID: null,
+        expectedSSID,
+        error: error.message,
+        method: 'error'
+      };
+    }
+  }
+
   /**
    * Disconnect from current WiFi
    */
@@ -775,49 +1003,80 @@ export class NetworkServiceManager extends EventEmitter {
    */
   async getWiFiStatus() {
     try {
-      // Try iw command first (more reliable on modern systems)
-      const { stdout } = await execAsync('/sbin/iw dev wlan0 link');
+      // Use NetworkManager to get WiFi status
+      const { stdout } = await execAsync('nmcli -t -f NAME,TYPE,DEVICE con show --active');
+      const lines = stdout.split('\n');
 
-      if (stdout.includes('Not connected')) {
-        return {
-          connected: false,
-          ssid: null,
-          state: 'DISCONNECTED'
-        };
+      // Find active WiFi connection
+      for (const line of lines) {
+        if (line.includes('wifi') || line.includes('wireless')) {
+          const parts = line.split(':');
+          const connectionName = parts[0];
+          const device = parts[2];
+
+          if (device === 'wlan0') {
+            // Get the actual SSID from the active WiFi connection
+            try {
+              const { stdout: detailsOutput } = await execAsync(`nmcli -t -f IN-USE,SIGNAL,SSID dev wifi list`);
+              const wifiLines = detailsOutput.split('\n');
+              let signal = null;
+              let actualSSID = null;
+
+              // Find the currently connected network (marked with *)
+              for (const wifiLine of wifiLines) {
+                if (wifiLine.startsWith('*')) {
+                  const wifiParts = wifiLine.split(':');
+                  actualSSID = wifiParts[2]; // The actual SSID
+                  signal = parseInt(wifiParts[1]) || null;
+                  break;
+                }
+              }
+
+              // Use the actual SSID if found, otherwise fall back to connection name
+              const displaySSID = actualSSID || connectionName;
+
+              return {
+                connected: true,
+                ssid: displaySSID,
+                signal: signal,
+                state: 'CONNECTED',
+                method: 'NetworkManager',
+                connectionName: connectionName
+              };
+            } catch (detailError) {
+              // If we can't get details, at least show the connection name
+              return {
+                connected: true,
+                ssid: connectionName,
+                state: 'CONNECTED',
+                method: 'NetworkManager'
+              };
+            }
+          }
+        }
       }
 
-      // Parse iw output for connection info
-      const ssidMatch = stdout.match(/SSID: (.+)/);
-      const freqMatch = stdout.match(/freq: (\d+)/);
-      const signalMatch = stdout.match(/signal: ([-\d.]+) dBm/);
-
+      // No active WiFi connection found
       return {
-        connected: ssidMatch ? true : false,
-        ssid: ssidMatch ? ssidMatch[1].trim() : null,
-        frequency: freqMatch ? parseInt(freqMatch[1]) : null,
-        signal: signalMatch ? parseFloat(signalMatch[1]) : null,
-        state: ssidMatch ? 'CONNECTED' : 'UNKNOWN'
+        connected: false,
+        ssid: null,
+        state: 'DISCONNECTED',
+        method: 'NetworkManager'
       };
 
     } catch (error) {
-      // Fallback to wpa_cli if available
-      try {
-        const { stdout } = await execAsync('wpa_cli -i wlan0 status');
+      logger.debug('NetworkManager status check failed, trying fallback methods:', error.message);
 
-        const status = {};
-        stdout.trim().split('\n').forEach(line => {
-          const [key, value] = line.split('=');
-          if (key && value) {
-            status[key] = value;
-          }
-        });
+      // Fallback to ip command for basic connectivity check
+      try {
+        const { stdout } = await execAsync('ip addr show wlan0');
+        const hasIP = stdout.includes('inet ') && !stdout.includes('inet 127.');
 
         return {
-          connected: status.wpa_state === 'COMPLETED',
-          ssid: status.ssid || null,
-          bssid: status.bssid || null,
-          ipAddress: status.ip_address || null,
-          state: status.wpa_state || 'UNKNOWN'
+          connected: hasIP,
+          ssid: null,
+          state: hasIP ? 'CONNECTED' : 'DISCONNECTED',
+          method: 'fallback'
         };
 
       } catch (fallbackError) {
