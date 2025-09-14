@@ -27,7 +27,7 @@ export class NetworkConfigManager {
         path: '/etc/dhcpcd.conf'
       }
     };
-    
+
     // Default configuration values
     this.defaults = {
       accessPoint: {
@@ -44,7 +44,7 @@ export class NetworkConfigManager {
         country: 'US'
       }
     };
-    
+
     // Backup file suffix
     this.backupSuffix = '.pi-camera-control.backup';
   }
@@ -84,6 +84,63 @@ export class NetworkConfigManager {
         logger.debug(`Current ${name} configuration not found or not readable`);
         config.current = null;
       }
+    }
+
+    // Parse hostapd configuration to extract current AP settings
+    // This preserves any configuration changes made outside our application
+    await this.parseCurrentAccessPointConfig();
+  }
+
+  /**
+   * Parse existing hostapd.conf to extract current AP settings
+   */
+  async parseCurrentAccessPointConfig() {
+    const hostapdConfig = this.configs.hostapd.current;
+    if (!hostapdConfig) {
+      logger.debug('No existing hostapd configuration to parse');
+      return;
+    }
+
+    try {
+      const currentSettings = {};
+      const lines = hostapdConfig.split('\n');
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('#') || !trimmed.includes('=')) {
+          continue; // Skip comments and non-key-value lines
+        }
+
+        const [key, ...valueParts] = trimmed.split('=');
+        const value = valueParts.join('=').trim();
+
+        switch (key) {
+          case 'ssid':
+            currentSettings.ssid = value;
+            break;
+          case 'wpa_passphrase':
+            currentSettings.passphrase = value;
+            break;
+          case 'channel':
+            currentSettings.channel = parseInt(value) || this.defaults.accessPoint.channel;
+            break;
+          case 'ignore_broadcast_ssid':
+            currentSettings.hidden = value === '1';
+            break;
+          case 'interface':
+            currentSettings.interface = value;
+            break;
+        }
+      }
+
+      // Update defaults with current settings to preserve them
+      if (Object.keys(currentSettings).length > 0) {
+        logger.info('Preserving current AP configuration from hostapd.conf', currentSettings);
+        this.defaults.accessPoint = { ...this.defaults.accessPoint, ...currentSettings };
+      }
+
+    } catch (error) {
+      logger.warn('Failed to parse current hostapd configuration:', error.message);
     }
   }
   
@@ -413,8 +470,13 @@ country=${clientConfig.country}
    * Update access point configuration with new settings
    */
   async updateAccessPointConfig(newConfig) {
-    const updatedConfig = { ...this.defaults.accessPoint, ...newConfig };
-    await this.ensureAccessPointConfig(updatedConfig);
+    // Update defaults with new configuration
+    this.defaults.accessPoint = { ...this.defaults.accessPoint, ...newConfig };
+
+    // Apply updated configuration to hostapd.conf
+    await this.ensureAccessPointConfig(this.defaults.accessPoint);
+
+    logger.info('Access Point configuration updated and saved to hostapd.conf');
   }
   
   /**
