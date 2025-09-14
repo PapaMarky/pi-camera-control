@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { logger } from '../utils/logger.js';
 import { IntervalometerSession } from '../intervalometer/session.js';
 
-export function createApiRouter(getCameraController, powerManager, server, networkManager, discoveryManager, intervalometerStateManager) {
+export function createApiRouter(getCameraController, powerManager, server, networkStateManager, discoveryManager, intervalometerStateManager) {
   const router = Router();
 
   // Camera status and connection
@@ -599,11 +599,13 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
   });
 
   // Network Management Routes
-  if (networkManager) {
+  if (networkStateManager) {
+    const networkServiceManager = networkStateManager.serviceManager; // Get direct access to service manager
+
     // Get current network status
     router.get('/network/status', async (req, res) => {
       try {
-        const status = await networkManager.getNetworkStatus();
+        const status = await networkStateManager.getNetworkStatus();
         res.json(status);
       } catch (error) {
         logger.error('Failed to get network status:', error);
@@ -611,16 +613,16 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Switch network mode (field/development)
+    // Switch network mode (field/development) - HIGH-LEVEL STATE OPERATION
     router.post('/network/mode', async (req, res) => {
       try {
         const { mode } = req.body;
-        
+
         if (!mode || !['field', 'development'].includes(mode)) {
           return res.status(400).json({ error: 'Invalid mode. Must be "field" or "development"' });
         }
 
-        const result = await networkManager.switchNetworkMode(mode);
+        const result = await networkStateManager.switchMode(mode);
         res.json(result);
       } catch (error) {
         logger.error('Failed to switch network mode:', error);
@@ -628,11 +630,11 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Scan for WiFi networks
+    // Scan for WiFi networks - LOW-LEVEL SERVICE OPERATION
     router.get('/network/wifi/scan', async (req, res) => {
       try {
         const forceRefresh = req.query.refresh === 'true';
-        const networks = await networkManager.scanWiFiNetworks(forceRefresh);
+        const networks = await networkServiceManager.scanWiFiNetworks(forceRefresh);
         res.json({ networks });
       } catch (error) {
         logger.error('WiFi scan failed:', error);
@@ -640,10 +642,10 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Get saved WiFi networks
+    // Get saved WiFi networks - LOW-LEVEL SERVICE OPERATION
     router.get('/network/wifi/saved', async (req, res) => {
       try {
-        const networks = await networkManager.getSavedNetworks();
+        const networks = await networkServiceManager.getSavedNetworks();
         res.json({ networks });
       } catch (error) {
         logger.error('Failed to get saved networks:', error);
@@ -651,16 +653,16 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Connect to WiFi network
+    // Connect to WiFi network - LOW-LEVEL SERVICE OPERATION
     router.post('/network/wifi/connect', async (req, res) => {
       try {
         const { ssid, password, priority } = req.body;
-        
+
         if (!ssid) {
           return res.status(400).json({ error: 'SSID is required' });
         }
 
-        const result = await networkManager.connectToWiFi(ssid, password, priority);
+        const result = await networkServiceManager.connectToWiFi(ssid, password, priority);
         res.json(result);
       } catch (error) {
         logger.error('WiFi connection failed:', error);
@@ -668,10 +670,10 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Disconnect from WiFi
+    // Disconnect from WiFi - LOW-LEVEL SERVICE OPERATION
     router.post('/network/wifi/disconnect', async (req, res) => {
       try {
-        const result = await networkManager.disconnectWiFi();
+        const result = await networkServiceManager.disconnectWiFi();
         res.json(result);
       } catch (error) {
         logger.error('WiFi disconnection failed:', error);
@@ -679,11 +681,11 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Remove saved WiFi network
+    // Remove saved WiFi network - LOW-LEVEL SERVICE OPERATION
     router.delete('/network/wifi/saved/:id', async (req, res) => {
       try {
         const { id } = req.params;
-        const result = await networkManager.removeSavedNetwork(id);
+        const result = await networkServiceManager.removeSavedNetwork(id);
         res.json(result);
       } catch (error) {
         logger.error('Failed to remove saved network:', error);
@@ -691,11 +693,11 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Configure access point
+    // Configure access point - HIGH-LEVEL STATE OPERATION (affects overall state)
     router.post('/network/accesspoint/configure', async (req, res) => {
       try {
         const { ssid, passphrase, channel, hidden } = req.body;
-        
+
         if (!ssid || !passphrase) {
           return res.status(400).json({ error: 'SSID and passphrase are required' });
         }
@@ -704,7 +706,7 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
           return res.status(400).json({ error: 'Passphrase must be at least 8 characters' });
         }
 
-        const result = await networkManager.configureAccessPoint({
+        const result = await networkStateManager.configureAccessPoint({
           ssid, passphrase, channel, hidden
         });
         res.json(result);
@@ -714,16 +716,16 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Set WiFi country for international travel
+    // Set WiFi country for international travel - LOW-LEVEL SERVICE OPERATION
     router.post('/network/wifi/country', async (req, res) => {
       try {
         const { country } = req.body;
-        
+
         if (!country) {
           return res.status(400).json({ error: 'Country code is required' });
         }
-        
-        const result = await networkManager.setWiFiCountry(country.toUpperCase());
+
+        const result = await networkServiceManager.setWiFiCountry(country.toUpperCase());
         res.json(result);
       } catch (error) {
         logger.error('WiFi country setting failed:', error);
@@ -731,10 +733,10 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Get current WiFi country
+    // Get current WiFi country - LOW-LEVEL SERVICE OPERATION
     router.get('/network/wifi/country', async (req, res) => {
       try {
-        const result = await networkManager.getWiFiCountry();
+        const result = await networkServiceManager.getWiFiCountry();
         res.json(result);
       } catch (error) {
         logger.error('Failed to get WiFi country:', error);
@@ -742,10 +744,10 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Get available country codes
+    // Get available country codes - LOW-LEVEL SERVICE OPERATION
     router.get('/network/wifi/countries', async (req, res) => {
       try {
-        const countries = networkManager.getCountryCodes();
+        const countries = networkServiceManager.getCountryCodes();
         res.json({ countries });
       } catch (error) {
         logger.error('Failed to get country codes:', error);

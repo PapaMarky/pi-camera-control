@@ -16,17 +16,17 @@ class CameraControlApp {
       
       // Initialize UI components first (non-blocking)
       this.initializeUI();
-      
-      // Connect WebSocket with timeout
-      this.updateLoadingMessage('Connecting...', 'connecting');
-      wsManager.connect();
-      
-      // Give WebSocket time to connect before trying camera
-      await this.delay(1000);
-      
-      // Initialize camera manager with graceful error handling
+
+      // Initialize camera manager BEFORE WebSocket connects so listeners are ready
       this.updateLoadingMessage('Connecting...', 'connecting');
       await this.initializeCameraWithRetry();
+
+      // Connect WebSocket AFTER listeners are registered
+      this.updateLoadingMessage('Connecting...', 'connecting');
+      wsManager.connect();
+
+      // Give WebSocket time to connect
+      await this.delay(1000);
 
       // Initialize network UI
       this.networkUI = new NetworkUI(wsManager);

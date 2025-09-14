@@ -277,6 +277,7 @@ class CameraManager {
 
     // Welcome message
     wsManager.on('welcome', (data) => {
+      console.log('Welcome message received, calling handleStatusUpdate with:', data);
       this.log('Connected to camera control server', 'success');
       this.handleStatusUpdate(data);
     });
@@ -911,7 +912,14 @@ class CameraManager {
     
     if (data && typeof data === 'object') {
       console.log('Processing status update, data type:', data.type, 'keys:', Object.keys(data));
-      
+
+      // Debug network data specifically
+      if (data.network) {
+        console.log('Network data found in message:', data.network);
+      } else {
+        console.log('No network data in message. Full data:', data);
+      }
+
       // Welcome messages and status updates both have camera/power/network properties
       if (data.camera || data.power || data.network) {
         cameraData = data.camera;
@@ -1001,11 +1009,16 @@ class CameraManager {
   // UI update methods
   updateConnectionStatus(status, text) {
     const indicator = document.getElementById('connection-indicator');
+    if (!indicator) {
+      console.debug('Connection indicator not ready, skipping status update');
+      return;
+    }
+
     const statusDot = indicator.querySelector('.status-dot');
     const statusText = indicator.querySelector('.status-text');
-    
-    statusDot.className = `status-dot ${status}`;
-    statusText.textContent = text;
+
+    if (statusDot) statusDot.className = `status-dot ${status}`;
+    if (statusText) statusText.textContent = text;
     
     // Update camera status card
     const cameraStatusDot = document.querySelector('.camera-status .status-dot');
