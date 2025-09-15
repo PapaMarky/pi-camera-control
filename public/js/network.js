@@ -5,6 +5,12 @@ class NetworkUI {
     constructor(websocket) {
         this.ws = websocket;
         this.currentNetworks = [];
+        this.clientConnectionInfo = {
+            ip: null,
+            isViaWiFi: null,
+            lastChecked: null,
+            cacheTimeout: 30000 // 30 seconds
+        };
         this.init();
     }
 
@@ -89,6 +95,12 @@ class NetworkUI {
 
         saveApBtn?.addEventListener('click', () => {
             this.saveAPConfiguration();
+        });
+
+        // Close networks list button
+        const closeNetworksBtn = document.getElementById('close-networks-btn');
+        closeNetworksBtn?.addEventListener('click', () => {
+            this.hideWiFiNetworks();
         });
 
         // Close modals when clicking outside
@@ -300,9 +312,16 @@ class NetworkUI {
     }
 
     handleModeSwitch() {
+        // Immediately disable the button to prevent double-clicks
+        const switchButton = document.getElementById('switch-network-mode-btn');
+        if (switchButton && switchButton.disabled) {
+            console.debug('Network mode switch already in progress, ignoring click');
+            return;
+        }
+
         const fieldRadio = document.getElementById('field-mode-radio');
         const devRadio = document.getElementById('development-mode-radio');
-        
+
         let selectedMode = null;
         if (fieldRadio?.checked) selectedMode = 'field';
         if (devRadio?.checked) selectedMode = 'development';
@@ -312,21 +331,22 @@ class NetworkUI {
             return;
         }
 
-        this.showToast(`Switching to ${selectedMode} mode...`, 'info');
+        // Immediately set loading state to prevent double-clicks
         this.setButtonLoading('switch-network-mode-btn', true);
+        this.showToast(`Switching to ${selectedMode} mode...`, 'info');
 
         // Send WebSocket message for network mode switch
         const success = this.ws.send('network_mode_switch', { mode: selectedMode });
-        
+
         if (!success) {
             this.showToast('Failed to send network mode switch request', 'error');
             this.setButtonLoading('switch-network-mode-btn', false);
         }
-        
-        // Reset button after 5 seconds (in case we don't get a response)
+
+        // Reset button after 10 seconds (in case we don't get a response)
         setTimeout(() => {
             this.setButtonLoading('switch-network-mode-btn', false);
-        }, 5000);
+        }, 10000);
     }
 
     async scanWiFiNetworks(forceRefresh = false) {
@@ -365,13 +385,30 @@ class NetworkUI {
     /**
      * Detect if client is connected via WiFi (not Access Point)
      * Access Point clients will have IP in 192.168.4.x range
+     * Uses caching to avoid slow WebRTC detection on every call
      */
     async isClientConnectedViaWiFi() {
+        const now = Date.now();
+        const cache = this.clientConnectionInfo;
+
+        // Check if we have cached data that's still valid
+        if (cache.isViaWiFi !== null &&
+            cache.lastChecked !== null &&
+            (now - cache.lastChecked) < cache.cacheTimeout) {
+            console.debug('Using cached client connection info:', cache.isViaWiFi);
+            return cache.isViaWiFi;
+        }
+
         // Get client IP from various sources
         const clientIP = await this.getClientIP();
 
+        // Update cache with IP
+        cache.ip = clientIP;
+        cache.lastChecked = now;
+
         if (!clientIP) {
             // If we can't determine IP, assume WiFi connection for safety
+            cache.isViaWiFi = true;
             return true;
         }
 
@@ -379,7 +416,13 @@ class NetworkUI {
         const apSubnetRegex = /^192\.168\.4\./;
 
         // If client IP is NOT in AP subnet, they're connected via WiFi
-        return !apSubnetRegex.test(clientIP);
+        const isViaWiFi = !apSubnetRegex.test(clientIP);
+
+        // Cache the result
+        cache.isViaWiFi = isViaWiFi;
+
+        console.debug('Client connection detected:', { ip: clientIP, isViaWiFi });
+        return isViaWiFi;
     }
 
     /**
@@ -412,11 +455,11 @@ class NetworkUI {
                     }
                 };
 
-                // Timeout after 3 seconds
+                // Timeout after 1 second for faster response
                 setTimeout(() => {
                     pc.close();
                     resolve(null);
-                }, 3000);
+                }, 1000);
 
             } catch (error) {
                 console.error('Error getting client IP:', error);
@@ -462,13 +505,24 @@ class NetworkUI {
                 !network.ssid.match(/^[0-9A-Fa-f:]+$/)) // Filter out MAC addresses used as SSIDs
             .forEach(network => {
                 const existing = networkMap.get(network.ssid);
-                if (!existing || (network.quality || 0) > (existing.quality || 0)) {
+
+                // Get signal strength for comparison (quality > signal > strength)
+                const getSignalStrength = (net) => {
+                    return net.quality || net.signal || net.strength || -100;
+                };
+
+                if (!existing || getSignalStrength(network) > getSignalStrength(existing)) {
                     networkMap.set(network.ssid, network);
                 }
             });
 
         const filteredNetworks = Array.from(networkMap.values())
-            .sort((a, b) => (b.quality || 0) - (a.quality || 0));
+            .sort((a, b) => {
+                const getSignalStrength = (net) => {
+                    return net.quality || net.signal || net.strength || -100;
+                };
+                return getSignalStrength(b) - getSignalStrength(a);
+            });
 
         console.log(`Filtered networks (removed ${networks.length - filteredNetworks.length}):`, filteredNetworks);
 
@@ -507,9 +561,9 @@ class NetworkUI {
             signalStrength = network.quality;
             qualityText = `${signalStrength}%`;
         } else if (network.signal !== undefined) {
-            // Convert dBm to percentage (typical range: -30 dBm = 100%, -90 dBm = 0%)
-            const dbm = network.signal;
-            signalStrength = Math.max(0, Math.min(100, Math.round((dbm + 90) * 100 / 60)));
+            // NetworkManager provides signal as percentage (0-100), not dBm
+            signalStrength = Math.max(0, Math.min(100, network.signal));
+            console.log(`Signal strength for ${network.ssid}: ${network.signal}% (from NetworkManager)`);
             qualityText = `${signalStrength}%`;
         } else if (network.strength !== undefined) {
             signalStrength = network.strength;
@@ -622,6 +676,13 @@ class NetworkUI {
         if (modal) {
             modal.style.display = 'none';
             this.pendingWiFiAction = null;
+        }
+    }
+
+    hideWiFiNetworks() {
+        const networksContainer = document.getElementById('wifi-networks');
+        if (networksContainer) {
+            networksContainer.style.display = 'none';
         }
     }
 
