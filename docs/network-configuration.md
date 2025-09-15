@@ -67,7 +67,42 @@ wpa_pairwise=TKIP
 rsn_pairwise=CCMP
 ```
 
-### 4. DHCP Server Configuration
+### 4. Access Point Interface Creation
+
+The `ap0` interface (virtual WiFi interface for access point) must be created before hostapd starts. This is handled by a dedicated systemd service:
+
+**create-ap-interface.service** (`/etc/systemd/system/create-ap-interface.service`):
+```ini
+[Unit]
+Description=Create ap0 interface for hostapd
+Before=hostapd.service
+Wants=network.target
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'if ! ip link show ap0 > /dev/null 2>&1; then iw dev wlan0 interface add ap0 type __ap; fi'
+ExecStart=/sbin/ip addr add 192.168.4.1/24 dev ap0
+ExecStart=/sbin/ip link set ap0 up
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+```
+
+This service:
+- Creates the `ap0` virtual interface using `iw dev wlan0 interface add ap0 type __ap`
+- Assigns IP address `192.168.4.1/24` to the interface
+- Brings the interface up
+- Runs before hostapd service starts (critical dependency)
+- Only creates interface if it doesn't already exist
+
+Enable the service:
+```bash
+sudo systemctl enable create-ap-interface.service
+```
+
+### 5. DHCP Server Configuration
 
 Add to `/etc/dnsmasq.conf`:
 ```bash
@@ -162,6 +197,9 @@ curl -X POST http://pi-ip:3000/api/network/mode \
 Enable required services:
 
 ```bash
+# Enable interface creation service (must run before hostapd)
+sudo systemctl enable create-ap-interface
+
 # Enable hostapd and dnsmasq to start at boot
 sudo systemctl enable hostapd
 sudo systemctl enable dnsmasq
@@ -169,6 +207,8 @@ sudo systemctl enable dnsmasq
 # Configure wpa_supplicant for on-demand use
 sudo systemctl disable wpa_supplicant@wlan0
 ```
+
+**Critical**: The `create-ap-interface` service must be enabled before hostapd, as hostapd requires the `ap0` interface to exist.
 
 ## Current Implementation Architecture
 
@@ -242,6 +282,12 @@ iPhone/MacBook ──WiFi──┘
 - Check if NetworkManager is running: `systemctl status NetworkManager`
 - Verify nmcli accessibility: `nmcli general status`
 - Force WiFi rescan: `sudo nmcli dev wifi rescan`
+
+**Access Point Interface Missing (ap0)**:
+- Check if create-ap-interface service is enabled: `systemctl is-enabled create-ap-interface`
+- Check service status: `systemctl status create-ap-interface`
+- Manually create interface: `sudo iw dev wlan0 interface add ap0 type __ap`
+- Check interface exists: `ip link show ap0`
 
 **Network Not Found**:
 - Ensure network is in range: `nmcli dev wifi list`

@@ -11,6 +11,7 @@ CLAUDE.md opt/pi-camera-control/
 
 # Runtime files (systemd service and network script)
 runtime/pi-camera-control.service etc/systemd/system/
+runtime/create-ap-interface.service etc/systemd/system/
 runtime/camera-network-mode usr/local/bin/
 
 # Documentation
