@@ -206,7 +206,12 @@
 
                         <!-- WiFi Networks List -->
                         <div class="wifi-networks" id="wifi-networks" style="display: none;">
-                            <h5>Available Networks</h5>
+                            <div class="networks-header">
+                                <h5>Available Networks</h5>
+                                <button type="button" class="close-networks-btn" id="close-networks-btn" title="Close networks list">
+                                    <span aria-hidden="true">✕</span>
+                                </button>
+                            </div>
                             <div class="networks-list" id="networks-list">
                                 <!-- Networks will be populated via JavaScript -->
                             </div>
@@ -553,7 +558,12 @@
                     </div>
                     <div class="input-group">
                         <label for="wifi-password-input">Password:</label>
-                        <input type="password" id="wifi-password-input" placeholder="Enter WiFi password">
+                        <div class="password-input-container">
+                            <input type="password" id="wifi-password-input" placeholder="Enter WiFi password">
+                            <button type="button" class="password-toggle-btn" data-target="wifi-password-input" title="Show password" aria-label="Show password">
+                                <span class="toggle-icon" aria-hidden="true">👁️</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="input-group">
                         <label for="wifi-priority-input">Priority (optional):</label>
@@ -583,7 +593,12 @@
                     
                     <div class="input-group">
                         <label for="manual-ip-input">Camera IP Address:</label>
-                        <input type="text" id="manual-ip-input" placeholder="192.168.12.98" pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$">
+                        <div class="input-with-clear">
+                            <input type="text" id="manual-ip-input" placeholder="192.168.12.98" pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$">
+                            <button type="button" class="clear-input-btn" id="clear-ip-btn" title="Clear IP address">
+                                <span aria-hidden="true">✕</span>
+                            </button>
+                        </div>
                         <small>Enter the IP address shown on camera screen</small>
                     </div>
                     
@@ -592,7 +607,18 @@
                         <input type="number" id="manual-port-input" value="443" min="1" max="65535">
                         <small>Leave as 443 unless you know the camera uses a different port</small>
                     </div>
-                    
+
+                    <!-- Error display area -->
+                    <div class="modal-error" id="manual-connect-error" style="display: none;">
+                        <div class="error-icon">⚠️</div>
+                        <div class="error-content">
+                            <div class="error-title">Connection Failed</div>
+                            <div class="error-message" id="manual-connect-error-message">
+                                Unable to connect to camera
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="button-grid">
                         <button id="cancel-manual-connect-btn" class="secondary-btn">Cancel</button>
                         <button id="confirm-manual-connect-btn" class="primary-btn">Connect</button>
@@ -639,7 +665,12 @@
                     </div>
                     <div class="input-group">
                         <label for="ap-password-input">Password:</label>
-                        <input type="password" id="ap-password-input" placeholder="At least 8 characters" minlength="8">
+                        <div class="password-input-container">
+                            <input type="password" id="ap-password-input" placeholder="At least 8 characters" minlength="8">
+                            <button type="button" class="password-toggle-btn" data-target="ap-password-input" title="Show password" aria-label="Show password">
+                                <span class="toggle-icon" aria-hidden="true">👁️</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="input-group">
                         <label for="ap-channel-input">WiFi Channel:</label>

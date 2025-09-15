@@ -96,6 +96,13 @@ class CameraManager {
       }
     });
 
+    // Clear IP input button
+    document.getElementById('clear-ip-btn').addEventListener('click', () => {
+      const ipInput = document.getElementById('manual-ip-input');
+      ipInput.value = '';
+      ipInput.focus();
+    });
+
     // Function menu toggle
     const menuToggle = document.getElementById('function-menu-toggle');
     if (menuToggle) {
@@ -818,15 +825,37 @@ class CameraManager {
     }
   }
 
-  showManualConnectModal() {
+  async showManualConnectModal() {
     const modal = document.getElementById('manual-connect-modal');
     const ipInput = document.getElementById('manual-ip-input');
     const portInput = document.getElementById('manual-port-input');
-    
-    // Clear any previous values
-    ipInput.value = '';
+
+    // Pre-populate with last successful IP if available
+    try {
+      const response = await fetch('/api/discovery/last-ip');
+      const data = await response.json();
+
+      if (data.lastIP) {
+        ipInput.value = data.lastIP;
+        // Position cursor at the end for easy editing
+        setTimeout(() => {
+          ipInput.setSelectionRange(ipInput.value.length, ipInput.value.length);
+        }, 0);
+      } else {
+        // No history - clear field
+        ipInput.value = '';
+      }
+    } catch (error) {
+      console.warn('Failed to get last camera IP:', error);
+      // Fallback to empty field
+      ipInput.value = '';
+    }
+
     portInput.value = '443';
-    
+
+    // Clear any previous error state
+    this.hideManualConnectError();
+
     modal.style.display = 'flex';
     ipInput.focus();
   }
@@ -834,32 +863,51 @@ class CameraManager {
   hideManualConnectModal() {
     const modal = document.getElementById('manual-connect-modal');
     modal.style.display = 'none';
+    // Clear any error state when closing modal
+    this.hideManualConnectError();
+  }
+
+  showManualConnectError(message) {
+    const errorDiv = document.getElementById('manual-connect-error');
+    const errorMessage = document.getElementById('manual-connect-error-message');
+
+    errorMessage.textContent = message;
+    errorDiv.style.display = 'flex';
+  }
+
+  hideManualConnectError() {
+    const errorDiv = document.getElementById('manual-connect-error');
+    errorDiv.style.display = 'none';
   }
 
   async performManualConnect() {
     const ipInput = document.getElementById('manual-ip-input');
     const portInput = document.getElementById('manual-port-input');
     const connectBtn = document.getElementById('confirm-manual-connect-btn');
-    
+
     const ip = ipInput.value.trim();
     const port = portInput.value.trim() || '443';
-    
+
+    // Clear any previous error
+    this.hideManualConnectError();
+
+    // Input validation
     if (!ip) {
-      this.handleError('Please enter a camera IP address');
+      this.showManualConnectError('Please enter a camera IP address');
       return;
     }
-    
+
     // Basic IP validation
     const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     if (!ipRegex.test(ip)) {
-      this.handleError('Please enter a valid IP address (e.g., 192.168.4.3)');
+      this.showManualConnectError('Please enter a valid IP address (e.g., 192.168.4.3)');
       return;
     }
-    
+
     this.log(`Connecting to camera at ${ip}:${port}...`, 'info');
     connectBtn.disabled = true;
     connectBtn.textContent = 'Connecting...';
-    
+
     try {
       const response = await fetch('/api/discovery/connect', {
         method: 'POST',
@@ -868,21 +916,57 @@ class CameraManager {
         },
         body: JSON.stringify({ ip, port })
       });
-      
+
       const result = await response.json();
-      
+
       if (result.success) {
         this.log(`Successfully connected to camera at ${ip}:${port}`, 'success');
         this.hideManualConnectModal();
         // Status will be updated via WebSocket or next status check
       } else {
-        this.handleError(`Connection failed: ${result.error || 'Unknown error'}`);
+        // Provide more specific error messages
+        const errorMessage = this.getSpecificErrorMessage(result.error, ip);
+        this.showManualConnectError(errorMessage);
+        this.log(`Connection failed: ${result.error || 'Unknown error'}`, 'error');
       }
     } catch (error) {
-      this.handleError(`Connection failed: ${error.message}`);
+      // Handle network/request errors
+      const errorMessage = this.getNetworkErrorMessage(error, ip);
+      this.showManualConnectError(errorMessage);
+      this.log(`Connection failed: ${error.message}`, 'error');
     } finally {
       connectBtn.disabled = false;
       connectBtn.textContent = 'Connect';
+    }
+  }
+
+  getSpecificErrorMessage(serverError, ip) {
+    if (!serverError) return 'Unable to connect to camera';
+
+    const error = serverError.toLowerCase();
+
+    if (error.includes('initialization failed') || error.includes('controller initialization')) {
+      return `Camera found at ${ip} but CCAPI service is not responding. Check that the camera is in shooting mode and CCAPI is enabled.`;
+    } else if (error.includes('timeout') || error.includes('timed out')) {
+      return `Connection to ${ip} timed out. Check that the camera is connected to the network and the IP address is correct.`;
+    } else if (error.includes('network') || error.includes('unreachable')) {
+      return `Cannot reach camera at ${ip}. Verify the IP address and network connection.`;
+    } else if (error.includes('refused') || error.includes('connection refused')) {
+      return `Camera at ${ip} refused the connection. Check that CCAPI is enabled on the camera.`;
+    } else {
+      return `Connection failed: ${serverError}`;
+    }
+  }
+
+  getNetworkErrorMessage(error, ip) {
+    const message = error.message ? error.message.toLowerCase() : '';
+
+    if (message.includes('fetch')) {
+      return `Unable to connect to camera at ${ip}. Check your network connection and camera IP address.`;
+    } else if (message.includes('timeout')) {
+      return `Connection to ${ip} timed out. Verify the camera is connected to the network.`;
+    } else {
+      return `Network error: ${error.message || 'Unknown connection error'}`;
     }
   }
   async refreshIntervalometerStatus() {
