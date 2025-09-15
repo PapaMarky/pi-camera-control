@@ -262,13 +262,31 @@ install_network_mode_script() {
     fi
 }
 
+# Install create-ap-interface service
+install_ap_interface_service() {
+    log_info "Installing create-ap-interface systemd service..."
+
+    local service_source="$(dirname "$0")/../runtime/create-ap-interface.service"
+
+    if [ -f "$service_source" ]; then
+        $SUDO_CMD cp "$service_source" /etc/systemd/system/
+        $SUDO_CMD systemctl daemon-reload
+        $SUDO_CMD systemctl enable create-ap-interface
+        log_info "create-ap-interface service installed and enabled"
+        log_info "This service creates the ap0 interface required for hostapd"
+    else
+        log_error "create-ap-interface service file not found at $service_source"
+        return 1
+    fi
+}
+
 # Configure systemd services
 configure_services() {
     log_info "Configuring systemd services..."
-    
+
     # Disable services initially (they will be managed by our network mode script)
     local services=("hostapd" "dnsmasq")
-    
+
     for service in "${services[@]}"; do
         if service_exists "$service"; then
             $SUDO_CMD systemctl stop "$service" 2>/dev/null || true
@@ -276,7 +294,7 @@ configure_services() {
             log_info "Disabled $service (will be managed by network mode script)"
         fi
     done
-    
+
     # Enable and configure wpa_supplicant for wlan0
     if service_exists "wpa_supplicant@wlan0"; then
         $SUDO_CMD systemctl enable wpa_supplicant@wlan0 || true
@@ -334,10 +352,11 @@ main() {
     # Run setup steps
     install_system_packages
     configure_hostapd
-    configure_dnsmasq  
+    configure_dnsmasq
     configure_network_interfaces
     disable_ipv6
     install_network_mode_script
+    install_ap_interface_service
     configure_services
     install_app_service
     install_node_dependencies

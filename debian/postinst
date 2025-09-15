@@ -165,18 +165,22 @@ EOF
 # Configure systemd services
 configure_services() {
     log_info "Configuring systemd services..."
-    
-    # Enable pi-camera-control service
+
+    # Enable create-ap-interface service (must run before hostapd)
     systemctl daemon-reload
+    systemctl enable create-ap-interface
+    log_info "Enabled create-ap-interface service (creates ap0 interface for hostapd)"
+
+    # Enable pi-camera-control service
     systemctl enable pi-camera-control
-    
+
     # Configure network services (initially disabled, managed by network mode script)
     systemctl disable hostapd 2>/dev/null || true
     systemctl disable dnsmasq 2>/dev/null || true
-    
+
     # Enable wpa_supplicant for wlan0
     systemctl enable wpa_supplicant@wlan0 2>/dev/null || true
-    
+
     log_info "System services configured"
 }
 
