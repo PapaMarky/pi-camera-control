@@ -39,3 +39,19 @@ dtim_period=2           # Data delivery interval
 - Err 64: Usually network configuration incompatibility
 - Connection + immediate disconnect: Missing DHCP server
 - SSID not found: Channel interference or power issues
+
+## Raspberry Pi Zero W Limitations
+
+**Critical**: The Pi Zero W has limited 802.11n support. While `ieee80211n=1` improves Canon camera compatibility, it may prevent the Pi Zero W from properly hosting the access point.
+
+**Symptoms:**
+- Camera can see SSID but cannot connect
+- "Cannot connect to wireless lan terminal" errors
+- Connection attempts fail with Err 64
+
+**Solutions:**
+1. Use Pi 3/4 for better 802.11n support as access point
+2. Or disable 802.11n: remove `ieee80211n=1` from hostapd.conf
+3. Keep in mixed mode for maximum compatibility
+
+**Reference**: [Pi Zero W 802.11n connectivity issues](https://forums.raspberrypi.com/viewtopic.php?t=222055)
