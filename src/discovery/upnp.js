@@ -38,16 +38,38 @@ export class UPnPDiscovery extends EventEmitter {
    */
   async startDiscovery() {
     try {
+      // Check if we have any available network interfaces before starting
+      const interfaces = this.getAvailableInterfaces();
+      if (interfaces.length === 0) {
+        logger.warn('No network interfaces available - UPnP discovery will start but may have limited functionality');
+      }
+
       await this.startListening();
-      await this.performMSearch();
-      
-      // Periodically search for cameras every 60 seconds
-      this.schedulePeriodicSearch();
-      
+
+      // Only perform M-SEARCH if we have interfaces or if socket binding succeeded
+      if (this.isListening) {
+        await this.performMSearch();
+
+        // Periodically search for cameras every 60 seconds
+        this.schedulePeriodicSearch();
+      }
+
       logger.info('UPnP discovery started successfully');
       return true;
     } catch (error) {
       logger.error('Failed to start UPnP discovery:', error);
+
+      // Clean up if startup failed
+      if (this.socket) {
+        try {
+          this.socket.close();
+        } catch (closeError) {
+          logger.debug('Error closing socket during cleanup:', closeError.message);
+        }
+        this.socket = null;
+        this.isListening = false;
+      }
+
       return false;
     }
   }
@@ -117,25 +139,44 @@ export class UPnPDiscovery extends EventEmitter {
   joinMulticastOnInterfaces() {
     const interfaces = this.getAvailableInterfaces();
     logger.debug('Available network interfaces:', interfaces.map(i => `${i.name}:${i.address}`));
-    
+
+    let joinedCount = 0;
+
     for (const iface of interfaces) {
       try {
         this.socket.addMembership(this.MULTICAST_ADDRESS, iface.address);
         logger.info(`Joined multicast on interface ${iface.name} (${iface.address})`);
+        joinedCount++;
       } catch (error) {
-        logger.warn(`Failed to join multicast on interface ${iface.name} (${iface.address}):`, error.message);
+        // Only log as warning for specific interface failures
+        if (error.code === 'ENODEV' || error.code === 'EADDRNOTAVAIL') {
+          logger.warn(`Interface ${iface.name} (${iface.address}) not available for multicast: ${error.message}`);
+        } else {
+          logger.warn(`Failed to join multicast on interface ${iface.name} (${iface.address}):`, error.message);
+        }
       }
     }
-    
-    // If no specific interfaces worked, try default
-    if (interfaces.length === 0) {
+
+    // If no specific interfaces worked, try default (but don't throw on failure)
+    if (joinedCount === 0) {
       try {
         this.socket.addMembership(this.MULTICAST_ADDRESS);
-        logger.debug('Joined multicast on default interface');
+        logger.info('Joined multicast on default interface');
+        joinedCount++;
       } catch (error) {
-        logger.error('Failed to join multicast group:', error);
-        throw error;
+        // Don't throw - just log and continue with limited functionality
+        if (error.code === 'ENODEV') {
+          logger.warn('No network devices available for multicast - UPnP discovery will have limited functionality');
+        } else {
+          logger.warn('Failed to join multicast group on default interface:', error.message);
+        }
       }
+    }
+
+    if (joinedCount === 0) {
+      logger.warn('UPnP discovery: No multicast interfaces available - passive discovery only');
+    } else {
+      logger.info(`UPnP discovery: Successfully joined multicast on ${joinedCount} interface(s)`);
     }
   }
 
@@ -496,16 +537,43 @@ export class UPnPDiscovery extends EventEmitter {
    * Schedule periodic M-SEARCH to discover cameras
    */
   schedulePeriodicSearch() {
+    // Track consecutive failures for backoff
+    if (!this.searchFailureCount) {
+      this.searchFailureCount = 0;
+    }
+
     this.searchTimeout = setTimeout(async () => {
       try {
-        await this.performMSearch();
+        // Check if we have available interfaces before attempting search
+        const interfaces = this.getAvailableInterfaces();
+        if (interfaces.length === 0) {
+          logger.debug('No network interfaces available for periodic M-SEARCH, skipping...');
+          this.searchFailureCount++;
+        } else {
+          await this.performMSearch();
+          this.searchFailureCount = 0; // Reset on success
+        }
       } catch (error) {
-        logger.error('Periodic M-SEARCH failed:', error);
+        this.searchFailureCount++;
+
+        // Reduce log noise for repeated failures
+        if (this.searchFailureCount <= 3 || this.searchFailureCount % 10 === 0) {
+          logger.warn(`Periodic M-SEARCH failed (${this.searchFailureCount} times):`, error.message);
+        }
       }
-      
+
+      // Use exponential backoff for failed searches (up to 5 minutes max)
+      const baseInterval = 60000; // 60 seconds
+      const backoffMultiplier = Math.min(Math.pow(2, Math.min(this.searchFailureCount, 4)), 5); // Max 5x = 5 minutes
+      const nextInterval = baseInterval * backoffMultiplier;
+
+      if (this.searchFailureCount > 0) {
+        logger.debug(`Scheduling next M-SEARCH in ${nextInterval / 1000} seconds (backoff due to ${this.searchFailureCount} failures)`);
+      }
+
       // Schedule next search
       this.schedulePeriodicSearch();
-    }, 60000); // Every 60 seconds
+    }, this.searchFailureCount > 0 ? Math.min(60000 * Math.pow(2, Math.min(this.searchFailureCount, 4)), 300000) : 60000);
   }
 
   /**
@@ -527,29 +595,32 @@ export class UPnPDiscovery extends EventEmitter {
    */
   async stopDiscovery() {
     logger.info('Stopping UPnP discovery...');
-    
+
     if (this.searchTimeout) {
       clearTimeout(this.searchTimeout);
       this.searchTimeout = null;
     }
-    
+
     if (this.announceTimeout) {
       clearTimeout(this.announceTimeout);
       this.announceTimeout = null;
     }
-    
+
     if (this.socket && this.isListening) {
       try {
         this.socket.dropMembership(this.MULTICAST_ADDRESS);
       } catch (error) {
         logger.debug('Error dropping multicast membership:', error.message);
       }
-      
+
       this.socket.close();
       this.socket = null;
       this.isListening = false;
     }
-    
+
+    // Reset failure tracking
+    this.searchFailureCount = 0;
+
     this.discoveredDevices.clear();
     logger.info('UPnP discovery stopped');
   }
