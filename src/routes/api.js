@@ -844,6 +844,28 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
         res.status(500).json({ error: 'Failed to get camera' });
       }
     });
+
+    // Get last successful camera IP for UI pre-population
+    router.get('/discovery/last-ip', (req, res) => {
+      try {
+        const lastIP = discoveryManager.getLastSuccessfulIP();
+        res.json({ lastIP });
+      } catch (error) {
+        logger.error('Failed to get last camera IP:', error);
+        res.status(500).json({ error: 'Failed to get last camera IP' });
+      }
+    });
+
+    // Clear camera connection history
+    router.delete('/discovery/connection-history', async (req, res) => {
+      try {
+        await discoveryManager.clearConnectionHistory();
+        res.json({ success: true, message: 'Connection history cleared' });
+      } catch (error) {
+        logger.error('Failed to clear connection history:', error);
+        res.status(500).json({ error: 'Failed to clear connection history' });
+      }
+    });
   }
 
   // Error handling middleware for API routes

@@ -1,24 +1,36 @@
 import { EventEmitter } from 'events';
 import { CameraController } from './controller.js';
+import { CameraConnectionHistory } from './connection-history.js';
 import { logger } from '../utils/logger.js';
 
 export class CameraStateManager extends EventEmitter {
   constructor() {
     super();
-    
+
     // Camera state
     this.cameras = new Map(); // uuid -> camera data
     this.primaryCameraUuid = null;
     this.primaryController = null;
-    
+
     // Connection tracking
     this.lastKnownIPs = new Map(); // uuid -> last known IP
     this.connectionHistory = new Map(); // uuid -> connection events
-    
+
+    // Camera connection history for UI pre-population
+    this.cameraConnectionHistory = new CameraConnectionHistory();
+
     // State management
     this.isShuttingDown = false;
-    
+
     logger.info('CameraStateManager initialized');
+  }
+
+  /**
+   * Initialize the camera state manager
+   */
+  async initialize() {
+    await this.cameraConnectionHistory.initialize();
+    logger.info('CameraStateManager initialization complete');
   }
 
   /**
@@ -210,7 +222,10 @@ export class CameraStateManager extends EventEmitter {
         this.primaryController = controller;
         
         this.recordConnectionEvent(uuid, 'connected', cameraData.info.ipAddress);
-        
+
+        // Record successful connection in history for UI pre-population
+        await this.cameraConnectionHistory.recordConnection(cameraData.info.ipAddress);
+
         logger.info(`Camera ${uuid} connected successfully and set as primary`);
         this.emit('primaryCameraChanged', {
           uuid,
@@ -509,6 +524,21 @@ export class CameraStateManager extends EventEmitter {
       result[cameraUuid] = history;
     }
     return result;
+  }
+
+  /**
+   * Get the last successful camera IP for UI pre-population
+   * @returns {string|null} The last successful IP or null if none recorded
+   */
+  getLastSuccessfulIP() {
+    return this.cameraConnectionHistory.getLastIP();
+  }
+
+  /**
+   * Clear the camera connection history
+   */
+  async clearConnectionHistory() {
+    await this.cameraConnectionHistory.clearHistory();
   }
 
   /**

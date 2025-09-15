@@ -23,7 +23,6 @@ dotenv.config();
 const PORT = process.env.PORT || 3000;
 const CAMERA_IP = process.env.CAMERA_IP || '192.168.12.98';
 const CAMERA_PORT = process.env.CAMERA_PORT || '443';
-const USE_DISCOVERY = process.env.USE_DISCOVERY !== 'false'; // Enable discovery by default
 
 class CameraControlServer {
   constructor() {
@@ -32,15 +31,9 @@ class CameraControlServer {
     this.wss = new WebSocketServer({ server: this.server });
     
     // Initialize discovery manager (camera state is managed within it)
-    if (USE_DISCOVERY) {
-      this.discoveryManager = new DiscoveryManager();
-      this.fallbackStateManager = null;
-      this.setupDiscoveryHandlers();
-    } else {
-      // Fallback to hardcoded camera connection
-      this.discoveryManager = null;
-      this.fallbackStateManager = null; // Will be initialized in start()
-    }
+    // Discovery is always enabled with fallback to hardcoded IP
+    this.discoveryManager = new DiscoveryManager();
+    this.setupDiscoveryHandlers();
     
     this.powerManager = new PowerManager();
     this.networkManager = new NetworkStateManager();
@@ -262,37 +255,22 @@ class CameraControlServer {
 
   // Get current camera controller from appropriate source
   getCurrentCameraController() {
-    if (this.discoveryManager) {
-      return this.discoveryManager.getPrimaryCamera();
-    } else if (this.fallbackStateManager) {
-      return this.fallbackStateManager.getPrimaryController();
-    }
-    return null;
+    return this.discoveryManager.getPrimaryCamera();
   }
 
   async start() {
     try {
-      // Initialize camera connection or discovery
-      if (this.discoveryManager) {
-        // Start UPnP discovery
-        logger.info('Starting UPnP camera discovery...');
-        const discoveryStarted = await this.discoveryManager.startDiscovery();
-        if (!discoveryStarted) {
-          logger.warn('UPnP discovery failed to start - falling back to manual connection');
-          // Fallback to manual connection
-          try {
-            await this.discoveryManager.connectToIp(CAMERA_IP, CAMERA_PORT);
-          } catch (error) {
-            logger.warn('Fallback camera connection failed:', error.message);
-          }
-        }
-      } else {
-        // Initialize fallback state manager and connect to camera
-        const { CameraStateManager } = await import('./camera/state-manager.js');
-        this.fallbackStateManager = new CameraStateManager();
+      // Initialize discovery manager (including connection history)
+      await this.discoveryManager.initialize();
+
+      // Initialize camera discovery (always enabled)
+      logger.info('Starting UPnP camera discovery...');
+      const discoveryStarted = await this.discoveryManager.startDiscovery();
+      if (!discoveryStarted) {
+        logger.warn('UPnP discovery failed to start - falling back to manual connection');
+        // Fallback to manual connection
         try {
-          await this.fallbackStateManager.connectToIP(CAMERA_IP, CAMERA_PORT);
-          logger.info(`Connected to fallback camera at ${CAMERA_IP}:${CAMERA_PORT}`);
+          await this.discoveryManager.connectToIp(CAMERA_IP, CAMERA_PORT);
         } catch (error) {
           logger.warn('Fallback camera connection failed:', error.message);
         }
@@ -351,12 +329,7 @@ class CameraControlServer {
     });
     
     // Cleanup discovery, camera and power monitoring
-    if (this.discoveryManager) {
-      await this.discoveryManager.stopDiscovery();
-    }
-    if (this.fallbackStateManager) {
-      await this.fallbackStateManager.cleanup();
-    }
+    await this.discoveryManager.stopDiscovery();
     await this.powerManager.cleanup();
     await this.networkManager.cleanup();
     

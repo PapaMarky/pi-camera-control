@@ -47,6 +47,14 @@ export class DiscoveryManager extends EventEmitter {
   }
 
   /**
+   * Initialize discovery manager
+   */
+  async initialize() {
+    await this.cameraStateManager.initialize();
+    logger.info('DiscoveryManager initialized');
+  }
+
+  /**
    * Start camera discovery
    */
   async startDiscovery() {
@@ -321,5 +329,20 @@ export class DiscoveryManager extends EventEmitter {
       isDiscovering: this.isDiscovering,
       ...stateStatus
     };
+  }
+
+  /**
+   * Get the last successful camera IP for UI pre-population
+   * @returns {string|null} The last successful IP or null if none recorded
+   */
+  getLastSuccessfulIP() {
+    return this.cameraStateManager.getLastSuccessfulIP();
+  }
+
+  /**
+   * Clear the camera connection history
+   */
+  async clearConnectionHistory() {
+    return await this.cameraStateManager.clearConnectionHistory();
   }
 }
