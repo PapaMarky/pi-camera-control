@@ -142,18 +142,21 @@ class CameraControlApp {
   initializeUI() {
     // Set up keyboard shortcuts
     this.setupKeyboardShortcuts();
-    
+
     // Set up service worker for PWA (if available)
     this.registerServiceWorker();
-    
+
     // Set up visual feedback
     this.setupVisualFeedback();
-    
+
     // Set up responsive behavior
     this.setupResponsiveBehavior();
-    
+
     // Initialize tooltips and help text
     this.initializeTooltips();
+
+    // Initialize password toggle functionality
+    this.initializePasswordToggles();
   }
 
   setupKeyboardShortcuts() {
@@ -316,6 +319,47 @@ class CameraControlApp {
     if (this.currentTooltip) {
       this.currentTooltip.remove();
       this.currentTooltip = null;
+    }
+  }
+
+  initializePasswordToggles() {
+    // Find all password toggle buttons
+    const toggleButtons = document.querySelectorAll('.password-toggle-btn');
+
+    toggleButtons.forEach(button => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        this.togglePasswordVisibility(button);
+      });
+    });
+  }
+
+  togglePasswordVisibility(toggleButton) {
+    const targetId = toggleButton.getAttribute('data-target');
+    const passwordInput = document.getElementById(targetId);
+    const toggleIcon = toggleButton.querySelector('.toggle-icon');
+
+    if (!passwordInput || !toggleIcon) {
+      console.warn('Password toggle: target input or icon not found');
+      return;
+    }
+
+    const isPasswordVisible = passwordInput.type === 'text';
+
+    if (isPasswordVisible) {
+      // Hide password
+      passwordInput.type = 'password';
+      toggleIcon.textContent = '👁️';
+      toggleButton.classList.remove('password-visible');
+      toggleButton.setAttribute('title', 'Show password');
+      toggleButton.setAttribute('aria-label', 'Show password');
+    } else {
+      // Show password
+      passwordInput.type = 'text';
+      toggleIcon.textContent = '👁️‍🗨️';
+      toggleButton.classList.add('password-visible');
+      toggleButton.setAttribute('title', 'Hide password');
+      toggleButton.setAttribute('aria-label', 'Hide password');
     }
   }
 
