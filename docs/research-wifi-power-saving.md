@@ -324,7 +324,6 @@ The pi-camera-control system implements a sophisticated three-layer network mana
 - `disconnectWiFi()` → `nmcli device disconnect wlan0`
 - `verifyWiFiConnection()` → `nmcli -t -f NAME,TYPE,DEVICE con show --active`
 - `getSavedNetworks()` → `nmcli -t -f NAME,TYPE con show`
-- `removeSavedNetwork()` → `nmcli con delete "<connection_name>"`
 - `setWiFiCountry()` → `iw reg set <code>` + config file updates
 - `getWiFiCountry()` → `iw reg get`
 

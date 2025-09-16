@@ -859,11 +859,28 @@ export class NetworkServiceManager extends EventEmitter {
         if (line.trim() && (line.includes('wifi') || line.includes('wireless'))) {
           const parts = line.split(':');
           if (parts.length >= 2) {
-            networks.push({
-              name: parts[0],
-              type: parts[1],
-              method: 'NetworkManager'
-            });
+            const connectionName = parts[0];
+
+            // Get the actual SSID this connection targets
+            try {
+              const { stdout: ssidOutput } = await execAsync(`nmcli con show "${connectionName}" | grep "802-11-wireless.ssid"`);
+              const ssidMatch = ssidOutput.match(/802-11-wireless\.ssid:\s*(.+)/);
+              const targetSSID = ssidMatch ? ssidMatch[1].trim() : connectionName;
+
+              networks.push({
+                name: targetSSID, // Use target SSID for matching, not connection name
+                type: parts[1],
+                method: 'NetworkManager'
+              });
+            } catch (ssidError) {
+              // Fallback to connection name if we can't get SSID
+              logger.debug(`Failed to get SSID for connection ${connectionName}:`, ssidError.message);
+              networks.push({
+                name: connectionName,
+                type: parts[1],
+                method: 'NetworkManager'
+              });
+            }
           }
         }
       }
@@ -875,19 +892,6 @@ export class NetworkServiceManager extends EventEmitter {
     }
   }
 
-  /**
-   * Remove saved WiFi network (NetworkManager version)
-   */
-  async removeSavedNetwork(connectionName) {
-    try {
-      await execAsync(`nmcli con delete "${connectionName}"`);
-      logger.info(`Removed saved network connection: ${connectionName}`);
-      return { success: true };
-    } catch (error) {
-      logger.error(`Failed to remove saved network ${connectionName}:`, error);
-      throw error;
-    }
-  }
 
   /**
    * Verify WiFi connection to specific SSID

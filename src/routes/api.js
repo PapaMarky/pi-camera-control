@@ -637,17 +637,6 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Remove saved WiFi network - LOW-LEVEL SERVICE OPERATION
-    router.delete('/network/wifi/saved/:name', async (req, res) => {
-      try {
-        const { name } = req.params;
-        const result = await networkServiceManager.removeSavedNetwork(name);
-        res.json(result);
-      } catch (error) {
-        logger.error('Failed to remove saved network:', error);
-        res.status(500).json({ error: error.message });
-      }
-    });
 
     // Connect to WiFi network - LOW-LEVEL SERVICE OPERATION
     router.post('/network/wifi/connect', async (req, res) => {
