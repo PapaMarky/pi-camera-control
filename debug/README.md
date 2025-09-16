@@ -15,7 +15,7 @@ node debug-network.js
 **What it tests:**
 - Network interface status (wlan0, ap0)
 - Service status (hostapd, dnsmasq, wpa_supplicant)
-- wpa_cli connectivity
+- NetworkManager connectivity
 - Network mode script availability
 
 ### `fix-network.sh` 🚨 **Emergency Recovery**

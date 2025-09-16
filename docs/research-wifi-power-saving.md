@@ -320,13 +320,13 @@ The pi-camera-control system implements a sophisticated three-layer network mana
 - `enableIpForwarding()` → `echo 1 > /proc/sys/net/ipv4/ip_forward`
 - `ensureApInterface()` → `ip link show ap0`
 
-**wpa_cli (Legacy WiFi Client Management)**
-- `disconnectWiFi()` → `wpa_cli -i wlan0 disconnect`
-- `verifyWiFiConnection()` → `wpa_cli -i wlan0 status`
-- `getSavedNetworks()` → `wpa_cli -i wlan0 list_networks`
-- `removeSavedNetwork()` → `wpa_cli -i wlan0 remove_network <id>`, `wpa_cli -i wlan0 save_config`
-- `setWiFiCountry()` → `wpa_cli -i wlan0 set country <code>`, `wpa_cli -i wlan0 save_config`
-- `getWiFiCountry()` → `wpa_cli -i wlan0 get country`
+**NetworkManager (WiFi Client Management)**
+- `disconnectWiFi()` → `nmcli device disconnect wlan0`
+- `verifyWiFiConnection()` → `nmcli -t -f NAME,TYPE,DEVICE con show --active`
+- `getSavedNetworks()` → `nmcli -t -f NAME,TYPE con show`
+- `removeSavedNetwork()` → `nmcli con delete "<connection_name>"`
+- `setWiFiCountry()` → `iw reg set <code>` + config file updates
+- `getWiFiCountry()` → `iw reg get`
 
 **hostapd-related Tools**
 - `getAPSSID()` → `grep -E "^ssid=" /etc/hostapd/hostapd.conf`
@@ -350,7 +350,7 @@ The pi-camera-control system implements a sophisticated three-layer network mana
 
 **System Commands Required**
 - **Critical**: `systemctl`, `ip`, `nmcli`
-- **Important**: `iw`, `wpa_cli`, `hostapd_cli`
+- **Important**: `iw`, `hostapd_cli`
 - **Utility**: `grep`, `arp`, `iwconfig`, `cat`, `echo`
 
 #### Power Management Implications

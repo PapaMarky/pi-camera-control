@@ -79,7 +79,7 @@ export class NetworkServiceManager extends EventEmitter {
    */
   async checkSystemCapabilities() {
     const criticalCommands = ['systemctl', 'ip'];
-    const optionalCommands = ['iw', 'wpa_cli'];
+    const optionalCommands = ['iw', 'nmcli'];
     
     // Check critical commands
     for (const cmd of criticalCommands) {
@@ -626,50 +626,6 @@ export class NetworkServiceManager extends EventEmitter {
     return networks.sort((a, b) => b.signal - a.signal);
   }
 
-  /**
-   * Parse wpa_cli scan_results output into network list
-   */
-  parseWpaCliScan(scanOutput) {
-    const networks = [];
-    const lines = scanOutput.split('\n');
-    
-    for (const line of lines) {
-      if (!line.trim() || line.includes('bssid')) continue;
-      
-      try {
-        // wpa_cli format: bssid / frequency / signal level / flags / ssid
-        const parts = line.trim().split('\t');
-        if (parts.length >= 5) {
-          const [bssid, frequency, signal, flags, ssid] = parts;
-          
-          if (ssid && ssid.length > 0) {
-            const network = {
-              ssid: ssid,
-              bssid: bssid,
-              frequency: parseInt(frequency),
-              signal: parseInt(signal),
-              band: frequency.startsWith('24') ? '2.4GHz' : '5GHz'
-            };
-            
-            // Parse security
-            network.security = [];
-            if (flags.includes('WPA2')) network.security.push('WPA2');
-            if (flags.includes('WPA3')) network.security.push('WPA3');
-            if (flags.includes('WPA')) network.security.push('WPA');
-            if (flags.includes('WEP')) network.security.push('WEP');
-            if (network.security.length === 0) network.security.push('Open');
-            
-            networks.push(network);
-          }
-        }
-      } catch (error) {
-        logger.debug('Failed to parse wpa_cli scan line:', error.message);
-      }
-    }
-    
-    // Sort by signal strength (strongest first)
-    return networks.sort((a, b) => (b.signal || -100) - (a.signal || -100));
-  }
   
   /**
    * Parse iw scan output into network list
@@ -963,33 +919,11 @@ export class NetworkServiceManager extends EventEmitter {
         logger.debug('iw link check failed:', error.message);
       }
 
-      // Fallback to wpa_cli status
+      // Fallback to NetworkManager
       try {
-        const { stdout } = await execAsync('wpa_cli -i wlan0 status');
-        const lines = stdout.split('\n');
-        let currentSSID = null;
-        let wpaState = null;
-
-        for (const line of lines) {
-          if (line.startsWith('ssid=')) {
-            currentSSID = line.split('=')[1];
-          }
-          if (line.startsWith('wpa_state=')) {
-            wpaState = line.split('=')[1];
-          }
-        }
-
-        const connected = currentSSID === expectedSSID && wpaState === 'COMPLETED';
-
-        return {
-          connected,
-          currentSSID,
-          expectedSSID,
-          wpaState,
-          method: 'wpa_cli'
-        };
+        return await this.verifyWiFiConnectionNM(expectedSSID);
       } catch (error) {
-        logger.debug('wpa_cli status check failed:', error.message);
+        logger.debug('NetworkManager status check failed:', error.message);
       }
 
       return {
@@ -1126,7 +1060,7 @@ export class NetworkServiceManager extends EventEmitter {
             state: isConnected ? 'CONNECTED' : 'DISCONNECTED'
           };
         } catch (iwconfigError) {
-          logger.error('Failed to get WiFi status via iw, wpa_cli, and iwconfig:', error.message, fallbackError.message, iwconfigError.message);
+          logger.error('Failed to get WiFi status via iw, NetworkManager, and iwconfig:', error.message, fallbackError.message, iwconfigError.message);
           return {
             connected: false,
             ssid: null,
@@ -1188,9 +1122,13 @@ export class NetworkServiceManager extends EventEmitter {
    */
   async setWiFiCountry(countryCode) {
     try {
-      // Set country in wpa_supplicant
-      await execAsync(`wpa_cli -i wlan0 set country ${countryCode}`);
-      await execAsync('wpa_cli -i wlan0 save_config');
+      // Set country using iw (NetworkManager will inherit this setting)
+      try {
+        await execAsync(`iw reg set ${countryCode}`);
+        logger.info(`Set regulatory domain to ${countryCode}`);
+      } catch (iwError) {
+        logger.warn('Failed to set regulatory domain with iw:', iwError.message);
+      }
 
       // Also set in /etc/wpa_supplicant/wpa_supplicant.conf if file exists
       try {
@@ -1228,15 +1166,15 @@ export class NetworkServiceManager extends EventEmitter {
    */
   async getWiFiCountry() {
     try {
-      // Try to get from wpa_cli first
+      // Try to get from iw regulatory domain first
       try {
-        const { stdout } = await execAsync('wpa_cli -i wlan0 get country');
-        const country = stdout.trim();
-        if (country && country !== 'FAIL' && country.length === 2) {
-          return { country: country.toUpperCase() };
+        const { stdout } = await execAsync('iw reg get');
+        const match = stdout.match(/country\s+(\w+):/);
+        if (match) {
+          return { country: match[1].toUpperCase() };
         }
-      } catch (cliError) {
-        logger.debug('wpa_cli get country failed:', cliError.message);
+      } catch (iwError) {
+        logger.debug('iw reg get failed:', iwError.message);
       }
 
       // Fallback: check wpa_supplicant.conf
