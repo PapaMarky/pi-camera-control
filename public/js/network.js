@@ -11,6 +11,11 @@ class NetworkUI {
             lastChecked: null,
             cacheTimeout: 30000 // 30 seconds
         };
+        this.wifiState = {
+            enabled: false,
+            connected: false,
+            network: null
+        };
         this.init();
     }
 
@@ -18,21 +23,17 @@ class NetworkUI {
         this.bindEvents();
         this.bindModals();
         this.setupWebSocketListeners();
+        this.checkWiFiStatus();
     }
 
     bindEvents() {
-        // Network mode switching
-        document.getElementById('switch-network-mode-btn')?.addEventListener('click', () => {
-            this.handleModeSwitch();
-        });
-
         // WiFi operations
         document.getElementById('scan-wifi-btn')?.addEventListener('click', () => {
             this.scanWiFiNetworks();
         });
 
-        document.getElementById('disconnect-wifi-btn')?.addEventListener('click', () => {
-            this.disconnectWiFi();
+        document.getElementById('wifi-toggle-btn')?.addEventListener('click', () => {
+            this.handleWiFiToggle();
         });
 
         // Access Point configuration
@@ -116,8 +117,12 @@ class NetworkUI {
     setupWebSocketListeners() {
         // Listen for network-related WebSocket responses
         if (this.ws && this.ws.on) {
-            this.ws.on('network_mode_result', (data) => {
-                this.handleNetworkModeResult(data);
+            this.ws.on('wifi_enable_result', (data) => {
+                this.handleWiFiEnableResult(data);
+            });
+
+            this.ws.on('wifi_disable_result', (data) => {
+                this.handleWiFiDisableResult(data);
             });
 
             this.ws.on('network_scan_result', (data) => {
@@ -134,20 +139,67 @@ class NetworkUI {
         }
     }
 
-    handleNetworkModeResult(data) {
-        this.setButtonLoading('switch-network-mode-btn', false);
-        
+    handleWiFiEnableResult(data) {
+        this.setButtonLoading('wifi-toggle-btn', false);
+
         if (data.success) {
-            this.showToast(`Switched to ${data.mode} mode`, 'success');
-            // Update the network status with the new data
-            if (data.status) {
-                this.updateNetworkStatus({
-                    mode: data.mode,
-                    interfaces: data.status
-                });
-            }
+            this.showToast('WiFi enabled successfully', 'success');
+            this.wifiState.enabled = true;
+            this.updateWiFiToggleButton();
+
+            // Force refresh of all network status after a brief delay
+            setTimeout(() => {
+                this.checkWiFiStatus();
+                // Request updated network status from server
+                if (this.ws && this.ws.send) {
+                    this.ws.send('get_status');
+                }
+
+                // Auto-open WiFi networks list to help user connect
+                // Add extra delay to let NetworkManager fully initialize saved connections
+                setTimeout(() => {
+                    try {
+                        this.scanWiFiNetworks();
+                    } catch (scanError) {
+                        console.error('Auto-scan failed, but WiFi enable succeeded:', scanError);
+                    }
+                }, 1000);
+            }, 1000);
         } else {
-            this.showToast(`Mode switch failed: ${data.error || 'Unknown error'}`, 'error');
+            this.showToast(`WiFi enable failed: ${data.error || 'Unknown error'}`, 'error');
+        }
+    }
+
+    handleWiFiDisableResult(data) {
+        this.setButtonLoading('wifi-toggle-btn', false);
+
+        if (data.success) {
+            this.showToast('WiFi turned off successfully', 'success');
+            this.wifiState.enabled = false;
+            this.wifiState.connected = false;
+            this.wifiState.network = null;
+            this.updateWiFiToggleButton();
+
+            // Close SSID list when WiFi is turned off
+            const networksContainer = document.getElementById('wifi-networks');
+            if (networksContainer) {
+                networksContainer.style.display = 'none';
+                console.log('SSID list hidden after WiFi turned off');
+            }
+
+            // Update WiFi status display when disabled
+            this.updateWiFiStatus({ active: false, network: null, ip: null });
+
+            // Force refresh of all network status after a brief delay
+            setTimeout(() => {
+                this.checkWiFiStatus();
+                // Request updated network status from server
+                if (this.ws && this.ws.send) {
+                    this.ws.send('get_status');
+                }
+            }, 1000);
+        } else {
+            this.showToast(`WiFi disable failed: ${data.error || 'Unknown error'}`, 'error');
         }
     }
 
@@ -167,6 +219,8 @@ class NetworkUI {
     }
 
     handleNetworkConnectResult(data) {
+        console.log('handleNetworkConnectResult called with:', data);
+
         if (data.success) {
             this.showToast(`Connected to ${data.network || 'network'}`, 'success');
 
@@ -176,16 +230,49 @@ class NetworkUI {
                 networksContainer.style.display = 'none';
                 console.log('WiFi networks list hidden after successful connection');
             }
+
+            // Update WiFi state and button after successful connection
+            this.wifiState.connected = true;
+            this.wifiState.network = data.network;
+            this.updateWiFiToggleButton();
+
+            console.log('Setting timeout for network status refresh...');
+            // Force refresh of all network status after a brief delay
+            setTimeout(() => {
+                console.log('Timeout fired! Refreshing network status after successful connection...');
+                this.checkWiFiStatus();
+                // Fetch updated network status to update display fields
+                this.fetchNetworkStatus();
+                // Request updated network status from server via WebSocket
+                if (this.ws && this.ws.send) {
+                    this.ws.send('get_status');
+                }
+            }, 2000); // Increased delay to 2 seconds
         } else {
             this.showToast(`Connection failed: ${data.error || 'Unknown error'}`, 'error');
         }
     }
 
     handleNetworkDisconnectResult(data) {
-        this.setButtonLoading('disconnect-wifi-btn', false);
-        
+        this.setButtonLoading('wifi-toggle-btn', false);
+
         if (data.success) {
             this.showToast('Disconnected from WiFi', 'success');
+            this.wifiState.connected = false;
+            this.wifiState.network = null;
+            this.updateWiFiToggleButton();
+
+            // Update WiFi status display when disconnected
+            this.updateWiFiStatus({ active: false, network: null, ip: null });
+
+            // Force refresh of all network status after a brief delay
+            setTimeout(() => {
+                this.checkWiFiStatus();
+                // Request updated network status from server
+                if (this.ws && this.ws.send) {
+                    this.ws.send('get_status');
+                }
+            }, 1000);
         } else {
             this.showToast(`Disconnection failed: ${data.error || 'Unknown error'}`, 'error');
         }
@@ -194,47 +281,39 @@ class NetworkUI {
     updateNetworkStatus(networkData) {
         if (!networkData) return;
 
-        const { mode, interfaces, services } = networkData;
-
-
-        // Update network mode indicators
-        this.updateNetworkMode(mode);
+        const { interfaces, services } = networkData;
 
         // Update WiFi status
         this.updateWiFiStatus(interfaces?.wlan0);
 
         // Update Access Point status
         this.updateAccessPointStatus(interfaces?.ap0);
-
-        // Update UI state based on current status
-        this.updateUIState(networkData);
     }
 
-    updateNetworkMode(mode) {
-        const modeElement = document.getElementById('network-mode');
-        if (modeElement) {
-            modeElement.textContent = mode ? mode.charAt(0).toUpperCase() + mode.slice(1) : '-';
-        }
-
-        // Update radio buttons in network settings
-        const fieldRadio = document.getElementById('field-mode-radio');
-        const devRadio = document.getElementById('development-mode-radio');
-        
-        if (fieldRadio && devRadio) {
-            fieldRadio.checked = (mode === 'field');
-            devRadio.checked = (mode === 'development');
-        }
-    }
 
     updateWiFiStatus(wifiData) {
+        console.log('updateWiFiStatus called with:', wifiData);
         const statusElement = document.getElementById('wifi-connection-status');
         const networkElement = document.getElementById('current-wifi-network');
         const ipElement = document.getElementById('wifi-ip-address');
         const headerStatusElement = document.getElementById('wifi-status-text');
+        const wifiStatusElement = document.getElementById('wifi-status');
+
+        console.log('DOM elements found:', {
+            statusElement: !!statusElement,
+            networkElement: !!networkElement,
+            ipElement: !!ipElement,
+            headerStatusElement: !!headerStatusElement
+        });
 
         if (wifiData) {
             const { active, network, ip } = wifiData;
-            
+            console.log('Processing WiFi data:', { active, network, ip });
+
+            // Update our internal state
+            this.wifiState.connected = active || false;
+            this.wifiState.network = network || null;
+
             // Show network name in status if connected
             let status;
             if (active && network) {
@@ -244,20 +323,32 @@ class NetworkUI {
             } else {
                 status = 'Disconnected';
             }
-            
+
             const networkName = network || 'Unknown';
-            const ipAddress = ip || '-';
+            // Strip subnet mask from IP address (e.g., "192.168.1.100/24" -> "192.168.1.100")
+            const ipAddress = ip ? ip.split('/')[0] : '-';
+
+            console.log('Updating display with:', { status, networkName, ipAddress });
 
             if (statusElement) statusElement.textContent = status;
-            if (networkElement) networkElement.textContent = active ? networkName : 'Not connected';
-            if (ipElement) ipElement.textContent = ipAddress;
+            if (networkElement) {
+                const displayText = active ? networkName : 'Not connected';
+                networkElement.textContent = displayText;
+                console.log('Updated network element to:', displayText);
+            }
+            if (ipElement) {
+                ipElement.textContent = ipAddress;
+                console.log('Updated IP element to:', ipAddress);
+            }
             if (headerStatusElement) headerStatusElement.textContent = active ? '✓' : '✗';
 
-            // Update disconnect button state
-            const disconnectBtn = document.getElementById('disconnect-wifi-btn');
-            if (disconnectBtn) {
-                disconnectBtn.disabled = !active;
-            }
+            // Update WiFi Status field - this will be set by checkWiFiStatus()
+            // Don't set it here as we need to check the actual enabled state from API
+
+            // Also check WiFi enabled state when updating status
+            this.checkWiFiStatus();
+        } else {
+            console.log('No WiFi data provided to updateWiFiStatus');
         }
     }
 
@@ -291,62 +382,122 @@ class NetworkUI {
         }
     }
 
-    updateUIState(networkData) {
-        // Enable/disable WiFi section based on mode
-        const wifiSection = document.getElementById('wifi-client-section');
-        // WiFi controls should be enabled in both 'development' and 'field' modes
-        // (wifi-only mode should not exist - camera controller always has AP)
-        const wifiControlsEnabled = networkData.mode === 'development' || networkData.mode === 'field';
+    async enableWiFi() {
+        this.setButtonLoading('wifi-toggle-btn', true);
+        this.showToast('Enabling WiFi...', 'info');
 
-        if (wifiSection) {
-            wifiSection.style.opacity = wifiControlsEnabled ? '1' : '0.6';
-            const buttons = wifiSection.querySelectorAll('button');
-            buttons.forEach(btn => {
-                if (wifiControlsEnabled) {
-                    btn.removeAttribute('disabled');
-                } else {
-                    btn.setAttribute('disabled', 'true');
-                }
-            });
+        try {
+            const response = await fetch('/api/network/wifi/enable', { method: 'POST' });
+            const data = await response.json();
+            this.handleWiFiEnableResult(data);
+        } catch (error) {
+            console.error('WiFi enable failed:', error);
+            this.showToast('Failed to enable WiFi', 'error');
+            this.setButtonLoading('wifi-toggle-btn', false);
         }
     }
 
-    handleModeSwitch() {
-        // Immediately disable the button to prevent double-clicks
-        const switchButton = document.getElementById('switch-network-mode-btn');
-        if (switchButton && switchButton.disabled) {
-            console.debug('Network mode switch already in progress, ignoring click');
-            return;
+    async disableWiFi() {
+        this.setButtonLoading('wifi-toggle-btn', true);
+        this.showToast('Turning off WiFi...', 'info');
+
+        try {
+            const response = await fetch('/api/network/wifi/disable', { method: 'POST' });
+            const data = await response.json();
+            this.handleWiFiDisableResult(data);
+        } catch (error) {
+            console.error('WiFi disable failed:', error);
+            this.showToast('Failed to disable WiFi', 'error');
+            this.setButtonLoading('wifi-toggle-btn', false);
         }
+    }
 
-        const fieldRadio = document.getElementById('field-mode-radio');
-        const devRadio = document.getElementById('development-mode-radio');
+    async checkWiFiStatus() {
+        try {
+            const response = await fetch('/api/network/wifi/enabled');
+            const data = await response.json();
 
-        let selectedMode = null;
-        if (fieldRadio?.checked) selectedMode = 'field';
-        if (devRadio?.checked) selectedMode = 'development';
+            if (data.enabled !== undefined) {
+                this.wifiState.enabled = data.enabled;
+                this.updateWiFiToggleButton();
 
-        if (!selectedMode) {
-            this.showToast('Please select a network mode', 'error');
-            return;
+                // Update Status field
+                const wifiStatusElement = document.getElementById('wifi-status');
+                if (wifiStatusElement) {
+                    wifiStatusElement.textContent = data.enabled ? 'On' : 'Off';
+                }
+
+                // Update Switch Network button state
+                const scanWiFiBtn = document.getElementById('scan-wifi-btn');
+                if (scanWiFiBtn) {
+                    scanWiFiBtn.disabled = !data.enabled;
+                    scanWiFiBtn.style.opacity = data.enabled ? '1' : '0.5';
+                }
+            }
+        } catch (error) {
+            console.error('Failed to check WiFi status:', error);
+            // Default to checking... state
         }
+    }
 
-        // Immediately set loading state to prevent double-clicks
-        this.setButtonLoading('switch-network-mode-btn', true);
-        this.showToast(`Switching to ${selectedMode} mode...`, 'info');
+    async fetchNetworkStatus() {
+        try {
+            console.log('Fetching network status...');
+            const response = await fetch('/api/network/status');
+            const data = await response.json();
 
-        // Send WebSocket message for network mode switch
-        const success = this.ws.send('network_mode_switch', { mode: selectedMode });
-
-        if (!success) {
-            this.showToast('Failed to send network mode switch request', 'error');
-            this.setButtonLoading('switch-network-mode-btn', false);
+            console.log('Network status response:', data);
+            if (data && data.interfaces && data.interfaces.wlan0) {
+                console.log('Updating WiFi status with:', data.interfaces.wlan0);
+                // Update WiFi connection info (Current Network, IP Address)
+                this.updateWiFiStatus(data.interfaces.wlan0);
+            } else {
+                console.log('No wlan0 interface data found in response');
+            }
+        } catch (error) {
+            console.error('Failed to fetch network status:', error);
         }
+    }
 
-        // Reset button after 10 seconds (in case we don't get a response)
-        setTimeout(() => {
-            this.setButtonLoading('switch-network-mode-btn', false);
-        }, 10000);
+    handleWiFiToggle() {
+        const toggleBtn = document.getElementById('wifi-toggle-btn');
+        if (toggleBtn?.disabled) return;
+
+        if (this.wifiState.enabled) {
+            // If WiFi is enabled (whether connected or not), disable it
+            this.disableWiFi();
+        } else {
+            // If disabled, enable WiFi
+            this.enableWiFi();
+        }
+    }
+
+    updateWiFiToggleButton() {
+        const toggleBtn = document.getElementById('wifi-toggle-btn');
+        const toggleIcon = document.getElementById('wifi-toggle-icon');
+        const toggleText = document.getElementById('wifi-toggle-text');
+
+        if (!toggleBtn || !toggleIcon || !toggleText) return;
+
+        if (!this.wifiState.enabled) {
+            // WiFi is disabled
+            toggleBtn.className = 'secondary-btn';
+            toggleBtn.disabled = false;
+            toggleIcon.textContent = '🛜';
+            toggleText.textContent = 'Enable WiFi';
+        } else if (this.wifiState.connected) {
+            // WiFi is enabled and connected
+            toggleBtn.className = 'danger-btn';
+            toggleBtn.disabled = false;
+            toggleIcon.textContent = '❌';
+            toggleText.textContent = 'Turn Off WiFi';
+        } else {
+            // WiFi is enabled but not connected
+            toggleBtn.className = 'danger-btn';
+            toggleBtn.disabled = false;
+            toggleIcon.textContent = '📵';
+            toggleText.textContent = 'Turn Off WiFi';
+        }
     }
 
     async scanWiFiNetworks(forceRefresh = false) {
@@ -399,6 +550,15 @@ class NetworkUI {
             return cache.isViaWiFi;
         }
 
+        // First check if we're accessing via the AP IP (192.168.4.1)
+        const hostname = window.location.hostname;
+        if (hostname === '192.168.4.1') {
+            cache.isViaWiFi = false;
+            cache.lastChecked = now;
+            console.debug('Client connected via AP (hostname check):', { hostname, isViaWiFi: false });
+            return false;
+        }
+
         // Get client IP from various sources
         const clientIP = await this.getClientIP();
 
@@ -407,9 +567,12 @@ class NetworkUI {
         cache.lastChecked = now;
 
         if (!clientIP) {
-            // If we can't determine IP, assume WiFi connection for safety
-            cache.isViaWiFi = true;
-            return true;
+            // If we can't determine IP, check hostname as fallback
+            // If hostname is AP IP, assume AP connection; otherwise assume WiFi
+            const isViaWiFi = hostname !== '192.168.4.1';
+            cache.isViaWiFi = isViaWiFi;
+            console.debug('Client connection fallback (no IP detected):', { hostname, isViaWiFi });
+            return isViaWiFi;
         }
 
         // Access Point subnet is 192.168.4.x
@@ -421,7 +584,7 @@ class NetworkUI {
         // Cache the result
         cache.isViaWiFi = isViaWiFi;
 
-        console.debug('Client connection detected:', { ip: clientIP, isViaWiFi });
+        console.debug('Client connection detected:', { ip: clientIP, hostname, isViaWiFi });
         return isViaWiFi;
     }
 
@@ -468,10 +631,31 @@ class NetworkUI {
         });
     }
 
-    displayWiFiNetworks(networks) {
+    async displayWiFiNetworks(networks) {
         console.log('displayWiFiNetworks called with:', networks);
         const networksContainer = document.getElementById('wifi-networks');
         const networksList = document.getElementById('networks-list');
+
+        // Fetch saved networks to show which ones have stored passwords
+        let savedNetworks = [];
+        console.log('Starting saved networks fetch process...');
+        try {
+            console.log('Fetching saved networks...');
+            const response = await fetch('/api/network/wifi/saved');
+            console.log('Saved networks response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log('Saved networks response data:', JSON.stringify(data, null, 2));
+            savedNetworks = data.networks || [];
+            console.log('Parsed saved networks:', JSON.stringify(savedNetworks, null, 2));
+        } catch (error) {
+            console.error('Failed to fetch saved networks:', error);
+            console.error('Error details:', error.message);
+        }
 
         if (!networksContainer || !networksList) {
             console.error('Missing WiFi networks container elements');
@@ -533,7 +717,9 @@ class NetworkUI {
 
         // Create network items
         filteredNetworks.forEach(network => {
-            const networkItem = this.createNetworkItem(network);
+            const isSaved = savedNetworks.some(saved => saved.name === network.ssid);
+            console.log(`Creating network item for: ${network.ssid} isSaved: ${isSaved}`);
+            const networkItem = this.createNetworkItem(network, isSaved);
             networksList.appendChild(networkItem);
         });
 
@@ -543,14 +729,17 @@ class NetworkUI {
         networksContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    createNetworkItem(network) {
+    createNetworkItem(network, isSaved = false) {
         const item = document.createElement('div');
         item.className = 'network-item';
 
-        console.log('Creating network item for:', network); // Debug log
+        console.log('Creating network item for:', network, 'isSaved:', isSaved); // Debug log
 
         // Security icon - only show lock for secured networks
         const securityIcon = network.security === 'Open' ? ' ' : '🔒';
+
+        // Saved network indicator
+        const savedIndicator = isSaved ? ' ⭐' : '';
 
         // Signal strength - convert dBm to percentage
         let signalStrength = 0;
@@ -570,37 +759,35 @@ class NetworkUI {
             qualityText = `${signalStrength}%`;
         }
 
-        const signalBars = this.getSignalBars(signalStrength);
-
         item.innerHTML = `
             <div class="network-info">
-                <div class="network-name">${network.ssid}</div>
+                <div class="network-name">${network.ssid}${savedIndicator}</div>
                 <div class="network-details">
                     <span class="network-security">${securityIcon} ${network.security}</span>
-                    <span class="network-signal">${signalBars} ${qualityText}</span>
+                    <span class="network-signal">${qualityText}</span>
                 </div>
             </div>
-            <button class="connect-btn" data-ssid="${network.ssid}">Connect</button>
+            <button class="connect-btn" data-ssid="${network.ssid}">${isSaved && network.security !== 'Open' ? 'Connect ⭐' : 'Connect'}</button>
         `;
 
         // Add click handler for connect button
         const connectBtn = item.querySelector('.connect-btn');
         connectBtn.addEventListener('click', () => {
-            this.showWiFiModal(network);
+            this.showWiFiModal(network, isSaved);
         });
 
         return item;
     }
 
     getSignalBars(quality) {
-        if (quality >= 80) return '▁▂▃▄▅';
-        if (quality >= 60) return '▁▂▃▄_';
-        if (quality >= 40) return '▁▂▃__';
-        if (quality >= 20) return '▁▂___';
-        return '▁____';
+        if (quality >= 80) return '▏▎▍▌▋';
+        if (quality >= 60) return '▏▎▍▌░';
+        if (quality >= 40) return '▏▎▍░░';
+        if (quality >= 20) return '▏▎░░░';
+        return '▏░░░░';
     }
 
-    showWiFiModal(network) {
+    showWiFiModal(network, isSaved = false) {
         const modal = document.getElementById('wifi-connect-modal');
         const ssidInput = document.getElementById('wifi-ssid-input');
         const passwordInput = document.getElementById('wifi-password-input');
@@ -610,6 +797,15 @@ class NetworkUI {
             ssidInput.value = network.ssid;
             passwordInput.value = '';
             priorityInput.value = '1';
+
+            // Show helpful text for saved networks
+            if (isSaved && network.security !== 'Open') {
+                passwordInput.placeholder = 'Enter if changed';
+                passwordInput.style.borderColor = '#28a745';
+            } else {
+                passwordInput.placeholder = 'Enter WiFi password';
+                passwordInput.style.borderColor = '';
+            }
             
             // Hide password field for open networks
             const passwordGroup = passwordInput.parentElement;
@@ -712,17 +908,17 @@ class NetworkUI {
 
     disconnectWiFi() {
         this.showToast('Disconnecting from WiFi...', 'info');
-        this.setButtonLoading('disconnect-wifi-btn', true);
+        this.setButtonLoading('wifi-toggle-btn', true);
 
         const success = this.ws.send('network_disconnect');
-        
+
         if (!success) {
             this.showToast('Failed to send disconnect request', 'error');
-            this.setButtonLoading('disconnect-wifi-btn', false);
+            this.setButtonLoading('wifi-toggle-btn', false);
         } else {
             // Reset button after 5 seconds if no response
             setTimeout(() => {
-                this.setButtonLoading('disconnect-wifi-btn', false);
+                this.setButtonLoading('wifi-toggle-btn', false);
             }, 5000);
         }
     }

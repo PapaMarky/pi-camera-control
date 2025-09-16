@@ -613,22 +613,6 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Switch network mode (field/development) - HIGH-LEVEL STATE OPERATION
-    router.post('/network/mode', async (req, res) => {
-      try {
-        const { mode } = req.body;
-
-        if (!mode || !['field', 'development'].includes(mode)) {
-          return res.status(400).json({ error: 'Invalid mode. Must be "field" or "development"' });
-        }
-
-        const result = await networkStateManager.switchMode(mode);
-        res.json(result);
-      } catch (error) {
-        logger.error('Failed to switch network mode:', error);
-        res.status(500).json({ error: error.message });
-      }
-    });
 
     // Scan for WiFi networks - LOW-LEVEL SERVICE OPERATION
     router.get('/network/wifi/scan', async (req, res) => {
@@ -649,6 +633,18 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
         res.json({ networks });
       } catch (error) {
         logger.error('Failed to get saved networks:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Remove saved WiFi network - LOW-LEVEL SERVICE OPERATION
+    router.delete('/network/wifi/saved/:name', async (req, res) => {
+      try {
+        const { name } = req.params;
+        const result = await networkServiceManager.removeSavedNetwork(name);
+        res.json(result);
+      } catch (error) {
+        logger.error('Failed to remove saved network:', error);
         res.status(500).json({ error: error.message });
       }
     });
@@ -681,28 +677,6 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
-    // Get saved WiFi networks - LOW-LEVEL SERVICE OPERATION
-    router.get('/network/wifi/saved', async (req, res) => {
-      try {
-        const networks = await networkServiceManager.getSavedNetworks();
-        res.json({ networks });
-      } catch (error) {
-        logger.error('Failed to get saved WiFi networks:', error);
-        res.status(500).json({ error: error.message });
-      }
-    });
-
-    // Remove saved WiFi network - LOW-LEVEL SERVICE OPERATION
-    router.delete('/network/wifi/saved/:id', async (req, res) => {
-      try {
-        const { id } = req.params;
-        const result = await networkServiceManager.removeSavedNetwork(id);
-        res.json(result);
-      } catch (error) {
-        logger.error('Failed to remove saved network:', error);
-        res.status(500).json({ error: error.message });
-      }
-    });
 
     // Configure access point - HIGH-LEVEL STATE OPERATION (affects overall state)
     router.post('/network/accesspoint/configure', async (req, res) => {
@@ -762,6 +736,39 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
         res.json({ countries });
       } catch (error) {
         logger.error('Failed to get country codes:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Enable WiFi (wlan0) while keeping Access Point (ap0) active
+    router.post('/network/wifi/enable', async (req, res) => {
+      try {
+        const result = await networkServiceManager.enableWiFi();
+        res.json(result);
+      } catch (error) {
+        logger.error('Failed to enable WiFi:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Disable WiFi (wlan0) while keeping Access Point (ap0) active
+    router.post('/network/wifi/disable', async (req, res) => {
+      try {
+        const result = await networkServiceManager.disableWiFi();
+        res.json(result);
+      } catch (error) {
+        logger.error('Failed to disable WiFi:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Check if WiFi is enabled
+    router.get('/network/wifi/enabled', async (req, res) => {
+      try {
+        const status = await networkServiceManager.isWiFiEnabled();
+        res.json(status);
+      } catch (error) {
+        logger.error('Failed to check WiFi status:', error);
         res.status(500).json({ error: error.message });
       }
     });

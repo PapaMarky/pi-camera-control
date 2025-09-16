@@ -731,7 +731,24 @@ export class NetworkServiceManager extends EventEmitter {
     // Sort by signal strength (strongest first)
     return networks.sort((a, b) => (b.signal || -100) - (a.signal || -100));
   }
-  
+
+  /**
+   * Get saved WiFi connections from NetworkManager
+   */
+  async getSavedWiFiConnections() {
+    try {
+      const { stdout: connections } = await execAsync('nmcli -t -f NAME,TYPE con show');
+      const wifiConnections = connections.split('\n')
+        .filter(line => line.includes('802-11-wireless'))
+        .map(line => line.split(':')[0]);
+
+      return wifiConnections;
+    } catch (error) {
+      logger.error('Failed to get saved WiFi connections:', error);
+      return [];
+    }
+  }
+
   /**
    * Connect to WiFi network
    */
@@ -903,6 +920,20 @@ export class NetworkServiceManager extends EventEmitter {
   }
 
   /**
+   * Remove saved WiFi network (NetworkManager version)
+   */
+  async removeSavedNetwork(connectionName) {
+    try {
+      await execAsync(`nmcli con delete "${connectionName}"`);
+      logger.info(`Removed saved network connection: ${connectionName}`);
+      return { success: true };
+    } catch (error) {
+      logger.error(`Failed to remove saved network ${connectionName}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Verify WiFi connection to specific SSID
    */
   async verifyWiFiConnection(expectedSSID) {
@@ -986,14 +1017,15 @@ export class NetworkServiceManager extends EventEmitter {
   async disconnectWiFi() {
     try {
       logger.info('Disconnecting from WiFi...');
-      
-      await execAsync('wpa_cli -i wlan0 disconnect');
-      
+
+      // Use NetworkManager to disconnect from current WiFi network
+      await execAsync('nmcli device disconnect wlan0');
+
       logger.info('WiFi disconnected');
       this.emit('wifiDisconnected');
-      
+
       return { success: true };
-      
+
     } catch (error) {
       logger.error('Failed to disconnect WiFi:', error);
       throw error;
@@ -1150,56 +1182,6 @@ export class NetworkServiceManager extends EventEmitter {
     }
   }
 
-  /**
-   * Get saved WiFi networks from wpa_supplicant config
-   */
-  async getSavedNetworks() {
-    try {
-      const { stdout } = await execAsync('wpa_cli -i wlan0 list_networks');
-      const networks = [];
-      const lines = stdout.trim().split('\n');
-
-      for (let i = 1; i < lines.length; i++) { // Skip header line
-        const line = lines[i];
-        if (!line.trim()) continue;
-
-        const parts = line.split('\t');
-        if (parts.length >= 4) {
-          const [id, ssid, bssid, flags] = parts;
-          networks.push({
-            id: parseInt(id),
-            ssid: ssid.trim(),
-            bssid: bssid === 'any' ? null : bssid,
-            flags: flags.trim(),
-            enabled: !flags.includes('DISABLED'),
-            current: flags.includes('CURRENT')
-          });
-        }
-      }
-
-      return networks;
-    } catch (error) {
-      logger.warn('Failed to get saved networks:', error.message);
-      return [];
-    }
-  }
-
-  /**
-   * Remove saved WiFi network
-   */
-  async removeSavedNetwork(networkId) {
-    try {
-      await execAsync(`wpa_cli -i wlan0 remove_network ${networkId}`);
-      await execAsync('wpa_cli -i wlan0 save_config');
-
-      logger.info(`Removed saved network ${networkId}`);
-      return { success: true };
-
-    } catch (error) {
-      logger.error(`Failed to remove saved network ${networkId}:`, error);
-      throw error;
-    }
-  }
 
   /**
    * Set WiFi regulatory country
@@ -1315,6 +1297,95 @@ export class NetworkServiceManager extends EventEmitter {
       { code: 'SE', name: 'Sweden' },
       { code: 'US', name: 'United States' }
     ];
+  }
+
+  /**
+   * Enable WiFi (wlan0) while keeping Access Point (ap0) active
+   * Uses NetworkManager approach for selective interface management
+   */
+  async enableWiFi() {
+    try {
+      logger.info('Enabling WiFi interface (wlan0)...');
+
+      // Ensure wlan0 is managed by NetworkManager
+      await execAsync('nmcli device set wlan0 managed yes');
+
+      // Bring up the wlan0 interface
+      await execAsync('ip link set wlan0 up');
+
+      // Start NetworkManager WiFi services if not already running
+      const nmStatus = await this.getServiceState('NetworkManager');
+      if (!nmStatus.active) {
+        await this.startService('NetworkManager');
+      }
+
+      logger.info('WiFi interface enabled successfully');
+      this.emit('wifiEnabled');
+      return { success: true, message: 'WiFi enabled successfully' };
+
+    } catch (error) {
+      logger.error('Failed to enable WiFi:', error);
+      this.emit('wifiEnableFailed', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Disable WiFi (wlan0) while keeping Access Point (ap0) active
+   * Uses NetworkManager approach for selective interface management
+   */
+  async disableWiFi() {
+    try {
+      logger.info('Disabling WiFi interface (wlan0)...');
+
+      // First disconnect any active WiFi connections
+      try {
+        await this.disconnectWiFi();
+      } catch (error) {
+        logger.debug('No WiFi connection to disconnect:', error.message);
+      }
+
+      // Remove wlan0 from NetworkManager management
+      await execAsync('nmcli device set wlan0 managed no');
+
+      // Bring down the wlan0 interface
+      await execAsync('ip link set wlan0 down');
+
+      logger.info('WiFi interface disabled successfully');
+      this.emit('wifiDisabled');
+      return { success: true, message: 'WiFi disabled successfully' };
+
+    } catch (error) {
+      logger.error('Failed to disable WiFi:', error);
+      this.emit('wifiDisableFailed', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Check if WiFi (wlan0) is enabled
+   */
+  async isWiFiEnabled() {
+    try {
+      // Check if wlan0 is up (check for UP flag, not state)
+      const { stdout: linkStatus } = await execAsync('ip link show wlan0');
+      const isInterfaceUp = linkStatus.includes(',UP') || linkStatus.includes('<UP') || linkStatus.includes('UP>') || linkStatus.includes('UP,');
+
+      // Check if wlan0 is managed by NetworkManager (not unmanaged)
+      const { stdout: nmStatus } = await execAsync('nmcli device status');
+      const wlan0Line = nmStatus.split('\n').find(line => line.trim().startsWith('wlan0'));
+      const isManaged = wlan0Line && !wlan0Line.includes('unmanaged');
+
+      return {
+        enabled: isInterfaceUp && isManaged,
+        interfaceUp: isInterfaceUp,
+        managed: isManaged
+      };
+
+    } catch (error) {
+      logger.error('Failed to check WiFi status:', error);
+      return { enabled: false, interfaceUp: false, managed: false };
+    }
   }
 
   /**
