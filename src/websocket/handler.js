@@ -6,14 +6,10 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   
   // Set up network event listeners for real-time updates
   if (networkManager && networkManager.stateManager) {
-    networkManager.stateManager.on('modeChanged', (data) => {
-      broadcastNetworkEvent('network_mode_changed', data);
-    });
-    
     networkManager.stateManager.on('serviceStateChanged', (data) => {
       broadcastNetworkEvent('network_service_changed', data);
     });
-    
+
     networkManager.stateManager.on('interfaceStateChanged', (data) => {
       broadcastNetworkEvent('network_interface_changed', data);
     });
@@ -243,8 +239,12 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
           await handleNetworkDisconnect(ws);
           break;
           
-        case 'network_mode_switch':
-          await handleNetworkModeSwitch(ws, data);
+        case 'wifi_enable':
+          await handleWiFiEnable(ws);
+          break;
+
+        case 'wifi_disable':
+          await handleWiFiDisable(ws);
           break;
           
         case 'start_intervalometer_with_title':
@@ -479,27 +479,39 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
     }
   };
 
-  const handleNetworkModeSwitch = async (ws, data) => {
-    if (!networkManager) {
+  const handleWiFiEnable = async (ws) => {
+    if (!networkManager || !networkManager.serviceManager) {
       return sendError(ws, 'Network management not available');
     }
-    
-    try {
-      const { mode } = data;
-      
-      if (!mode || !['field', 'development'].includes(mode)) {
-        return sendError(ws, 'Invalid mode. Must be "field" or "development"');
-      }
 
-      const result = await networkManager.switchNetworkMode(mode);
-      sendResponse(ws, 'network_mode_result', result);
-      
+    try {
+      const result = await networkManager.serviceManager.enableWiFi();
+      sendResponse(ws, 'wifi_enable_result', result);
+
       // Broadcast network status change to all clients
-      setTimeout(() => broadcastStatus(), 3000);
-      
+      setTimeout(() => broadcastStatus(), 2000);
+
     } catch (error) {
-      logger.error('Network mode switch failed via WebSocket:', error);
-      sendError(ws, `Mode switch failed: ${error.message}`);
+      logger.error('WiFi enable failed via WebSocket:', error);
+      sendError(ws, `WiFi enable failed: ${error.message}`);
+    }
+  };
+
+  const handleWiFiDisable = async (ws) => {
+    if (!networkManager || !networkManager.serviceManager) {
+      return sendError(ws, 'Network management not available');
+    }
+
+    try {
+      const result = await networkManager.serviceManager.disableWiFi();
+      sendResponse(ws, 'wifi_disable_result', result);
+
+      // Broadcast network status change to all clients
+      setTimeout(() => broadcastStatus(), 2000);
+
+    } catch (error) {
+      logger.error('WiFi disable failed via WebSocket:', error);
+      sendError(ws, `WiFi disable failed: ${error.message}`);
     }
   };
 

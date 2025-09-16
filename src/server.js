@@ -296,7 +296,8 @@ class CameraControlServer {
       }
       
       // Start server (IPv4 only when IPv6 is disabled system-wide)
-      this.server.listen(PORT, () => {
+      // Bind to all interfaces (0.0.0.0) so server is accessible from both WiFi and AP networks
+      this.server.listen(PORT, '0.0.0.0', () => {
         const discoveryInfo = this.discoveryManager 
           ? `discovery enabled (fallback: ${CAMERA_IP}:${CAMERA_PORT})`
           : `direct connection: ${CAMERA_IP}:${CAMERA_PORT}`;

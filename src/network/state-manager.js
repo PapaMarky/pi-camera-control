@@ -17,7 +17,6 @@ export class NetworkStateManager extends EventEmitter {
     this.configManager = new NetworkConfigManager();
     
     // Current network state
-    this.currentMode = null; // 'field', 'development'
     this.networkState = {
       interfaces: new Map(), // ap0, wlan0 states
       services: new Map(),   // hostapd, dnsmasq, wpa_supplicant states
@@ -50,9 +49,6 @@ export class NetworkStateManager extends EventEmitter {
       await this.serviceManager.initialize();
       await this.configManager.initialize();
 
-      // Detect current network mode
-      await this.detectCurrentMode();
-
       // Ensure Access Point is always running (camera controller requirement)
       await this.ensureAccessPointRunning();
 
@@ -60,12 +56,11 @@ export class NetworkStateManager extends EventEmitter {
       this.startStatusMonitoring();
 
       logger.info('NetworkStateManager initialized successfully', {
-        mode: this.currentMode,
         interfaces: Object.fromEntries(this.networkState.interfaces),
         services: Object.fromEntries(this.networkState.services)
       });
 
-      this.emit('initialized', { mode: this.currentMode });
+      this.emit('initialized');
       return true;
 
     } catch (error) {
@@ -134,140 +129,7 @@ export class NetworkStateManager extends EventEmitter {
     });
   }
   
-  /**
-   * Detect current network mode based on active services and interfaces
-   */
-  async detectCurrentMode() {
-    try {
-      // Update current state
-      await this.updateNetworkState();
-      
-      const wlan0Active = this.networkState.interfaces.get('wlan0')?.active || false;
-      const ap0Active = this.networkState.interfaces.get('ap0')?.active || false;
-      const hostapdActive = this.networkState.services.get('hostapd')?.active || false;
-      
-      // Determine mode based on current state
-      // Note: AP is ensured to be running during initialization
-      if (hostapdActive && ap0Active && wlan0Active) {
-        this.currentMode = 'development';
-      } else if (hostapdActive && ap0Active && !wlan0Active) {
-        this.currentMode = 'field';
-      } else if (!hostapdActive && !ap0Active && wlan0Active) {
-        // Unusual state - WiFi client active but no AP
-        // Mode detection happens before AP is ensured, so we can see this temporarily
-        logger.info('WiFi client active, AP will be started during initialization');
-        this.currentMode = 'development';
-      } else {
-        // Default to field mode - AP will be ensured during initialization
-        this.currentMode = 'field';
-        logger.info(`Network services not yet active, defaulting to ${this.currentMode} mode`);
-      }
-      
-      logger.info(`Detected network mode: ${this.currentMode}`);
-      this.emit('modeDetected', { mode: this.currentMode });
-      
-    } catch (error) {
-      logger.error('Failed to detect network mode:', error);
-      this.currentMode = 'field'; // Safe default
-    }
-  }
   
-  /**
-   * Switch network mode with atomic operations
-   */
-  async switchMode(targetMode) {
-    if (!['field', 'development'].includes(targetMode)) {
-      throw new Error(`Invalid network mode: ${targetMode}. Valid modes are 'field' and 'development'`);
-    }
-    
-    if (this.currentMode === targetMode) {
-      logger.info(`Already in ${targetMode} mode`);
-      return { success: true, mode: targetMode };
-    }
-    
-    try {
-      logger.info(`Switching from ${this.currentMode} to ${targetMode} mode`);
-      this.emit('modeChanging', { from: this.currentMode, to: targetMode });
-      
-      // Stop current mode services
-      await this.stopCurrentModeServices();
-      
-      // Configure for new mode
-      await this.configureForMode(targetMode);
-      
-      // Start new mode services
-      await this.startModeServices(targetMode);
-      
-      // Update state
-      this.currentMode = targetMode;
-      await this.updateNetworkState();
-      
-      logger.info(`Successfully switched to ${targetMode} mode`);
-      this.emit('modeChanged', { 
-        mode: targetMode,
-        state: {
-          interfaces: Object.fromEntries(this.networkState.interfaces),
-          services: Object.fromEntries(this.networkState.services)
-        }
-      });
-      
-      return { success: true, mode: targetMode };
-      
-    } catch (error) {
-      logger.error(`Failed to switch to ${targetMode} mode:`, error);
-      this.emit('modeChangeFailed', { 
-        targetMode, 
-        currentMode: this.currentMode,
-        error: error.message 
-      });
-      throw error;
-    }
-  }
-  
-  /**
-   * Stop services for current mode
-   */
-  async stopCurrentModeServices() {
-    switch (this.currentMode) {
-      case 'field':
-        await this.serviceManager.stopAccessPoint();
-        break;
-      case 'development':
-        await this.serviceManager.stopAccessPoint();
-        await this.serviceManager.stopWiFiClient();
-        break;
-    }
-  }
-  
-  /**
-   * Configure system for specific mode
-   */
-  async configureForMode(mode) {
-    switch (mode) {
-      case 'field':
-        await this.configManager.ensureAccessPointConfig();
-        break;
-      case 'development':
-        await this.configManager.ensureAccessPointConfig();
-        await this.configManager.ensureWiFiClientConfig();
-        break;
-    }
-  }
-  
-  /**
-   * Start services for specific mode
-   */
-  async startModeServices(mode) {
-    switch (mode) {
-      case 'field':
-        await this.serviceManager.startAccessPoint();
-        break;
-      case 'development':
-        await this.serviceManager.startAccessPoint();
-        await this.serviceManager.startWiFiClient();
-        break;
-    }
-  }
   
   /**
    * Update complete network state
@@ -384,28 +246,18 @@ export class NetworkStateManager extends EventEmitter {
    */
   getNetworkStatus() {
     const status = {
-      mode: this.currentMode,
       interfaces: Object.fromEntries(this.networkState.interfaces),
       services: Object.fromEntries(this.networkState.services),
       lastUpdate: this.networkState.lastUpdate
     };
 
-
     logger.debug('getNetworkStatus returning:', {
-      mode: status.mode,
       interfaceKeys: Object.keys(status.interfaces),
       wlan0: status.interfaces.wlan0,
       ap0: status.interfaces.ap0
     });
 
     return status;
-  }
-  
-  /**
-   * Switch network mode (API compatibility)
-   */
-  async switchNetworkMode(mode) {
-    return await this.switchMode(mode);
   }
   
   /**
