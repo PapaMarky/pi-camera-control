@@ -1005,6 +1005,24 @@ button:focus-visible, input:focus-visible {
   color: var(--text-secondary);
 }
 
+/* WiFi Control Styles */
+.wifi-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.wifi-toggle-buttons {
+  margin-left: 1rem;
+}
+
+.wifi-toggle-buttons .secondary-btn {
+  margin: 0;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.875rem;
+}
+
 /* WiFi Networks List */
 .wifi-networks {
   margin-top: 1rem;

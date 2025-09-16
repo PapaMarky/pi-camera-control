@@ -40,7 +40,7 @@
                         <span class="status-icon">⏱️</span>
                     </div>
                     <div class="status-indicator" id="wifi-status-header" title="WiFi Status">
-                        <span class="status-icon">📶</span>
+                        <span class="status-icon">🛜</span>
                         <span class="status-text" id="wifi-status-text">-</span>
                     </div>
                     <div class="status-indicator" id="ap-status-header" title="Access Point Status">
@@ -118,10 +118,6 @@
                             <span class="label">Uptime:</span>
                             <span id="pi-uptime">-</span>
                         </div>
-                        <div class="status-row">
-                            <span class="label">Mode:</span>
-                            <span id="network-mode">-</span>
-                        </div>
                         <div class="status-row power-warnings">
                             <span id="power-warnings"></span>
                         </div>
@@ -152,37 +148,14 @@
                     <h3>Network Settings</h3>
                 </div>
                 <div class="card-content">
-                    <!-- Network Mode Section -->
-                    <div class="network-section">
-                        <h4>Network Mode</h4>
-                        <div class="mode-selector">
-                            <div class="radio-option">
-                                <input type="radio" id="field-mode-radio" name="network-mode" value="field">
-                                <label for="field-mode-radio">
-                                    <span class="mode-title">Field Mode</span>
-                                    <span class="mode-description">Access Point only - battery optimized</span>
-                                </label>
-                            </div>
-                            <div class="radio-option">
-                                <input type="radio" id="development-mode-radio" name="network-mode" value="development">
-                                <label for="development-mode-radio">
-                                    <span class="mode-title">Development Mode</span>
-                                    <span class="mode-description">Access Point + WiFi Client - internet access</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="button-grid">
-                            <button id="switch-network-mode-btn" class="secondary-btn">
-                                <span class="btn-icon">🔄</span>
-                                <span class="btn-text">Switch Mode</span>
-                            </button>
-                        </div>
-                    </div>
-
                     <!-- WiFi Client Section -->
                     <div class="network-section" id="wifi-client-section">
                         <h4>WiFi Connection</h4>
                         <div class="wifi-status">
+                            <div class="status-row">
+                                <span class="label">Status:</span>
+                                <span id="wifi-status">Off</span>
+                            </div>
                             <div class="status-row">
                                 <span class="label">Current Network:</span>
                                 <span id="current-wifi-network">Not connected</span>
@@ -195,12 +168,12 @@
                         
                         <div class="button-grid">
                             <button id="scan-wifi-btn" class="secondary-btn">
-                                <span class="btn-icon">📶</span>
+                                <span class="btn-icon">🛜</span>
                                 <span class="btn-text">Switch Network</span>
                             </button>
-                            <button id="disconnect-wifi-btn" class="danger-btn" disabled>
-                                <span class="btn-icon">❌</span>
-                                <span class="btn-text">Disconnect</span>
+                            <button id="wifi-toggle-btn" class="danger-btn" disabled>
+                                <span class="btn-icon" id="wifi-toggle-icon">❌</span>
+                                <span class="btn-text" id="wifi-toggle-text">Disconnect</span>
                             </button>
                         </div>
 
