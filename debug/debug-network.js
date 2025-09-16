@@ -38,8 +38,8 @@ async function main() {
     await runCommand('dnsmasq service status', 'systemctl is-active dnsmasq 2>/dev/null || echo "inactive"');
     await runCommand('wpa_supplicant service status', 'systemctl is-active wpa_supplicant@wlan0 2>/dev/null || echo "inactive"');
     
-    // Test wpa_cli access
-    await runCommand('wpa_cli status', 'wpa_cli -i wlan0 status 2>/dev/null || echo "wpa_cli failed"');
+    // Test NetworkManager access
+    await runCommand('NetworkManager status', 'nmcli -t -f NAME,TYPE,DEVICE con show --active 2>/dev/null || echo "NetworkManager failed"');
     
     // Test hostapd client list (may need different approach)
     await runCommand('hostapd clients', 'hostapd_cli list_sta 2>/dev/null || echo "hostapd_cli not available"');
