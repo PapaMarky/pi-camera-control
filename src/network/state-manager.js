@@ -243,8 +243,15 @@ export class NetworkStateManager extends EventEmitter {
   
   /**
    * Get current network status
+   * @param {boolean} forceRefresh - Force fresh network status before returning
    */
-  getNetworkStatus() {
+  async getNetworkStatus(forceRefresh = false) {
+    // Optionally force a fresh update before returning status
+    if (forceRefresh) {
+      logger.debug('Force refreshing network state before returning status');
+      await this.updateNetworkState();
+    }
+
     const status = {
       interfaces: Object.fromEntries(this.networkState.interfaces),
       services: Object.fromEntries(this.networkState.services),

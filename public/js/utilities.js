@@ -55,13 +55,11 @@ class UtilitiesManager {
 
   async getCurrentTime() {
     try {
-      const getTimeBtn = document.getElementById('get-time-btn');
-      const originalText = getTimeBtn?.textContent;
-
-      if (getTimeBtn) {
-        getTimeBtn.disabled = true;
-        getTimeBtn.textContent = 'Getting Time...';
-      }
+      // Use UIStateManager for consistent state handling
+      window.uiStateManager.setInProgress('get-time-btn', {
+        progressText: 'Getting Time...',
+        timeout: 15000
+      });
 
       const response = await fetch('/api/system/time');
       const data = await response.json();
@@ -124,23 +122,17 @@ class UtilitiesManager {
       console.error('Failed to get time:', error);
       this.log(`Failed to get time: ${error.message}`, 'error');
     } finally {
-      const getTimeBtn = document.getElementById('get-time-btn');
-      if (getTimeBtn) {
-        getTimeBtn.disabled = false;
-        getTimeBtn.textContent = originalText;
-      }
+      window.uiStateManager.restore('get-time-btn');
     }
   }
 
   async syncTimeToServer() {
     try {
-      const syncTimeBtn = document.getElementById('sync-time-btn');
-      const originalText = syncTimeBtn?.textContent;
-
-      if (syncTimeBtn) {
-        syncTimeBtn.disabled = true;
-        syncTimeBtn.textContent = 'Syncing...';
-      }
+      // Use UIStateManager for consistent state handling
+      window.uiStateManager.setInProgress('sync-time-btn', {
+        progressText: 'Syncing...',
+        timeout: 20000  // Time sync can take longer
+      });
 
       const clientTime = new Date();
       const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -184,11 +176,7 @@ class UtilitiesManager {
       console.error('Failed to sync time:', error);
       this.log(`Failed to sync time: ${error.message}`, 'error');
     } finally {
-      const syncTimeBtn = document.getElementById('sync-time-btn');
-      if (syncTimeBtn) {
-        syncTimeBtn.disabled = false;
-        syncTimeBtn.textContent = originalText;
-      }
+      window.uiStateManager.restore('sync-time-btn');
     }
   }
 

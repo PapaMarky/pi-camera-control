@@ -492,11 +492,24 @@ export class NetworkServiceManager extends EventEmitter {
         // Add WiFi-specific information
         try {
           const wifiStatus = await this.getWiFiStatus();
-          baseState.network = wifiStatus.ssid;
+          logger.info(`getWiFiStatus() returned:`, wifiStatus);
+          if (wifiStatus && wifiStatus.connected) {
+            baseState.network = wifiStatus.ssid;
+            baseState.connected = wifiStatus.connected;
+            baseState.signal = wifiStatus.signal;
+            baseState.connectionName = wifiStatus.connectionName;
+            logger.info(`Updated wlan0 state with SSID: ${wifiStatus.ssid}`);
+          } else {
+            baseState.network = null;
+            baseState.connected = false;
+            logger.debug('wlan0 not connected to any WiFi network');
+          }
           baseState.ip = ipAddress;
         } catch (error) {
           logger.error(`Failed to get WiFi status for wlan0: ${error.message}`, error);
+          // Don't fail the entire state update if WiFi status fails
           baseState.network = null;
+          baseState.connected = false;
           baseState.ip = ipAddress;
         }
       } else if (iface === 'ap0') {

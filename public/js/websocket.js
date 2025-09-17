@@ -103,6 +103,68 @@ class WebSocketManager {
     }
   }
 
+  // Enhanced method to send WebSocket operations with automatic UI state management
+  async sendOperation(type, data = {}, uiOptions = {}) {
+    const { elementId, progressText, progressIcon, timeout = 30000, onSuccess, onError } = uiOptions;
+
+    try {
+      // Set UI element to in-progress state if specified
+      if (elementId) {
+        window.uiStateManager.setInProgress(elementId, {
+          progressText,
+          progressIcon,
+          timeout
+        });
+      }
+
+      // Send the WebSocket message
+      const success = this.send(type, data);
+      if (!success) {
+        throw new Error('Failed to send WebSocket message');
+      }
+
+      // Return a promise that resolves when the result is received
+      return new Promise((resolve, reject) => {
+        const resultType = `${type}_result`;
+        const timeoutId = setTimeout(() => {
+          this.off(resultType, handleResult);
+          if (elementId) {
+            window.uiStateManager.restore(elementId);
+          }
+          reject(new Error(`Operation timed out after ${timeout}ms`));
+        }, timeout);
+
+        const handleResult = (result) => {
+          clearTimeout(timeoutId);
+          this.off(resultType, handleResult);
+
+          if (elementId) {
+            window.uiStateManager.restore(elementId);
+          }
+
+          if (result.success) {
+            if (onSuccess) onSuccess(result);
+            resolve(result);
+          } else {
+            const error = new Error(result.error || 'Operation failed');
+            error.result = result;
+            if (onError) onError(error);
+            reject(error);
+          }
+        };
+
+        this.on(resultType, handleResult);
+      });
+
+    } catch (error) {
+      if (elementId) {
+        window.uiStateManager.restore(elementId);
+      }
+      if (onError) onError(error);
+      throw error;
+    }
+  }
+
   isConnected() {
     return this.connected && this.ws && this.ws.readyState === WebSocket.OPEN;
   }
