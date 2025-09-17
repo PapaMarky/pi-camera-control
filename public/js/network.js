@@ -129,9 +129,7 @@ class NetworkUI {
                 this.handleNetworkScanResult(data);
             });
 
-            this.ws.on('network_connect_result', (data) => {
-                this.handleNetworkConnectResult(data);
-            });
+            // network_connect_result is now handled automatically by sendOperation method
 
             this.ws.on('network_disconnect_result', (data) => {
                 this.handleNetworkDisconnectResult(data);
@@ -218,40 +216,7 @@ class NetworkUI {
         }
     }
 
-    handleNetworkConnectResult(data) {
-        console.log('handleNetworkConnectResult called with:', data);
-
-        if (data.success) {
-            this.showToast(`Connected to ${data.network || 'network'}`, 'success');
-
-            // Hide the WiFi networks list after successful connection
-            const networksContainer = document.getElementById('wifi-networks');
-            if (networksContainer) {
-                networksContainer.style.display = 'none';
-                console.log('WiFi networks list hidden after successful connection');
-            }
-
-            // Update WiFi state and button after successful connection
-            this.wifiState.connected = true;
-            this.wifiState.network = data.network;
-            this.updateWiFiToggleButton();
-
-            console.log('Setting timeout for network status refresh...');
-            // Force refresh of all network status after a brief delay
-            setTimeout(() => {
-                console.log('Timeout fired! Refreshing network status after successful connection...');
-                this.checkWiFiStatus();
-                // Fetch updated network status to update display fields
-                this.fetchNetworkStatus();
-                // Request updated network status from server via WebSocket
-                if (this.ws && this.ws.send) {
-                    this.ws.send('get_status');
-                }
-            }, 2000); // Increased delay to 2 seconds
-        } else {
-            this.showToast(`Connection failed: ${data.error || 'Unknown error'}`, 'error');
-        }
-    }
+    // handleNetworkConnectResult removed - now handled by universal WebSocket sendOperation method
 
     handleNetworkDisconnectResult(data) {
         this.setButtonLoading('wifi-toggle-btn', false);
@@ -383,7 +348,10 @@ class NetworkUI {
     }
 
     async enableWiFi() {
-        this.setButtonLoading('wifi-toggle-btn', true);
+        this.setButtonLoading('wifi-toggle-btn', true, {
+            progressText: 'Enabling WiFi...',
+            timeout: 20000  // 20 second timeout protection
+        });
         this.showToast('Enabling WiFi...', 'info');
 
         try {
@@ -398,7 +366,10 @@ class NetworkUI {
     }
 
     async disableWiFi() {
-        this.setButtonLoading('wifi-toggle-btn', true);
+        this.setButtonLoading('wifi-toggle-btn', true, {
+            progressText: 'Turning off WiFi...',
+            timeout: 15000  // 15 second timeout protection
+        });
         this.showToast('Turning off WiFi...', 'info');
 
         try {
@@ -515,7 +486,10 @@ class NetworkUI {
     performWiFiScan(forceRefresh = false) {
         console.log('performWiFiScan called with forceRefresh:', forceRefresh);
         this.showToast('Scanning for WiFi networks...', 'info');
-        this.setButtonLoading('scan-wifi-btn', true);
+        this.setButtonLoading('scan-wifi-btn', true, {
+            progressText: 'Scanning...',
+            timeout: 15000  // 15 second timeout protection
+        });
 
         console.log('Sending network_scan WebSocket message...');
         const success = this.ws.send('network_scan', { refresh: forceRefresh });
@@ -524,13 +498,9 @@ class NetworkUI {
         if (!success) {
             this.showToast('Failed to send WiFi scan request', 'error');
             this.setButtonLoading('scan-wifi-btn', false);
-        } else {
-            console.log('WiFi scan request sent successfully, waiting for response...');
-            // Reset button after 10 seconds if no response
-            setTimeout(() => {
-                this.setButtonLoading('scan-wifi-btn', false);
-            }, 10000);
         }
+        // Note: Successful scan completion will be handled by WebSocket response
+        // which will call this.setButtonLoading('scan-wifi-btn', false)
     }
 
     /**
@@ -816,7 +786,10 @@ class NetworkUI {
                 passwordGroup.style.display = 'block';
                 passwordInput.focus();
             }
-            
+
+            // Hide any previous error messages
+            this.hideWiFiConnectionError();
+
             modal.style.display = 'flex';
         }
     }
@@ -825,6 +798,25 @@ class NetworkUI {
         const modal = document.getElementById('wifi-connect-modal');
         if (modal) {
             modal.style.display = 'none';
+        }
+        // Hide error when modal is closed
+        this.hideWiFiConnectionError();
+    }
+
+    showWiFiConnectionError(message) {
+        const errorDiv = document.getElementById('wifi-connect-error');
+        const errorMessage = document.getElementById('wifi-connect-error-message');
+
+        if (errorDiv && errorMessage) {
+            errorMessage.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+    }
+
+    hideWiFiConnectionError() {
+        const errorDiv = document.getElementById('wifi-connect-error');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
         }
     }
 
@@ -882,7 +874,7 @@ class NetworkUI {
         }
     }
 
-    connectToWiFi() {
+    async connectToWiFi() {
         const ssid = document.getElementById('wifi-ssid-input')?.value;
         const password = document.getElementById('wifi-password-input')?.value;
         const priority = document.getElementById('wifi-priority-input')?.value;
@@ -892,35 +884,58 @@ class NetworkUI {
             return;
         }
 
-        this.hideWiFiModal();
+        // Don't hide modal yet - wait for connection result
         this.showToast(`Connecting to ${ssid}...`, 'info');
 
-        const success = this.ws.send('network_connect', {
-            ssid,
-            password: password || undefined,
-            priority: parseInt(priority) || 1
-        });
-        
-        if (!success) {
-            this.showToast('Failed to send connection request', 'error');
+        try {
+            // Use the universal sendOperation method for automatic UI state management
+            const result = await this.ws.sendOperation('network_connect', {
+                ssid,
+                password: password || undefined,
+                priority: parseInt(priority) || 1
+            }, {
+                elementId: 'confirm-wifi-connect-btn',
+                progressText: 'Connecting...',
+                timeout: 30000,
+                onSuccess: (result) => {
+                    this.showToast(`Connected to ${result.network || ssid}`, 'success');
+                    this.hideWiFiModal();
+                    // Hide the WiFi networks list after successful connection
+                    const networksContainer = document.getElementById('wifi-networks');
+                    if (networksContainer) {
+                        networksContainer.style.display = 'none';
+                    }
+                },
+                onError: (error) => {
+                    this.showWiFiConnectionError(error.message);
+                    this.showToast(`Connection failed: ${error.message}`, 'error');
+                }
+            });
+
+        } catch (error) {
+            // Error already handled by onError callback
+            console.error('WiFi connection failed:', error);
         }
     }
 
     disconnectWiFi() {
         this.showToast('Disconnecting from WiFi...', 'info');
-        this.setButtonLoading('wifi-toggle-btn', true);
+
+        // Use UIStateManager with timeout protection
+        window.uiStateManager.setInProgress('wifi-toggle-btn', {
+            progressText: 'Disconnecting...',
+            progressIcon: '🔄',
+            timeout: 10000  // 10 second timeout protection
+        });
 
         const success = this.ws.send('network_disconnect');
 
         if (!success) {
             this.showToast('Failed to send disconnect request', 'error');
-            this.setButtonLoading('wifi-toggle-btn', false);
-        } else {
-            // Reset button after 5 seconds if no response
-            setTimeout(() => {
-                this.setButtonLoading('wifi-toggle-btn', false);
-            }, 5000);
+            window.uiStateManager.restore('wifi-toggle-btn');
         }
+        // Note: Successful disconnection will be handled by WebSocket response
+        // which will call window.uiStateManager.restore('wifi-toggle-btn')
     }
 
     showAPConfigModal() {
@@ -1004,15 +1019,17 @@ class NetworkUI {
         });
     }
 
-    setButtonLoading(buttonId, loading) {
-        const button = document.getElementById(buttonId);
-        if (button) {
-            button.disabled = loading;
-            if (loading) {
-                button.classList.add('loading');
-            } else {
-                button.classList.remove('loading');
-            }
+    setButtonLoading(buttonId, loading, options = {}) {
+        // Migrate to UIStateManager for consistent state handling
+        if (loading) {
+            const { progressText = 'Loading...', timeout = 15000 } = options;
+            window.uiStateManager.setInProgress(buttonId, {
+                progressText,
+                progressIcon: '⏳',
+                timeout
+            });
+        } else {
+            window.uiStateManager.restore(buttonId);
         }
     }
 

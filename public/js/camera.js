@@ -323,10 +323,7 @@ class CameraManager {
 
   updateCameraStatusDisplay(status) {
     // Update camera IP
-    const ipElement = document.getElementById('camera-ip');
-    if (ipElement) {
-      ipElement.textContent = status.ip || '-';
-    }
+    window.uiStateManager.updateContent('camera-ip', status.ip || '-', { preserveState: false });
     
     // Update camera status indicator
     const statusDot = document.querySelector('.camera-status .status-dot');
@@ -340,12 +337,12 @@ class CameraManager {
     
     if (status.connected) {
       // Connected: hide manual connect button, show connected status
-      statusText.textContent = 'Connected';
+      window.uiStateManager.updateContent('camera-status-text', 'Connected', { preserveState: false });
       manualConnectRow.style.display = 'none';
     } else {
       // Disconnected: show manual connect button with disconnected status
       manualConnectRow.style.display = 'flex';
-      statusText.textContent = 'Disconnected';
+      window.uiStateManager.updateContent('camera-status-text', 'Disconnected', { preserveState: false });
     }
     
     // Update header status indicators
@@ -370,8 +367,8 @@ class CameraManager {
         this.getCameraBatteryStatus();
       }, 1000);
     } else if (!status.connected) {
-      document.getElementById('camera-mode').textContent = '-';
-      document.getElementById('camera-battery').textContent = '-';
+      window.uiStateManager.updateContent('camera-mode', '-', { preserveState: false });
+      window.uiStateManager.updateContent('camera-battery', '-', { preserveState: false });
       this.settingsRequested = false;
     }
     
@@ -455,14 +452,17 @@ class CameraManager {
   }
 
   updateCameraModeFromSettings(settings) {
-    const modeElement = document.getElementById('camera-mode');
+    const elementId = 'camera-mode';
+    let modeText = 'Unknown';
+
     if (settings?.shootingmodedial?.value) {
-      modeElement.textContent = settings.shootingmodedial.value.toUpperCase();
+      modeText = settings.shootingmodedial.value.toUpperCase();
     } else if (settings?.mode) {
-      modeElement.textContent = settings.mode.toUpperCase();
-    } else {
-      modeElement.textContent = 'Unknown';
+      modeText = settings.mode.toUpperCase();
     }
+
+    // Use UIStateManager to safely update content
+    window.uiStateManager.updateContent(elementId, modeText, { preserveState: false });
   }
 
   async getCameraBatteryStatus() {
@@ -517,21 +517,22 @@ class CameraManager {
         displayText += ` ${battery.name}`;
       }
       
-      batteryElement.textContent = displayText || 'Unknown';
-      
+      // Use UIStateManager to safely update content
+      window.uiStateManager.updateContent('camera-battery', displayText || 'Unknown', { preserveState: false });
+
       // Update header battery level
       const batteryLevelHeader = document.getElementById('battery-level-header');
       if (batteryLevelHeader) {
         // Show compact version in header (just percentage)
         if (typeof battery.level === 'number') {
-          batteryLevelHeader.textContent = `${battery.level}%`;
+          window.uiStateManager.updateContent('battery-level-header', `${battery.level}%`, { preserveState: false });
         } else {
           const numericLevel = parseInt(battery.level);
           if (!isNaN(numericLevel)) {
-            batteryLevelHeader.textContent = `${numericLevel}%`;
+            window.uiStateManager.updateContent('battery-level-header', `${numericLevel}%`, { preserveState: false });
           } else {
             const levelMap = { 'full': '100%', 'high': '75%', 'medium': '50%', 'low': '25%', 'critical': '10%' };
-            batteryLevelHeader.textContent = levelMap[battery.level.toLowerCase()] || battery.level;
+            window.uiStateManager.updateContent('battery-level-header', levelMap[battery.level.toLowerCase()] || battery.level, { preserveState: false });
           }
         }
       }
@@ -554,17 +555,20 @@ class CameraManager {
       }
       
     } else {
-      batteryElement.textContent = 'No battery info';
+      window.uiStateManager.updateContent('camera-battery', 'No battery info', { preserveState: false });
       const batteryLevelHeader = document.getElementById('battery-level-header');
       if (batteryLevelHeader) {
-        batteryLevelHeader.textContent = '-';
+        window.uiStateManager.updateContent('battery-level-header', '-', { preserveState: false });
       }
     }
   }
 
   async takePhoto() {
     this.log('Taking photo...', 'info');
-    this.setButtonLoading('take-photo-btn', true);
+    this.setButtonLoading('take-photo-btn', true, {
+      progressText: 'Taking photo...',
+      timeout: 15000
+    });
 
     try {
       if (wsManager.connected) {
@@ -588,7 +592,10 @@ class CameraManager {
 
   async getCameraSettings() {
     this.log('Getting camera settings...', 'info');
-    this.setButtonLoading('get-settings-btn', true);
+    this.setButtonLoading('get-settings-btn', true, {
+      progressText: 'Getting settings...',
+      timeout: 10000
+    });
 
     try {
       if (wsManager.connected) {
@@ -630,7 +637,10 @@ class CameraManager {
     }
     
     this.log(`Updating camera configuration to ${ip}:${port}...`, 'info');
-    this.setButtonLoading('update-camera-config-btn', true);
+    this.setButtonLoading('update-camera-config-btn', true, {
+      progressText: 'Updating config...',
+      timeout: 15000
+    });
     
     try {
       const response = await fetch('/api/camera/configure', {
@@ -684,7 +694,10 @@ class CameraManager {
     }
 
     this.log(`Validating interval: ${interval}s`, 'info');
-    this.setButtonLoading('validate-interval-btn', true);
+    this.setButtonLoading('validate-interval-btn', true, {
+      progressText: 'Validating...',
+      timeout: 10000
+    });
 
     try {
       if (wsManager.connected) {
@@ -748,7 +761,10 @@ class CameraManager {
     }
 
     this.log(logMessage, 'info');
-    this.setButtonLoading('start-intervalometer-btn', true);
+    this.setButtonLoading('start-intervalometer-btn', true, {
+      progressText: 'Starting...',
+      timeout: 10000
+    });
 
     try {
       console.log('WebSocket connected:', wsManager.connected);
@@ -803,7 +819,10 @@ class CameraManager {
     }
 
     this.log('Stopping intervalometer...', 'info');
-    this.setButtonLoading('stop-intervalometer-btn', true);
+    this.setButtonLoading('stop-intervalometer-btn', true, {
+      progressText: 'Stopping...',
+      timeout: 10000
+    });
 
     try {
       if (wsManager.connected) {
@@ -905,8 +924,13 @@ class CameraManager {
     }
 
     this.log(`Connecting to camera at ${ip}:${port}...`, 'info');
-    connectBtn.disabled = true;
-    connectBtn.textContent = 'Connecting...';
+
+    // Use UIStateManager for proper state handling
+    window.uiStateManager.setInProgress('confirm-manual-connect-btn', {
+      progressText: 'Connecting...',
+      progressIcon: '🔗',
+      timeout: 30000  // 30 second timeout for camera connection
+    });
 
     try {
       const response = await fetch('/api/discovery/connect', {
@@ -935,8 +959,7 @@ class CameraManager {
       this.showManualConnectError(errorMessage);
       this.log(`Connection failed: ${error.message}`, 'error');
     } finally {
-      connectBtn.disabled = false;
-      connectBtn.textContent = 'Connect';
+      window.uiStateManager.restore('confirm-manual-connect-btn');
     }
   }
 
@@ -1197,25 +1220,30 @@ class CameraManager {
     });
   }
 
-  setButtonLoading(buttonId, loading) {
-    const button = document.getElementById(buttonId);
-    const icon = button.querySelector('.btn-icon');
-    
+  setButtonLoading(buttonId, loading, options = {}) {
+    // Migrate to UIStateManager for consistent state handling
     if (loading) {
-      button.disabled = true;
-      icon.textContent = '⏳';
+      const { progressText, progressIcon = '⏳', timeout = 30000 } = options;
+
+      // Handle buttons with icons vs text
+      const button = document.getElementById(buttonId);
+      const icon = button?.querySelector('.btn-icon');
+
+      if (icon) {
+        // Button has icon - use icon-based progress
+        window.uiStateManager.setInProgress(buttonId, {
+          progressIcon,
+          timeout
+        });
+      } else {
+        // Button uses text - use text-based progress
+        window.uiStateManager.setInProgress(buttonId, {
+          progressText: progressText || 'Loading...',
+          timeout
+        });
+      }
     } else {
-      button.disabled = false;
-      // Restore original icon based on button
-      const iconMap = {
-        'take-photo-btn': '📷',
-        'get-settings-btn': '⚙️',
-        'validate-interval-btn': '✓',
-        'start-intervalometer-btn': '▶️',
-        'stop-intervalometer-btn': '⏹️',
-        'manual-connect-btn': '🔗'
-      };
-      icon.textContent = iconMap[buttonId] || '•';
+      window.uiStateManager.restore(buttonId);
     }
   }
 

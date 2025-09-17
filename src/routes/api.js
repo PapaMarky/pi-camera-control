@@ -645,7 +645,7 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
     // Get current network status
     router.get('/network/status', async (req, res) => {
       try {
-        const status = await networkStateManager.getNetworkStatus();
+        const status = await networkStateManager.getNetworkStatus(true);
         res.json(status);
       } catch (error) {
         logger.error('Failed to get network status:', error);

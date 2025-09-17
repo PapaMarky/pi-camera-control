@@ -164,7 +164,8 @@ body {
 }
 
 .menu-item:hover:not(:disabled) {
-  background-color: var(--bg-secondary);
+  background-color: var(--accent-primary);
+  color: white;
 }
 
 .menu-item:disabled {
@@ -173,8 +174,8 @@ body {
 }
 
 .menu-item.active {
-  background-color: var(--accent-primary);
-  color: white;
+  background-color: var(--bg-secondary);
+  border-left: 3px solid var(--accent-primary);
 }
 
 /* Icon buttons */

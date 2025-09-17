@@ -547,6 +547,18 @@
                         <input type="number" id="wifi-priority-input" value="1" min="0" max="100">
                         <small>Higher numbers = higher priority</small>
                     </div>
+
+                    <!-- Error display area -->
+                    <div class="modal-error" id="wifi-connect-error" style="display: none;">
+                        <div class="error-icon">⚠️</div>
+                        <div class="error-content">
+                            <div class="error-title">Connection Failed</div>
+                            <div class="error-message" id="wifi-connect-error-message">
+                                Unable to connect to network
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="button-grid">
                         <button id="cancel-wifi-connect-btn" class="secondary-btn">Cancel</button>
                         <button id="confirm-wifi-connect-btn" class="primary-btn">Connect</button>
@@ -683,6 +695,7 @@
     </div>
 
     <!-- Scripts -->
+    <script src="js/ui-state-manager.js"></script>
     <script src="js/websocket.js"></script>
     <script src="js/camera.js"></script>
     <script src="js/network.js"></script>

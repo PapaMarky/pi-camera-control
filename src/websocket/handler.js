@@ -59,19 +59,31 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   };
   
   // Broadcast status updates to all connected clients
-  const broadcastStatus = async () => {
+  const broadcastStatus = async (forceRefresh = false) => {
     if (clients.size === 0) return;
-    
+
     // Get network status if networkManager is available
     let networkStatus = null;
+    console.log('BROADCAST: networkManager available:', !!networkManager, 'forceRefresh:', forceRefresh);
     if (networkManager) {
       try {
-        networkStatus = await networkManager.getNetworkStatus();
-        logger.debug('Network status for broadcast:', networkStatus ? 'SUCCESS' : 'NULL', networkStatus);
+        networkStatus = await networkManager.getNetworkStatus(forceRefresh);
+        console.log('BROADCAST: getNetworkStatus result:', networkStatus ? 'SUCCESS' : 'NULL');
+        if (networkStatus && networkStatus.interfaces && networkStatus.interfaces.wlan0) {
+          console.log('BROADCAST: wlan0 data:', {
+            network: networkStatus.interfaces.wlan0.network,
+            connected: networkStatus.interfaces.wlan0.connected,
+            active: networkStatus.interfaces.wlan0.active
+          });
+        } else {
+          console.log('BROADCAST: No wlan0 data in result');
+        }
       } catch (error) {
+        console.log('BROADCAST: Error getting network status:', error.message);
         logger.error('Failed to get network status for broadcast:', error);
       }
     } else {
+      console.log('BROADCAST: NetworkManager not available');
       logger.error('NetworkManager not available for broadcast');
     }
     
@@ -146,7 +158,7 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
       let networkStatus = null;
       if (networkManager) {
         try {
-          networkStatus = await networkManager.getNetworkStatus();
+          networkStatus = await networkManager.getNetworkStatus(false);
           logger.info('Network status for welcome message:', networkStatus);
         } catch (error) {
           logger.error('Failed to get network status for welcome:', error);
@@ -393,7 +405,7 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
     let networkStatus = null;
     if (networkManager) {
       try {
-        networkStatus = await networkManager.getNetworkStatus();
+        networkStatus = await networkManager.getNetworkStatus(false);
       } catch (error) {
         logger.debug('Failed to get network status:', error);
       }
@@ -427,31 +439,40 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
 
   const handleNetworkConnect = async (ws, data) => {
     if (!networkManager || !networkManager.serviceManager) {
-      return sendError(ws, 'Network management not available');
+      return sendOperationResult(ws, 'network_connect', false, {}, 'Network management not available');
     }
 
     try {
       const { ssid, password, priority } = data;
 
       if (!ssid) {
-        return sendError(ws, 'SSID is required');
+        return sendOperationResult(ws, 'network_connect', false, {}, 'SSID is required');
       }
 
       // Use ServiceManager directly for low-level WiFi operations
       const result = await networkManager.serviceManager.connectToWiFi(ssid, password, priority);
-      sendResponse(ws, 'network_connect_result', result);
 
-      // Broadcast network status change to all clients
-      // Give more time for network changes to propagate
+      // Send success result with network details
+      sendOperationResult(ws, 'network_connect', true, {
+        network: ssid,
+        method: result.method || 'NetworkManager'
+      });
+
+      // Force immediate network state update to capture new SSID
       setTimeout(async () => {
-        logger.info('Broadcasting status after network connection change');
-        await networkManager.updateNetworkState(); // Force state refresh
-        broadcastStatus();
-      }, 5000);
+        logger.info('Broadcasting updated status with new SSID (force refresh)');
+        broadcastStatus(true); // Force refresh to get latest network state
+      }, 2000); // Reduced delay for faster UI update
+
+      // Additional update after longer delay to ensure everything has settled
+      setTimeout(async () => {
+        logger.info('Second network state update for WiFi connection verification');
+        broadcastStatus(true); // Force refresh to verify final state
+      }, 8000);
 
     } catch (error) {
       logger.error('Network connection failed via WebSocket:', error);
-      sendError(ws, `Connection failed: ${error.message}`);
+      sendOperationResult(ws, 'network_connect', false, {}, error.message);
     }
   };
 
@@ -812,6 +833,21 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   
   const sendError = (ws, error) => {
     sendResponse(ws, 'error', { message: error });
+  };
+
+  // Universal method to send operation results with consistent structure
+  const sendOperationResult = (ws, operation, success, data = {}, error = null) => {
+    const result = {
+      success,
+      timestamp: new Date().toISOString(),
+      ...data
+    };
+
+    if (!success && error) {
+      result.error = error;
+    }
+
+    sendResponse(ws, `${operation}_result`, result);
   };
   
   const broadcastEvent = (type, data) => {
