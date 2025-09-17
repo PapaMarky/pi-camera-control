@@ -493,103 +493,63 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
   // Set system time from client
   router.post('/system/time', async (req, res) => {
     try {
-      const { timestamp, timezone } = req.body;
-
+      const { timestamp } = req.body;
+      
       if (!timestamp) {
         return res.status(400).json({ error: 'Timestamp is required' });
       }
-
+      
       const clientTime = new Date(timestamp);
       if (isNaN(clientTime.getTime())) {
         return res.status(400).json({ error: 'Invalid timestamp format' });
       }
-
+      
       // Check if we're running on Linux (Pi) before attempting to set system time
       if (process.platform !== 'linux') {
         logger.warn('Time sync requested but not running on Linux - ignoring');
-        return res.json({
-          success: false,
+        return res.json({ 
+          success: false, 
           error: 'Time synchronization only supported on Linux systems',
-          currentTime: new Date().toISOString(),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          currentTime: new Date().toISOString()
         });
       }
-
-      // Format timestamp for date command (YYYY-MM-DD HH:MM:SS UTC)
-      // Always use UTC for internal system time to avoid timezone confusion
+      
+      // Format timestamp for date command (YYYY-MM-DD HH:MM:SS)
       const formattedTime = clientTime.toISOString().slice(0, 19).replace('T', ' ');
-
-      logger.info(`Time sync requested. Current: ${new Date().toISOString()}, Client: ${clientTime.toISOString()}, Client timezone: ${timezone}`);
-
+      
+      logger.info(`Time sync requested. Current: ${new Date().toISOString()}, Client: ${clientTime.toISOString()}`);
+      
+      // Use child_process to set system time
       const { spawn } = await import('child_process');
-
-      // Set system time in UTC
-      const setTime = spawn('sudo', ['date', '-u', '-s', formattedTime], { stdio: 'pipe' });
-
-      setTime.on('close', async (timeCode) => {
-        if (timeCode === 0) {
-          logger.info(`System time synchronized successfully to UTC: ${formattedTime}`);
-
-          // Set timezone if provided
-          let timezoneSetResult = null;
-          if (timezone) {
-            try {
-              // Set system timezone using timedatectl (systemd)
-              const setTimezone = spawn('sudo', ['timedatectl', 'set-timezone', timezone], { stdio: 'pipe' });
-
-              await new Promise((resolve, reject) => {
-                setTimezone.on('close', (tzCode) => {
-                  if (tzCode === 0) {
-                    timezoneSetResult = { success: true, timezone };
-                    logger.info(`System timezone set to: ${timezone}`);
-                    resolve();
-                  } else {
-                    logger.warn(`Failed to set timezone to ${timezone}, exit code: ${tzCode}`);
-                    timezoneSetResult = { success: false, error: `Failed to set timezone: ${timezone}` };
-                    resolve(); // Don't fail the whole operation
-                  }
-                });
-
-                setTimezone.on('error', (tzError) => {
-                  logger.warn('Timezone set error:', tzError.message);
-                  timezoneSetResult = { success: false, error: tzError.message };
-                  resolve(); // Don't fail the whole operation
-                });
-              });
-            } catch (error) {
-              logger.warn('Error setting timezone:', error.message);
-              timezoneSetResult = { success: false, error: error.message };
-            }
-          }
-
+      const setTime = spawn('sudo', ['date', '-s', formattedTime], { stdio: 'pipe' });
+      
+      setTime.on('close', (code) => {
+        if (code === 0) {
           const newTime = new Date().toISOString();
-          const newTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-          res.json({
-            success: true,
+          logger.info(`System time synchronized successfully to: ${newTime}`);
+          res.json({ 
+            success: true, 
             message: 'System time synchronized successfully',
             previousTime: new Date().toISOString(),
-            newTime: newTime,
-            timezone: newTimezone,
-            timezoneSync: timezoneSetResult
+            newTime: newTime
           });
         } else {
-          logger.error(`Time sync failed with exit code: ${timeCode}`);
-          res.status(500).json({
-            success: false,
-            error: 'Failed to set system time. Check sudo permissions.'
+          logger.error(`Time sync failed with exit code: ${code}`);
+          res.status(500).json({ 
+            success: false, 
+            error: 'Failed to set system time. Check sudo permissions.' 
           });
         }
       });
-
+      
       setTime.on('error', (error) => {
         logger.error('Time sync error:', error);
-        res.status(500).json({
-          success: false,
-          error: 'Failed to execute time sync command'
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to execute time sync command' 
         });
       });
-
+      
     } catch (error) {
       logger.error('Failed to sync time:', error);
       res.status(500).json({ error: error.message });
@@ -645,7 +605,7 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
     // Get current network status
     router.get('/network/status', async (req, res) => {
       try {
-        const status = await networkStateManager.getNetworkStatus(true);
+        const status = await networkStateManager.getNetworkStatus();
         res.json(status);
       } catch (error) {
         logger.error('Failed to get network status:', error);
@@ -653,6 +613,22 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
+    // Switch network mode (field/development) - HIGH-LEVEL STATE OPERATION
+    router.post('/network/mode', async (req, res) => {
+      try {
+        const { mode } = req.body;
+
+        if (!mode || !['field', 'development'].includes(mode)) {
+          return res.status(400).json({ error: 'Invalid mode. Must be "field" or "development"' });
+        }
+
+        const result = await networkStateManager.switchMode(mode);
+        res.json(result);
+      } catch (error) {
+        logger.error('Failed to switch network mode:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
 
     // Scan for WiFi networks - LOW-LEVEL SERVICE OPERATION
     router.get('/network/wifi/scan', async (req, res) => {
@@ -676,7 +652,6 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
         res.status(500).json({ error: error.message });
       }
     });
-
 
     // Connect to WiFi network - LOW-LEVEL SERVICE OPERATION
     router.post('/network/wifi/connect', async (req, res) => {
@@ -706,6 +681,17 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       }
     });
 
+    // Remove saved WiFi network - LOW-LEVEL SERVICE OPERATION
+    router.delete('/network/wifi/saved/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await networkServiceManager.removeSavedNetwork(id);
+        res.json(result);
+      } catch (error) {
+        logger.error('Failed to remove saved network:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
 
     // Configure access point - HIGH-LEVEL STATE OPERATION (affects overall state)
     router.post('/network/accesspoint/configure', async (req, res) => {
@@ -735,34 +721,11 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       try {
         const { country } = req.body;
 
-        // Enhanced input validation
         if (!country) {
-          return res.status(400).json({
-            error: 'Country code is required',
-            details: 'Please provide a valid 2-letter ISO country code (e.g., US, JP)'
-          });
+          return res.status(400).json({ error: 'Country code is required' });
         }
 
-        // Validate country code format
-        const countryCode = country.toString().toUpperCase().trim();
-        if (!/^[A-Z]{2}$/.test(countryCode)) {
-          return res.status(400).json({
-            error: 'Invalid country code format',
-            details: 'Country code must be exactly 2 uppercase letters (e.g., US, JP, GB)'
-          });
-        }
-
-        // Check if country code is in our supported list
-        const availableCountries = networkServiceManager.getCountryCodes();
-        const isSupported = availableCountries.some(c => c.code === countryCode);
-        if (!isSupported) {
-          return res.status(400).json({
-            error: 'Unsupported country code',
-            details: `Country code '${countryCode}' is not supported. Use GET /api/network/wifi/countries for available codes.`
-          });
-        }
-
-        const result = await networkServiceManager.setWiFiCountry(countryCode);
+        const result = await networkServiceManager.setWiFiCountry(country.toUpperCase());
         res.json(result);
       } catch (error) {
         logger.error('WiFi country setting failed:', error);
@@ -788,39 +751,6 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
         res.json({ countries });
       } catch (error) {
         logger.error('Failed to get country codes:', error);
-        res.status(500).json({ error: error.message });
-      }
-    });
-
-    // Enable WiFi (wlan0) while keeping Access Point (ap0) active
-    router.post('/network/wifi/enable', async (req, res) => {
-      try {
-        const result = await networkServiceManager.enableWiFi();
-        res.json(result);
-      } catch (error) {
-        logger.error('Failed to enable WiFi:', error);
-        res.status(500).json({ error: error.message });
-      }
-    });
-
-    // Disable WiFi (wlan0) while keeping Access Point (ap0) active
-    router.post('/network/wifi/disable', async (req, res) => {
-      try {
-        const result = await networkServiceManager.disableWiFi();
-        res.json(result);
-      } catch (error) {
-        logger.error('Failed to disable WiFi:', error);
-        res.status(500).json({ error: error.message });
-      }
-    });
-
-    // Check if WiFi is enabled
-    router.get('/network/wifi/enabled', async (req, res) => {
-      try {
-        const status = await networkServiceManager.isWiFiEnabled();
-        res.json(status);
-      } catch (error) {
-        logger.error('Failed to check WiFi status:', error);
         res.status(500).json({ error: error.message });
       }
     });
@@ -901,28 +831,6 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       } catch (error) {
         logger.error('Failed to get camera:', error);
         res.status(500).json({ error: 'Failed to get camera' });
-      }
-    });
-
-    // Get last successful camera IP for UI pre-population
-    router.get('/discovery/last-ip', (req, res) => {
-      try {
-        const lastIP = discoveryManager.getLastSuccessfulIP();
-        res.json({ lastIP });
-      } catch (error) {
-        logger.error('Failed to get last camera IP:', error);
-        res.status(500).json({ error: 'Failed to get last camera IP' });
-      }
-    });
-
-    // Clear camera connection history
-    router.delete('/discovery/connection-history', async (req, res) => {
-      try {
-        await discoveryManager.clearConnectionHistory();
-        res.json({ success: true, message: 'Connection history cleared' });
-      } catch (error) {
-        logger.error('Failed to clear connection history:', error);
-        res.status(500).json({ error: 'Failed to clear connection history' });
       }
     });
   }

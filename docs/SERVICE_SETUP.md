@@ -8,6 +8,20 @@ This guide explains how to set up the Pi Camera Control application as a systemd
 - Project deployed to `/home/pi/pi-camera-control/`
 - Root access (sudo privileges)
 
+### Required System Packages
+The following system packages must be installed for full functionality:
+```bash
+sudo apt install -y hostapd dnsmasq network-manager wireless-tools iw rfkill
+```
+
+These packages enable:
+- **hostapd**: Access Point functionality
+- **dnsmasq**: DHCP and DNS services
+- **network-manager**: Advanced WiFi management
+- **wireless-tools**: Legacy wireless configuration (iwconfig, iwlist)
+- **iw**: Modern wireless configuration and regulatory domain management
+- **rfkill**: Radio kill/enable control (troubleshooting and future power management)
+
 ## Quick Setup
 
 1. **Deploy the project** to `/home/pi/pi-camera-control/`:

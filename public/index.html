@@ -221,6 +221,40 @@
                         </div>
                     </div>
 
+                    <!-- WiFi Country Section -->
+                    <div class="network-section">
+                        <h4>WiFi Country</h4>
+                        <div class="country-status">
+                            <div class="status-row">
+                                <span class="label">Current Country:</span>
+                                <span id="current-wifi-country">Loading...</span>
+                            </div>
+                        </div>
+
+                        <div class="button-grid">
+                            <button id="change-country-btn" class="secondary-btn">
+                                <span class="btn-icon">🌍</span>
+                                <span class="btn-text">Change Country</span>
+                            </button>
+                        </div>
+
+                        <!-- Country Selection Modal -->
+                        <div class="country-selection" id="country-selection" style="display: none;">
+                            <div class="country-header">
+                                <h5>Select WiFi Country</h5>
+                                <button type="button" class="close-country-btn" id="close-country-btn" title="Close country selection">
+                                    <span aria-hidden="true">✕</span>
+                                </button>
+                            </div>
+                            <div class="country-info">
+                                <p class="warning-text">⚠️ Changing WiFi country affects regulatory compliance and power limits</p>
+                            </div>
+                            <div class="country-list" id="country-list">
+                                <!-- Countries will be populated via JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Camera Connection Configuration -->
                     <div class="network-section">
                         <h4>Camera Connection</h4>
