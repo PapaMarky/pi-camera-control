@@ -493,63 +493,103 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
   // Set system time from client
   router.post('/system/time', async (req, res) => {
     try {
-      const { timestamp } = req.body;
-      
+      const { timestamp, timezone } = req.body;
+
       if (!timestamp) {
         return res.status(400).json({ error: 'Timestamp is required' });
       }
-      
+
       const clientTime = new Date(timestamp);
       if (isNaN(clientTime.getTime())) {
         return res.status(400).json({ error: 'Invalid timestamp format' });
       }
-      
+
       // Check if we're running on Linux (Pi) before attempting to set system time
       if (process.platform !== 'linux') {
         logger.warn('Time sync requested but not running on Linux - ignoring');
-        return res.json({ 
-          success: false, 
+        return res.json({
+          success: false,
           error: 'Time synchronization only supported on Linux systems',
-          currentTime: new Date().toISOString()
+          currentTime: new Date().toISOString(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
         });
       }
-      
-      // Format timestamp for date command (YYYY-MM-DD HH:MM:SS)
+
+      // Format timestamp for date command (YYYY-MM-DD HH:MM:SS UTC)
+      // Always use UTC for internal system time to avoid timezone confusion
       const formattedTime = clientTime.toISOString().slice(0, 19).replace('T', ' ');
-      
-      logger.info(`Time sync requested. Current: ${new Date().toISOString()}, Client: ${clientTime.toISOString()}`);
-      
-      // Use child_process to set system time
+
+      logger.info(`Time sync requested. Current: ${new Date().toISOString()}, Client: ${clientTime.toISOString()}, Client timezone: ${timezone}`);
+
       const { spawn } = await import('child_process');
-      const setTime = spawn('sudo', ['date', '-s', formattedTime], { stdio: 'pipe' });
-      
-      setTime.on('close', (code) => {
-        if (code === 0) {
+
+      // Set system time in UTC
+      const setTime = spawn('sudo', ['date', '-u', '-s', formattedTime], { stdio: 'pipe' });
+
+      setTime.on('close', async (timeCode) => {
+        if (timeCode === 0) {
+          logger.info(`System time synchronized successfully to UTC: ${formattedTime}`);
+
+          // Set timezone if provided
+          let timezoneSetResult = null;
+          if (timezone) {
+            try {
+              // Set system timezone using timedatectl (systemd)
+              const setTimezone = spawn('sudo', ['timedatectl', 'set-timezone', timezone], { stdio: 'pipe' });
+
+              await new Promise((resolve, reject) => {
+                setTimezone.on('close', (tzCode) => {
+                  if (tzCode === 0) {
+                    timezoneSetResult = { success: true, timezone };
+                    logger.info(`System timezone set to: ${timezone}`);
+                    resolve();
+                  } else {
+                    logger.warn(`Failed to set timezone to ${timezone}, exit code: ${tzCode}`);
+                    timezoneSetResult = { success: false, error: `Failed to set timezone: ${timezone}` };
+                    resolve(); // Don't fail the whole operation
+                  }
+                });
+
+                setTimezone.on('error', (tzError) => {
+                  logger.warn('Timezone set error:', tzError.message);
+                  timezoneSetResult = { success: false, error: tzError.message };
+                  resolve(); // Don't fail the whole operation
+                });
+              });
+            } catch (error) {
+              logger.warn('Error setting timezone:', error.message);
+              timezoneSetResult = { success: false, error: error.message };
+            }
+          }
+
           const newTime = new Date().toISOString();
-          logger.info(`System time synchronized successfully to: ${newTime}`);
-          res.json({ 
-            success: true, 
+          const newTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+          res.json({
+            success: true,
             message: 'System time synchronized successfully',
             previousTime: new Date().toISOString(),
-            newTime: newTime
+            newTime: newTime,
+            timezone: newTimezone,
+            timezoneSync: timezoneSetResult
           });
         } else {
-          logger.error(`Time sync failed with exit code: ${code}`);
-          res.status(500).json({ 
-            success: false, 
-            error: 'Failed to set system time. Check sudo permissions.' 
+          logger.error(`Time sync failed with exit code: ${timeCode}`);
+          res.status(500).json({
+            success: false,
+            error: 'Failed to set system time. Check sudo permissions.'
           });
         }
       });
-      
+
       setTime.on('error', (error) => {
         logger.error('Time sync error:', error);
-        res.status(500).json({ 
-          success: false, 
-          error: 'Failed to execute time sync command' 
+        res.status(500).json({
+          success: false,
+          error: 'Failed to execute time sync command'
         });
       });
-      
+
     } catch (error) {
       logger.error('Failed to sync time:', error);
       res.status(500).json({ error: error.message });
