@@ -24,7 +24,6 @@ class NetworkUI {
         this.bindModals();
         this.setupWebSocketListeners();
         this.checkWiFiStatus();
-        this.loadCurrentCountry();
     }
 
     bindEvents() {
@@ -40,15 +39,6 @@ class NetworkUI {
         // Access Point configuration
         document.getElementById('configure-ap-btn')?.addEventListener('click', () => {
             this.showAPConfigModal();
-        });
-
-        // WiFi Country management
-        document.getElementById('change-country-btn')?.addEventListener('click', () => {
-            this.showCountrySelection();
-        });
-
-        document.getElementById('close-country-btn')?.addEventListener('click', () => {
-            this.hideCountrySelection();
         });
 
         // Modal event listeners are bound in bindModals()
@@ -143,16 +133,6 @@ class NetworkUI {
 
             this.ws.on('network_disconnect_result', (data) => {
                 this.handleNetworkDisconnectResult(data);
-            });
-
-            // Listen for general status updates that include network information
-            this.ws.on('status', (data) => {
-                this.handleStatusUpdate(data);
-            });
-
-            // Listen for welcome messages that include initial status
-            this.ws.on('welcome', (data) => {
-                this.handleStatusUpdate(data);
             });
         }
     }
@@ -1060,181 +1040,6 @@ class NetworkUI {
         } else {
             // Fallback
             console.log(`[${type.toUpperCase()}] ${message}`);
-        }
-    }
-
-    // WiFi Country Management Methods
-    async loadCurrentCountry() {
-        try {
-            const response = await fetch('/api/network/wifi/country');
-            const data = await response.json();
-
-            if (data.country) {
-                const countryElement = document.getElementById('current-wifi-country');
-
-                if (countryElement) {
-                    countryElement.textContent = this.getCountryName(data.country);
-                }
-            }
-        } catch (error) {
-            console.error('Failed to load current country:', error);
-            const countryElement = document.getElementById('current-wifi-country');
-            if (countryElement) {
-                countryElement.textContent = 'Error loading';
-            }
-        }
-    }
-
-    async loadAvailableCountries() {
-        try {
-            const response = await fetch('/api/network/wifi/countries');
-            const data = await response.json();
-
-            if (data.countries) {
-                this.availableCountries = data.countries;
-                this.renderCountryList();
-            }
-        } catch (error) {
-            console.error('Failed to load available countries:', error);
-            this.showToast('Failed to load country list', 'error');
-        }
-    }
-
-    renderCountryList() {
-        const countryList = document.getElementById('country-list');
-        if (!countryList || !this.availableCountries) return;
-
-        countryList.innerHTML = '';
-
-        // Define common countries first (US and JP for your use case)
-        const commonCountryCodes = ['US', 'JP'];
-        const commonCountries = [];
-        const otherCountries = [];
-
-        // Separate common and other countries
-        this.availableCountries.forEach(country => {
-            if (commonCountryCodes.includes(country.code)) {
-                commonCountries.push(country);
-            } else {
-                otherCountries.push(country);
-            }
-        });
-
-        // Sort common countries by the order in commonCountryCodes
-        commonCountries.sort((a, b) => {
-            return commonCountryCodes.indexOf(a.code) - commonCountryCodes.indexOf(b.code);
-        });
-
-        // Sort other countries alphabetically by name
-        otherCountries.sort((a, b) => a.name.localeCompare(b.name));
-
-        // Render common countries first, then other countries
-        [...commonCountries, ...otherCountries].forEach(country => {
-            this.renderCountryItem(countryList, country);
-        });
-    }
-
-    renderCountryItem(container, country) {
-        const item = document.createElement('div');
-        item.className = 'country-item';
-        item.innerHTML = `
-            <div class="country-name">${country.name}</div>
-        `;
-
-        item.addEventListener('click', () => {
-            this.selectCountry(country);
-        });
-
-        container.appendChild(item);
-    }
-
-    async selectCountry(country) {
-        const confirmMessage = `Change WiFi country to ${country.name} (${country.code})?\n\n⚠️ This will:\n• Apply new regulatory limits\n• Restart network services\n• May affect WiFi range and power`;
-
-        if (!confirm(confirmMessage)) {
-            return;
-        }
-
-        this.hideCountrySelection();
-        this.showToast(`Changing WiFi country to ${country.name}...`, 'info');
-
-        try {
-            const response = await fetch('/api/network/wifi/country', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    country: country.code
-                })
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                this.showToast(`WiFi country changed to ${country.name}`, 'success');
-
-                // Update UI immediately
-                const countryElement = document.getElementById('current-wifi-country');
-
-                if (countryElement) {
-                    countryElement.textContent = country.name;
-                }
-
-                // Refresh network status after change
-                setTimeout(() => {
-                    if (this.ws && this.ws.send) {
-                        this.ws.send('get_status');
-                    }
-                }, 2000);
-            } else {
-                this.showToast(`Failed to change country: ${data.error || 'Unknown error'}`, 'error');
-            }
-        } catch (error) {
-            console.error('Country change error:', error);
-            this.showToast('Failed to change WiFi country - check network connection', 'error');
-        }
-    }
-
-    showCountrySelection() {
-        const countrySelection = document.getElementById('country-selection');
-        if (countrySelection) {
-            // Load countries if not already loaded
-            if (!this.availableCountries) {
-                this.loadAvailableCountries();
-            }
-            countrySelection.style.display = 'block';
-        }
-    }
-
-    hideCountrySelection() {
-        const countrySelection = document.getElementById('country-selection');
-        if (countrySelection) {
-            countrySelection.style.display = 'none';
-        }
-    }
-
-    getCountryName(countryCode) {
-        if (!this.availableCountries) return countryCode;
-        const country = this.availableCountries.find(c => c.code === countryCode);
-        return country ? country.name : countryCode;
-    }
-
-    handleStatusUpdate(data) {
-        // Update country information if present in network status
-        if (data.network && data.network.wifiCountry) {
-            this.updateCountryDisplay(data.network.wifiCountry);
-        }
-    }
-
-    updateCountryDisplay(wifiCountryData) {
-        if (!wifiCountryData || !wifiCountryData.country) return;
-
-        const countryElement = document.getElementById('current-wifi-country');
-
-        if (countryElement) {
-            const countryName = this.getCountryName(wifiCountryData.country);
-            countryElement.textContent = countryName;
         }
     }
 }

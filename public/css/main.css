@@ -1774,3 +1774,86 @@ button:focus-visible, input:focus-visible {
     gap: 0.5rem;
   }
 }
+
+/* WiFi Country Selection Styles */
+.country-selection {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 1rem;
+  margin-top: 1rem;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.country-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.country-header h5 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.close-country-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.close-country-btn:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.country-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 300px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--bg-primary);
+}
+
+.country-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.country-item:last-child {
+  border-bottom: none;
+}
+
+.country-item:hover {
+  background-color: var(--accent-primary);
+  color: white;
+  transform: translateX(2px);
+}
+
+.country-item:active {
+  background-color: var(--accent-primary);
+  transform: translateX(1px);
+}
+
+.country-name {
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: inherit;
+}

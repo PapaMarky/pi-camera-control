@@ -1139,218 +1139,38 @@ export class NetworkServiceManager extends EventEmitter {
    */
   async setWiFiCountry(countryCode) {
     try {
-      // Validate country code format (2-letter ISO codes)
-      if (!countryCode || !/^[A-Z]{2}$/.test(countryCode)) {
-        throw new Error(`Invalid country code format: ${countryCode}. Must be 2-letter ISO code (e.g., US, JP)`);
-      }
-
-      logger.info(`Setting WiFi country to ${countryCode} for ALL wireless interfaces...`);
-
-      // First, let's check the current regulatory domain before making changes
-      let initialCountry;
+      // Set country using iw (NetworkManager will inherit this setting)
       try {
-        const { stdout: regBefore } = await execAsync(`/usr/sbin/iw reg get | head -5`);
-        logger.info(`Current regulatory domain before change:\n${regBefore}`);
-        initialCountry = await this.getWiFiCountry();
-        logger.info(`Current country before change: ${JSON.stringify(initialCountry)}`);
-      } catch (error) {
-        logger.warn('Failed to get initial regulatory domain:', error.message);
-      }
-
-      // Check which wireless interfaces exist
-      const wirelessInterfaces = [];
-      try {
-        const { stdout } = await execAsync(`/usr/sbin/iw dev | grep Interface | awk '{print $2}'`);
-        const interfaces = stdout.trim().split('\n').filter(iface => iface.trim());
-        wirelessInterfaces.push(...interfaces);
-        logger.info(`Found wireless interfaces: ${JSON.stringify(wirelessInterfaces)}`);
-      } catch (error) {
-        logger.warn('Failed to detect wireless interfaces:', error.message);
-        // Assume standard interfaces if detection fails
-        wirelessInterfaces.push('wlan0', 'ap0');
-      }
-
-      // Method 1: Set global regulatory domain via iw reg set
-      logger.info(`Setting global regulatory domain to ${countryCode} via iw...`);
-      try {
-        const { stdout, stderr } = await execAsync(`/usr/sbin/iw reg set ${countryCode} 2>&1`);
-        if (stdout) logger.info(`iw reg set output: ${stdout}`);
-        if (stderr) logger.warn(`iw reg set stderr: ${stderr}`);
-
-        // Give it time to apply
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        const { stdout: regAfter } = await execAsync(`/usr/sbin/iw reg get | head -5`);
-        logger.info(`Regulatory domain after global change:\n${regAfter}`);
+        await execAsync(`iw reg set ${countryCode}`);
+        logger.info(`Set regulatory domain to ${countryCode}`);
       } catch (iwError) {
-        logger.error('Failed to set global regulatory domain with iw:', iwError.message);
+        logger.warn('Failed to set regulatory domain with iw:', iwError.message);
       }
 
-      // Method 2: Set country for each interface individually
-      for (const iface of wirelessInterfaces) {
-        try {
-          logger.info(`Setting country ${countryCode} for interface ${iface}...`);
-
-          // Check if interface exists and is up
-          try {
-            const { stdout } = await execAsync(`ip link show ${iface}`);
-            if (!stdout.includes('UP')) {
-              logger.info(`Interface ${iface} is down, bringing it up...`);
-              await execAsync(`ip link set ${iface} up`);
-              await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-          } catch (linkError) {
-            logger.warn(`Interface ${iface} does not exist or cannot be brought up: ${linkError.message}`);
-            continue;
-          }
-
-          // Set regulatory domain for this specific interface
-          try {
-            await execAsync(`/usr/sbin/iw dev ${iface} set reg ${countryCode}`);
-            logger.info(`Set regulatory domain for ${iface} to ${countryCode}`);
-          } catch (regError) {
-            logger.warn(`Failed to set regulatory domain for ${iface}: ${regError.message}`);
-          }
-
-          // Force interface regulatory update
-          try {
-            await execAsync(`/usr/sbin/iw dev ${iface} scan trigger`);
-            logger.debug(`Triggered scan on ${iface} to refresh regulatory`);
-          } catch (scanError) {
-            logger.debug(`Could not trigger scan on ${iface}: ${scanError.message}`);
-          }
-
-        } catch (ifaceError) {
-          logger.error(`Failed to process interface ${iface}: ${ifaceError.message}`);
-        }
-      }
-
-      // Method 3: Try raspi-config for persistent configuration
-      try {
-        logger.info(`Setting persistent WiFi country via raspi-config...`);
-        const { stdout, stderr } = await execAsync(`raspi-config nonint do_wifi_country ${countryCode} 2>&1`);
-        if (stdout) logger.info(`raspi-config output: ${stdout}`);
-        if (stderr) logger.warn(`raspi-config stderr: ${stderr}`);
-        logger.info(`Set persistent WiFi country to ${countryCode} via raspi-config`);
-      } catch (raspiError) {
-        logger.error('Failed to set country via raspi-config:', raspiError);
-      }
-
-      // Method 4: Update hostapd configuration for access point
-      try {
-        const hostapdPath = '/etc/hostapd/hostapd.conf';
-        logger.info(`Updating hostapd configuration with country ${countryCode}...`);
-
-        const { stdout: hostapdConfig } = await execAsync(`cat ${hostapdPath}`);
-        let newHostapdConfig;
-
-        if (hostapdConfig.includes('country_code=')) {
-          newHostapdConfig = hostapdConfig.replace(/country_code=\w+/g, `country_code=${countryCode}`);
-          logger.info('Replacing existing country_code in hostapd.conf');
-        } else {
-          // Add country_code after interface line
-          newHostapdConfig = hostapdConfig.replace(
-            /(interface=.*\n)/,
-            `$1country_code=${countryCode}\n`
-          );
-          logger.info('Adding country_code to hostapd.conf');
-        }
-
-        await execAsync(`echo '${newHostapdConfig}' | sudo tee ${hostapdPath} > /dev/null`);
-        logger.info(`Updated hostapd.conf with country_code=${countryCode}`);
-
-        // Restart hostapd if it's running
-        try {
-          const hostapdActive = await this.isServiceActive('hostapd');
-          if (hostapdActive) {
-            logger.info('Restarting hostapd to apply country changes...');
-            await execAsync('systemctl restart hostapd');
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            logger.info('hostapd restarted');
-          }
-        } catch (hostapdError) {
-          logger.warn('Failed to restart hostapd:', hostapdError.message);
-        }
-
-      } catch (hostapdError) {
-        logger.warn('Failed to update hostapd configuration:', hostapdError.message);
-      }
-
-      // Method 5: Update wpa_supplicant.conf if it exists
+      // Also set in /etc/wpa_supplicant/wpa_supplicant.conf if file exists
       try {
         const configPath = '/etc/wpa_supplicant/wpa_supplicant.conf';
-        logger.info(`Checking if ${configPath} exists...`);
+        const { stdout } = await execAsync(`cat ${configPath}`);
 
-        try {
-          await execAsync(`test -f ${configPath}`);
-          logger.info(`${configPath} exists, updating it...`);
-
-          const { stdout } = await execAsync(`cat ${configPath}`);
-          let newConfig;
-
-          if (stdout.includes('country=')) {
-            newConfig = stdout.replace(/country=\w+/g, `country=${countryCode}`);
-            logger.info('Replacing existing country setting in wpa_supplicant.conf');
-          } else {
-            newConfig = stdout.replace(
-              /(ctrl_interface=.*\n)/,
-              `$1country=${countryCode}\n`
-            );
-            logger.info('Adding country setting to wpa_supplicant.conf');
-          }
-
-          await execAsync(`echo '${newConfig}' | sudo tee ${configPath} > /dev/null`);
-          logger.info(`Updated wpa_supplicant.conf with country ${countryCode}`);
-        } catch (fileError) {
-          logger.info(`${configPath} does not exist or cannot be read: ${fileError.message}`);
-        }
-      } catch (configError) {
-        logger.error('Failed to update wpa_supplicant.conf:', configError.message);
-      }
-
-      // Restart network services to ensure all changes take effect
-      try {
-        logger.info('Restarting network services to apply country changes...');
-
-        // Turn WiFi off and on via nmcli to refresh all interfaces
-        await execAsync('nmcli radio wifi off');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        await execAsync('nmcli radio wifi on');
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        logger.info('Network services restarted');
-      } catch (error) {
-        logger.warn('Failed to restart network services:', error.message);
-      }
-
-      // Verify the change was applied to both interfaces
-      try {
-        await new Promise(resolve => setTimeout(resolve, 3000)); // Give time for changes to apply
-
-        const verification = await this.getWiFiCountry();
-        logger.info(`Country verification result: ${JSON.stringify(verification)}`);
-
-        // Check each interface individually
-        for (const iface of wirelessInterfaces) {
-          try {
-            const { stdout } = await execAsync(`/usr/sbin/iw dev ${iface} info | grep country || echo "No country info"`);
-            logger.info(`Interface ${iface} country info: ${stdout.trim()}`);
-          } catch (ifaceCheckError) {
-            logger.debug(`Could not check country for ${iface}: ${ifaceCheckError.message}`);
-          }
-        }
-
-        if (verification.country === countryCode) {
-          logger.info(`WiFi country successfully changed to ${countryCode} for all interfaces`);
-          return { success: true, country: countryCode, message: `WiFi country changed to ${countryCode} for all interfaces` };
+        let newConfig;
+        if (stdout.includes('country=')) {
+          // Replace existing country
+          newConfig = stdout.replace(/country=\w+/g, `country=${countryCode}`);
         } else {
-          logger.warn(`Country change verification failed. Expected: ${countryCode}, Got: ${verification.country}`);
-          return { success: true, country: countryCode, message: `Country set to ${countryCode} for all interfaces (verification pending)` };
+          // Add country line after ctrl_interface
+          newConfig = stdout.replace(
+            /(ctrl_interface=.*\n)/,
+            `$1country=${countryCode}\n`
+          );
         }
-      } catch (verifyError) {
-        logger.warn('Failed to verify country change:', verifyError.message);
-        return { success: true, country: countryCode, message: `Country set to ${countryCode} for all interfaces (verification failed)` };
+
+        await execAsync(`echo '${newConfig}' > ${configPath}`);
+      } catch (configError) {
+        logger.warn('Could not update wpa_supplicant.conf:', configError.message);
       }
+
+      logger.info(`WiFi country set to ${countryCode}`);
+      return { success: true, country: countryCode };
 
     } catch (error) {
       logger.error(`Failed to set WiFi country to ${countryCode}:`, error);
@@ -1365,7 +1185,7 @@ export class NetworkServiceManager extends EventEmitter {
     try {
       // Try to get from iw regulatory domain first
       try {
-        const { stdout } = await execAsync('/usr/sbin/iw reg get');
+        const { stdout } = await execAsync('iw reg get');
         const match = stdout.match(/country\s+(\w+):/);
         if (match) {
           return { country: match[1].toUpperCase() };

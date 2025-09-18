@@ -106,7 +106,9 @@ install_system_packages() {
         "hostapd"           # Access Point daemon
         "dnsmasq"           # DHCP and DNS server
         "iptables"          # Firewall and NAT
-        "iw"               # Wireless configuration tool
+        "iw"               # Wireless configuration tool (for regulatory domain management)
+        "wireless-tools"    # Legacy wireless tools (iwconfig, iwlist)
+        "rfkill"           # Radio kill/enable tool
         "wpasupplicant"     # WPA client
         "dhcpcd5"          # DHCP client daemon
         "nodejs"           # Node.js runtime (if not already installed)

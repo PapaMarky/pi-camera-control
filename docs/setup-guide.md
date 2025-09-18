@@ -45,7 +45,7 @@ If you prefer to understand each step or need to customize the installation:
 sudo apt update && sudo apt upgrade -y
 
 # Install essential packages
-sudo apt install -y git curl wget nodejs npm hostapd dnsmasq network-manager wireless-tools iw
+sudo apt install -y git curl wget nodejs npm hostapd dnsmasq network-manager wireless-tools iw rfkill
 ```
 
 ### 2. Clone Project
