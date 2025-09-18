@@ -587,15 +587,15 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
         options.stopTime = stopDate;
       }
       
-      server.activeIntervalometerSession = new IntervalometerSession(() => cameraController(), options);
-      
+      server.activeIntervalometerSession = await intervalometerStateManager.createSession(() => cameraController(), options);
+
       // Set up event handlers with enhanced events for reporting
       server.activeIntervalometerSession.on('started', (sessionData) => {
         logger.info('Session started event received, broadcasting...');
         broadcastEvent('intervalometer_started', {
           ...sessionData,
-          sessionId: server.activeIntervalometerSession.getSessionId(),
-          title: server.activeIntervalometerSession.getTitle()
+          sessionId: server.activeIntervalometerSession.id,
+          title: server.activeIntervalometerSession.title
         });
       });
       
@@ -651,8 +651,8 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
         success: true,
         message: 'Intervalometer started successfully',
         status: server.activeIntervalometerSession.getStatus(),
-        sessionId: server.activeIntervalometerSession.getSessionId(),
-        title: server.activeIntervalometerSession.getTitle()
+        sessionId: server.activeIntervalometerSession.id,
+        title: server.activeIntervalometerSession.title
       });
     } catch (error) {
       logger.error('Failed to start intervalometer with title via WebSocket:', error);

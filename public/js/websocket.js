@@ -195,6 +195,15 @@ class WebSocketManager {
           this.emit(eventType, data);
         }
         break;
+
+      case 'timelapse_event':
+        // Handle timelapse-specific events
+        if (eventType) {
+          console.log('Received timelapse event:', eventType, data);
+          // Emit the specific event type (e.g., session_completed, session_stopped, etc.)
+          this.emit(eventType, data);
+        }
+        break;
         
       case 'photo_taken':
         this.emit('photo_taken', data);
