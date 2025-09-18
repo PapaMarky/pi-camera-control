@@ -54,7 +54,12 @@ class TimelapseUI {
 
     // WebSocket event handlers
     if (this.wsManager) {
+      // Report data responses
       this.wsManager.on('timelapse_reports_response', (data) => {
+        this.handleReportsResponse(data);
+      });
+
+      this.wsManager.on('timelapse_reports', (data) => {
         this.handleReportsResponse(data);
       });
 
@@ -62,6 +67,7 @@ class TimelapseUI {
         this.handleReportResponse(data);
       });
 
+      // Session events
       this.wsManager.on('session_completed', (data) => {
         this.handleSessionCompleted(data);
       });
@@ -76,6 +82,14 @@ class TimelapseUI {
 
       this.wsManager.on('unsaved_session_found', (data) => {
         this.handleUnsavedSessionFound(data);
+      });
+
+      this.wsManager.on('report_saved', (data) => {
+        this.loadReports(); // Refresh the list after saving
+      });
+
+      this.wsManager.on('report_deleted', (data) => {
+        this.loadReports(); // Refresh the list after deleting
       });
     }
   }
@@ -420,6 +434,7 @@ class TimelapseUI {
    * Handle session completed event
    */
   handleSessionCompleted(data) {
+    this.unsavedSession = data;
     this.showSessionCompletion(data, 'completed');
   }
 
@@ -427,6 +442,7 @@ class TimelapseUI {
    * Handle session stopped event
    */
   handleSessionStopped(data) {
+    this.unsavedSession = data;
     this.showSessionCompletion(data, 'stopped');
   }
 
@@ -434,6 +450,7 @@ class TimelapseUI {
    * Handle session error event
    */
   handleSessionError(data) {
+    this.unsavedSession = data;
     this.showSessionCompletion(data, 'error');
   }
 

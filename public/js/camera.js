@@ -1395,6 +1395,11 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
       if (window.utilitiesManager) {
         window.utilitiesManager.initialize();
       }
+    } else if (cardName === 'timelapse-reports') {
+      // Load timelapse reports when the card is shown
+      if (window.timelapseUI) {
+        window.timelapseUI.loadReports();
+      }
     }
     
     // Update menu active states
@@ -1509,7 +1514,8 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
   updateProgressDisplay(status) {
     try {
       console.log('updateProgressDisplay called with:', status);
-      
+      console.log('nextShotTime in status:', status.nextShotTime);
+
       // Safely get values with fallbacks
       const stats = status.stats || {};
       const options = status.options || {};
@@ -1553,7 +1559,7 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
         const nextShotIn = Math.max(0, nextShotTime - now);
         
         if (nextShotIn <= 1000) {
-          document.getElementById('next-shot-countdown').textContent = 'Taking shot...';
+          document.getElementById('next-shot-countdown').textContent = 'Now';
         } else {
           document.getElementById('next-shot-countdown').textContent = `${Math.ceil(nextShotIn / 1000)}s`;
         }

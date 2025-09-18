@@ -349,9 +349,10 @@ export class TimelapseSession extends EventEmitter {
       this.nextShotTime = now;
     } else {
       // Subsequent shots - calculate based on interval from start time
-      // shotsTaken has already been incremented in takeShot(), so use it directly
-      const nextShotInterval = this.stats.shotsTaken;
-      this.nextShotTime = new Date(this.stats.startTime.getTime() + (nextShotInterval * this.options.interval * 1000));
+      // After shot N is taken, shotsTaken = N, and we schedule shot N+1
+      // Shot 1 at time 0, shot 2 at 1*interval, shot 3 at 2*interval, etc.
+      // So for the next shot (N+1), we use shotsTaken as the multiplier since shot 1 was at 0
+      this.nextShotTime = new Date(this.stats.startTime.getTime() + (this.stats.shotsTaken * this.options.interval * 1000));
     }
     
     // Calculate delay until next shot time
@@ -386,7 +387,11 @@ export class TimelapseSession extends EventEmitter {
       
       this.stats.shotsTaken++;
       this.stats.shotsSuccessful++;
-      
+
+      // Immediately update nextShotTime for the UI
+      // After shot N, the next shot (N+1) will be at startTime + (N * interval)
+      this.nextShotTime = new Date(this.stats.startTime.getTime() + (this.stats.shotsTaken * this.options.interval * 1000));
+
       logger.info(`Shot ${shotNumber} completed successfully`, {
         sessionId: this.id,
         title: this.title,
