@@ -1106,37 +1106,30 @@ class NetworkUI {
 
         countryList.innerHTML = '';
 
-        // Add popular countries first (US and JP for your use case)
-        const popularCountries = ['US', 'JP'];
-        const otherCountries = this.availableCountries.filter(c => !popularCountries.includes(c.code));
+        // Define common countries first (US and JP for your use case)
+        const commonCountryCodes = ['US', 'JP'];
+        const commonCountries = [];
+        const otherCountries = [];
 
-        // Render popular countries
-        if (popularCountries.length > 0) {
-            const popularHeader = document.createElement('div');
-            popularHeader.className = 'country-group-header';
-            popularHeader.textContent = 'Common Countries';
-            countryList.appendChild(popularHeader);
-
-            popularCountries.forEach(code => {
-                const country = this.availableCountries.find(c => c.code === code);
-                if (country) {
-                    this.renderCountryItem(countryList, country);
-                }
-            });
-
-            // Add separator
-            const separator = document.createElement('div');
-            separator.className = 'country-separator';
-            countryList.appendChild(separator);
-
-            const otherHeader = document.createElement('div');
-            otherHeader.className = 'country-group-header';
-            otherHeader.textContent = 'All Countries';
-            countryList.appendChild(otherHeader);
-        }
-
-        // Render all countries
+        // Separate common and other countries
         this.availableCountries.forEach(country => {
+            if (commonCountryCodes.includes(country.code)) {
+                commonCountries.push(country);
+            } else {
+                otherCountries.push(country);
+            }
+        });
+
+        // Sort common countries by the order in commonCountryCodes
+        commonCountries.sort((a, b) => {
+            return commonCountryCodes.indexOf(a.code) - commonCountryCodes.indexOf(b.code);
+        });
+
+        // Sort other countries alphabetically by name
+        otherCountries.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Render common countries first, then other countries
+        [...commonCountries, ...otherCountries].forEach(country => {
             this.renderCountryItem(countryList, country);
         });
     }
@@ -1145,7 +1138,6 @@ class NetworkUI {
         const item = document.createElement('div');
         item.className = 'country-item';
         item.innerHTML = `
-            <div class="country-code">${country.code}</div>
             <div class="country-name">${country.name}</div>
         `;
 
