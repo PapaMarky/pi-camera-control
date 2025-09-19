@@ -253,6 +253,10 @@ class WebSocketManager {
         this.emit('timelapse_reports', data);
         break;
 
+      case 'timelapse_report':
+        this.emit('timelapse_report_response', data);
+        break;
+
       case 'unsaved_session':
         this.emit('unsaved_session', data);
         break;
