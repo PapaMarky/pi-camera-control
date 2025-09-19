@@ -212,7 +212,7 @@ class TimelapseUI {
   async viewReport(reportId) {
     try {
       if (this.wsManager && this.wsManager.isConnected()) {
-        this.wsManager.send('get_timelapse_report', { reportId });
+        this.wsManager.send('get_timelapse_report', { id: reportId });
       } else {
         const response = await fetch(`/api/timelapse/reports/${reportId}`);
         const data = await response.json();
