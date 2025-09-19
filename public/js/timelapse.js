@@ -43,6 +43,14 @@ class TimelapseUI {
       this.deleteReport();
     });
 
+    document.getElementById('download-json-btn').addEventListener('click', () => {
+      this.downloadReportAsJSON();
+    });
+
+    document.getElementById('download-markdown-btn').addEventListener('click', () => {
+      this.downloadReportAsMarkdown();
+    });
+
     // Session completion handlers
     document.getElementById('save-session-btn').addEventListener('click', () => {
       this.saveSession();
@@ -288,11 +296,11 @@ class TimelapseUI {
             </div>
             <div class="info-item">
               <span class="info-label">Interval:</span>
-              <span class="info-value">${report.settings.interval} seconds</span>
+              <span class="info-value">${report.intervalometer?.interval || '-'} seconds</span>
             </div>
             <div class="info-item">
               <span class="info-label">Total Planned:</span>
-              <span class="info-value">${report.settings.totalShots || 'Unlimited'}</span>
+              <span class="info-value">${report.intervalometer?.numberOfShots || 'Unlimited'}</span>
             </div>
           </div>
         </div>
@@ -734,6 +742,287 @@ class TimelapseUI {
       case 'error': return 'Session Error';
       default: return 'Session Ended';
     }
+  }
+
+  /**
+   * Download current report as JSON
+   */
+  downloadReportAsJSON() {
+    if (!this.currentReport) {
+      this.showError('No report loaded');
+      return;
+    }
+
+    try {
+      // Create a formatted JSON string
+      const jsonStr = JSON.stringify(this.currentReport, null, 2);
+
+      // Create a blob and download link
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      // Generate filename with timestamp
+      const timestamp = new Date(this.currentReport.startTime).toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      const filename = `timelapse-report-${timestamp}.json`;
+
+      // Create download link and click it
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // Clean up the URL
+      URL.revokeObjectURL(url);
+
+      this.showSuccess('Report downloaded as JSON');
+    } catch (error) {
+      console.error('Failed to download JSON:', error);
+      this.showError('Failed to download report');
+    }
+  }
+
+  /**
+   * Download current report as Markdown
+   */
+  async downloadReportAsMarkdown() {
+    if (!this.currentReport) {
+      this.showError('No report loaded');
+      return;
+    }
+
+    try {
+      // Generate Markdown content
+      const markdown = this.generateMarkdownReport(this.currentReport);
+
+      // Create a blob and download link
+      const blob = new Blob([markdown], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+
+      // Generate filename with timestamp
+      const timestamp = new Date(this.currentReport.startTime).toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      const filename = `timelapse-report-${timestamp}.md`;
+
+      // Create download link and click it
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // Clean up the URL
+      URL.revokeObjectURL(url);
+
+      this.showSuccess('Report downloaded as Markdown');
+    } catch (error) {
+      console.error('Failed to download Markdown:', error);
+      this.showError('Failed to download report');
+    }
+  }
+
+  /**
+   * Generate Markdown report from report data
+   */
+  generateMarkdownReport(report) {
+    const successRate = Math.round((report.results.imagesSuccessful / report.results.imagesCaptured) * 100);
+
+    let markdown = `# ${report.title}\n\n`;
+    markdown += `**Generated**: ${new Date().toLocaleString()}\n\n`;
+
+    markdown += `## Summary\n\n`;
+    markdown += `- **Status**: ${this.formatStatus(report.status)}\n`;
+    markdown += `- **Start Time**: ${this.formatDateTime(report.startTime)}\n`;
+    markdown += `- **End Time**: ${this.formatDateTime(report.endTime)}\n`;
+    markdown += `- **Duration**: ${this.formatDuration(report.duration)}\n`;
+    markdown += `- **Success Rate**: ${successRate}%\n\n`;
+
+    markdown += `## Session Settings\n\n`;
+    markdown += `- **Interval**: ${report.intervalometer?.interval || 'Unknown'} seconds\n`;
+    markdown += `- **Total Planned**: ${report.intervalometer?.numberOfShots || 'Unlimited'}\n`;
+    if (report.intervalometer?.stopAt) {
+      markdown += `- **Stop Time**: ${report.intervalometer.stopAt}\n`;
+    }
+    if (report.intervalometer?.stopCondition) {
+      markdown += `- **Stop Condition**: ${report.intervalometer.stopCondition}\n`;
+    }
+    markdown += `\n`;
+
+    markdown += `## Results\n\n`;
+    markdown += `- **Images Captured**: ${report.results.imagesCaptured}\n`;
+    markdown += `- **Successful Images**: ${report.results.imagesSuccessful}\n`;
+    markdown += `- **Failed Images**: ${report.results.imagesFailed}\n`;
+    markdown += `- **Completion Reason**: ${report.metadata.completionReason}\n\n`;
+
+    if (report.results.errors && report.results.errors.length > 0) {
+      markdown += `## Errors\n\n`;
+      markdown += `| Time | Shot # | Error |\n`;
+      markdown += `|------|--------|-------|\n`;
+      report.results.errors.forEach(error => {
+        const time = this.formatTime(error.timestamp);
+        const shot = error.shotNumber;
+        const message = error.error.replace(/\|/g, '\\|'); // Escape pipes in error messages
+        markdown += `| ${time} | ${shot} | ${message} |\n`;
+      });
+      markdown += `\n`;
+    }
+
+    if (report.cameraInfo) {
+      markdown += `## Camera Information\n\n`;
+      markdown += `- **Model**: ${report.cameraInfo.productname || report.metadata?.cameraModel || 'Unknown'}\n`;
+      if (report.cameraInfo.serialnumber) {
+        markdown += `- **Serial Number**: ${report.cameraInfo.serialnumber}\n`;
+      }
+      if (report.cameraInfo.firmwareversion) {
+        markdown += `- **Firmware**: ${report.cameraInfo.firmwareversion}\n`;
+      }
+      markdown += `\n`;
+    }
+
+    // Add camera settings table if available
+    if (report.cameraSettings && Object.keys(report.cameraSettings).length > 0) {
+      markdown += `## Camera Settings\n\n`;
+      markdown += `<table>\n`;
+      markdown += `<tr><th>Setting</th><th>Value</th></tr>\n`;
+
+      Object.entries(report.cameraSettings).forEach(([key, setting]) => {
+        // Skip the 'values' array if present
+        if (key === 'values' && Array.isArray(setting)) {
+          return;
+        }
+
+        // Get the display name (key)
+        const name = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+        // Format the value based on type
+        let value = '';
+        if (setting && typeof setting === 'object') {
+          if ('value' in setting) {
+            // If it has a 'value' property, use that
+            value = this.formatSettingValueForHTML(setting.value);
+          } else {
+            // Otherwise format the object
+            value = this.formatSettingValueForHTML(setting);
+          }
+        } else {
+          value = this.formatSettingValueForHTML(setting);
+        }
+
+        markdown += `<tr><td>${name}</td><td>${value}</td></tr>\n`;
+      });
+      markdown += `</table>\n\n`;
+    }
+
+    markdown += `## Metadata\n\n`;
+    markdown += `- **Report ID**: ${report.id}\n`;
+    markdown += `- **Session ID**: ${report.sessionId}\n`;
+    markdown += `- **Saved At**: ${this.formatDateTime(report.metadata.savedAt)}\n`;
+    markdown += `- **Version**: ${report.metadata.version}\n`;
+
+    return markdown;
+  }
+
+  /**
+   * Format camera setting value for markdown
+   */
+  formatSettingValue(value) {
+    if (value === null || value === undefined) {
+      return '`N/A`';
+    }
+
+    if (typeof value === 'object') {
+      // Check if it's a simple key-value object
+      const keys = Object.keys(value);
+
+      // Skip arrays named 'values'
+      if (Array.isArray(value)) {
+        const jsonStr = JSON.stringify(value);
+        // If it's short, keep it on one line with backticks
+        if (jsonStr.length < 50) {
+          return '`' + jsonStr + '`';
+        }
+        // Otherwise format it nicely
+        const formatted = JSON.stringify(value, null, 2);
+        // Escape underscores and format with line breaks
+        return this.escapeForMarkdownTable(formatted).replace(/\n/g, '<br>');
+      }
+
+      // For simple objects with just a few properties, format nicely
+      if (keys.length <= 5 && keys.every(k => typeof value[k] !== 'object')) {
+        // Single line for simple objects, wrapped in backticks
+        const formatted = keys.map(k => `${k}: ${value[k]}`).join(', ');
+        return '`' + formatted + '`';
+      }
+
+      // For complex objects, format as readable JSON with line breaks
+      const jsonStr = JSON.stringify(value, null, 2);
+      // Escape underscores and use <br> for line breaks, preserve spaces
+      return this.escapeForMarkdownTable(jsonStr)
+        .replace(/\n/g, '<br>')
+        .replace(/ /g, '&nbsp;');
+    }
+
+    // Wrap single values in backticks
+    return '`' + String(value) + '`';
+  }
+
+  /**
+   * Format camera setting value for HTML table
+   */
+  formatSettingValueForHTML(value) {
+    if (value === null || value === undefined) {
+      return '<code>N/A</code>';
+    }
+
+    if (typeof value === 'object') {
+      // Check if it's a simple key-value object
+      const keys = Object.keys(value);
+
+      // Skip arrays named 'values'
+      if (Array.isArray(value)) {
+        const jsonStr = JSON.stringify(value);
+        // If it's short, keep it on one line
+        if (jsonStr.length < 50) {
+          return '<code>' + this.escapeHTML(jsonStr) + '</code>';
+        }
+        // Otherwise format it nicely with proper line breaks
+        const formatted = JSON.stringify(value, null, 2);
+        return '<pre><code>' + this.escapeHTML(formatted) + '</code></pre>';
+      }
+
+      // For simple objects with just a few properties, format nicely
+      if (keys.length <= 5 && keys.every(k => typeof value[k] !== 'object')) {
+        // Multi-line for simple objects using <br>
+        const formatted = keys.map(k => this.escapeHTML(`${k}: ${value[k]}`)).join('<br>');
+        return '<code>' + formatted + '</code>';
+      }
+
+      // For complex objects, format as readable JSON with proper code block
+      const jsonStr = JSON.stringify(value, null, 2);
+      return '<pre><code>' + this.escapeHTML(jsonStr) + '</code></pre>';
+    }
+
+    // Wrap single values in code tags
+    return '<code>' + this.escapeHTML(String(value)) + '</code>';
+  }
+
+  /**
+   * Escape HTML special characters
+   */
+  escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  /**
+   * Escape special characters for markdown table cells
+   */
+  escapeForMarkdownTable(str) {
+    // Escape underscores to prevent italic formatting
+    // Escape pipes to prevent table issues
+    return str.replace(/_/g, '\\_').replace(/\|/g, '\\|');
   }
 }
 
