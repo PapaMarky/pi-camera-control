@@ -134,11 +134,11 @@ export class CameraController {
       }
     }
     
-    // Prefer manual shutter endpoint
+    // Prefer regular shutter endpoint over manual for better reliability
+    const regularEndpoint = endpoints.find(ep => ep.includes('shutterbutton') && !ep.includes('manual'));
     const manualEndpoint = endpoints.find(ep => ep.includes('manual'));
-    const regularEndpoint = endpoints.find(ep => ep.includes('shutterbutton'));
-    
-    return manualEndpoint || regularEndpoint;
+
+    return regularEndpoint || manualEndpoint;
   }
 
   async getCameraSettings() {
@@ -151,15 +151,44 @@ export class CameraController {
       return response.data;
     } catch (error) {
       logger.error('Failed to get camera settings:', error.message);
-      
+
       // If we get a network error, handle disconnection
       if (error.code === 'EHOSTUNREACH' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
         logger.warn('Camera network error detected, handling disconnection');
         this.handleDisconnection(error);
       }
-      
+
       // Create a clean error without circular references
       const cleanError = new Error(error.message || 'Failed to get camera settings');
+      cleanError.status = error.response?.status;
+      cleanError.statusText = error.response?.statusText;
+      throw cleanError;
+    }
+  }
+
+  async getDeviceInformation() {
+    if (!this.connected) {
+      throw new Error('Camera not connected');
+    }
+
+    try {
+      const response = await this.client.get(`${this.baseUrl}/ccapi/ver100/deviceinformation`);
+      logger.debug('Retrieved device information', {
+        productname: response.data.productname,
+        serialnumber: response.data.serialnumber
+      });
+      return response.data;
+    } catch (error) {
+      logger.error('Failed to get device information:', error.message);
+
+      // If we get a network error, handle disconnection
+      if (error.code === 'EHOSTUNREACH' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        logger.warn('Camera network error detected, handling disconnection');
+        this.handleDisconnection(error);
+      }
+
+      // Create a clean error without circular references
+      const cleanError = new Error(error.message || 'Failed to get device information');
       cleanError.status = error.response?.status;
       cleanError.statusText = error.response?.statusText;
       throw cleanError;
@@ -181,16 +210,25 @@ export class CameraController {
         const response = await this.client.get(`${this.baseUrl}/ccapi/ver100/devicestatus/battery`);
         return { batterylist: [response.data] };
       } catch (fallbackError) {
-        logger.error('Failed to get camera battery:', fallbackError.message);
-        
+        // Extract Canon API error details
+        const statusCode = fallbackError.response?.status || 'unknown';
+        const apiMessage = fallbackError.response?.data?.message || fallbackError.message;
+
+        logger.error(`Failed to get camera battery - Status: ${statusCode}, API Message: "${apiMessage}"`);
+
+        // Log full response for Canon API errors (400, 503)
+        if (fallbackError.response?.data && [400, 503].includes(statusCode)) {
+          logger.debug('Canon API error response:', fallbackError.response.data);
+        }
+
         // If we get a network error, handle disconnection
         if (fallbackError.code === 'EHOSTUNREACH' || fallbackError.code === 'ECONNREFUSED' || fallbackError.code === 'ETIMEDOUT') {
           logger.warn('Camera network error detected during battery check, handling disconnection');
           this.handleDisconnection(fallbackError);
         }
-        
-        const cleanError = new Error(fallbackError.message || 'Failed to get camera battery');
-        cleanError.status = fallbackError.response?.status;
+
+        const cleanError = new Error(apiMessage || 'Failed to get camera battery');
+        cleanError.status = statusCode;
         cleanError.statusText = fallbackError.response?.statusText;
         throw cleanError;
       }
@@ -210,13 +248,9 @@ export class CameraController {
       // Release any stuck shutter first
       await this.releaseShutter();
       
-      // Press shutter (try manual focus first, then autofocus)
-      let pressResult = await this.pressShutter(false); // Manual focus
-      if (!pressResult) {
-        logger.debug('Manual focus failed, trying autofocus');
-        pressResult = await this.pressShutter(true); // Autofocus
-      }
-      
+      // Press shutter with manual focus only (no AF for timelapses)
+      const pressResult = await this.pressShutter(false); // Always manual focus
+
       if (!pressResult) {
         throw new Error('Failed to press shutter');
       }
@@ -243,10 +277,22 @@ export class CameraController {
   }
 
   async pressShutter(useAutofocus = false) {
-    const payload = {
-      af: useAutofocus,
-      action: 'full_press'
-    };
+    // Determine payload based on endpoint type
+    let payload;
+    const isManualEndpoint = this.shutterEndpoint && this.shutterEndpoint.includes('manual');
+
+    if (isManualEndpoint) {
+      // Manual endpoint requires action parameter
+      payload = {
+        af: false, // Always false for timelapses as per documentation
+        action: 'full_press'
+      };
+    } else {
+      // Regular shooting endpoint
+      payload = {
+        af: false // Always false for timelapses
+      };
+    }
 
     try {
       // Use longer timeout for photo operations (30 seconds) to handle long exposures
@@ -258,13 +304,31 @@ export class CameraController {
       if (error.code === 'ECONNABORTED') {
         logger.warn('Shutter press timed out after 30 seconds - camera may be busy with long exposure');
       } else {
-        logger.error('Shutter press failed:', error.message);
+        // Extract Canon API error details
+        const statusCode = error.response?.status || 'unknown';
+        const apiMessage = error.response?.data?.message || error.message;
+        const endpoint = this.shutterEndpoint;
+
+        logger.error(`Shutter press failed - Status: ${statusCode}, API Message: "${apiMessage}", Endpoint: ${endpoint}, Manual: ${isManualEndpoint}`);
+
+        // Log full response data for debugging if available
+        if (error.response?.data) {
+          logger.debug('Full Canon API error response:', error.response.data);
+        }
       }
       return false;
     }
   }
 
   async releaseShutter() {
+    const isManualEndpoint = this.shutterEndpoint && this.shutterEndpoint.includes('manual');
+
+    // Only manual endpoint supports release action
+    if (!isManualEndpoint) {
+      logger.debug('Skipping shutter release - not using manual endpoint');
+      return true; // Regular endpoint doesn't need explicit release
+    }
+
     const payload = {
       af: false,
       action: 'release'
@@ -277,7 +341,18 @@ export class CameraController {
       });
       return response.status >= 200 && response.status < 300;
     } catch (error) {
-      logger.debug('Shutter release failed (may be normal):', error.message);
+      // Extract Canon API error details for release too
+      const statusCode = error.response?.status || 'unknown';
+      const apiMessage = error.response?.data?.message || error.message;
+      const endpoint = this.shutterEndpoint;
+
+      logger.debug(`Shutter release failed - Status: ${statusCode}, API Message: "${apiMessage}", Endpoint: ${endpoint}`);
+
+      // Log full response data for debugging if available
+      if (error.response?.data) {
+        logger.debug('Full Canon API release error response:', error.response.data);
+      }
+
       return false;
     }
   }

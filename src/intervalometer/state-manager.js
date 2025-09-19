@@ -435,8 +435,9 @@ export class IntervalometerStateManager extends EventEmitter {
    */
   generateSessionReport(session, completionData = null) {
     const status = session.getStatus();
+    const metadata = session.getMetadata();
     const now = new Date();
-    
+
     return {
       id: `report-${session.id}`,
       sessionId: session.id,
@@ -444,19 +445,18 @@ export class IntervalometerStateManager extends EventEmitter {
       startTime: status.stats.startTime,
       endTime: status.stats.endTime || now,
       duration: status.duration,
-      status: completionData ? 
-        (completionData.reason.includes('error') ? 'error' : 
-         completionData.reason.includes('Stopped') ? 'stopped' : 'completed') : 
+      status: completionData ?
+        (completionData.reason.includes('error') ? 'error' :
+         completionData.reason.includes('Stopped') ? 'stopped' : 'completed') :
         status.state,
-      settings: {
+      intervalometer: {
         interval: status.options.interval,
-        totalShots: status.options.totalShots,
-        stopTime: status.options.stopTime,
-        // TODO: Add camera settings when available
-        shutterSpeed: 'auto',
-        iso: 'auto', 
-        aperture: 'auto'
+        stopCondition: status.options.stopCondition || 'unlimited',
+        numberOfShots: status.options.totalShots,
+        stopAt: status.options.stopTime
       },
+      cameraInfo: metadata.cameraInfo || null,
+      cameraSettings: metadata.cameraSettings || null,
       results: {
         imagesCaptured: status.stats.shotsTaken,
         imagesSuccessful: status.stats.shotsSuccessful,
@@ -466,8 +466,8 @@ export class IntervalometerStateManager extends EventEmitter {
       metadata: {
         completionReason: completionData?.reason || 'Unknown',
         savedAt: now,
-        version: '1.0.0', // TODO: Get from package.json
-        cameraModel: 'Unknown' // TODO: Get from camera controller
+        version: '2.0.0',
+        cameraModel: metadata.cameraInfo?.productname || 'Unknown'
       }
     };
   }

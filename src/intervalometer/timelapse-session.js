@@ -25,8 +25,13 @@ export class TimelapseSession extends EventEmitter {
       interval: 10, // seconds
       totalShots: null, // infinite if null
       stopTime: null, // Date object
+      stopCondition: 'unlimited', // 'unlimited', 'stop-after', 'stop-at'
       ...options
     };
+
+    // Camera data to be fetched at start
+    this.cameraInfo = null;
+    this.cameraSettings = null;
 
     // Calculate totalShots if we have stopTime but no explicit totalShots
     if (this.options.stopTime && !this.options.totalShots) {
@@ -110,7 +115,9 @@ export class TimelapseSession extends EventEmitter {
       createdAt: this.createdAt,
       state: this.state,
       options: { ...this.options },
-      stats: { ...this.stats }
+      stats: { ...this.stats },
+      cameraInfo: this.cameraInfo,
+      cameraSettings: this.cameraSettings
     };
   }
   
@@ -161,6 +168,30 @@ export class TimelapseSession extends EventEmitter {
     const cameraStatus = cameraController.getConnectionStatus();
     if (!cameraStatus.connected) {
       throw new Error('Camera is not connected');
+    }
+
+    // Fetch camera information and settings at session start
+    try {
+      logger.info('Fetching camera information for timelapse session', {
+        sessionId: this.id,
+        title: this.title
+      });
+
+      this.cameraInfo = await cameraController.getDeviceInformation();
+      this.cameraSettings = await cameraController.getCameraSettings();
+
+      logger.info('Camera data fetched successfully', {
+        sessionId: this.id,
+        cameraProduct: this.cameraInfo?.productname,
+        cameraSerial: this.cameraInfo?.serialnumber
+      });
+    } catch (error) {
+      logger.warn('Failed to fetch camera data for session, continuing without it', {
+        sessionId: this.id,
+        title: this.title,
+        error: error.message
+      });
+      // Continue without camera data - don't fail the session
     }
     
     // Validate interval against camera settings

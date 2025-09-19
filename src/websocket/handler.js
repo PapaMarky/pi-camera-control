@@ -539,38 +539,39 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   // Timelapse reporting WebSocket handlers
   const handleStartIntervalometerWithTitle = async (ws, data) => {
     try {
-      const { interval, shots, stopTime, title } = data;
-      
+      const { interval, shots, stopTime, stopCondition, title } = data;
+
       // Validation
       if (!interval || interval <= 0) {
         return sendError(ws, 'Invalid interval value');
       }
-      
+
       // Check if session is already running
       if (server.activeIntervalometerSession && server.activeIntervalometerSession.state === 'running') {
         return sendError(ws, 'Intervalometer is already running');
       }
-      
+
       // Validate against camera settings
       const currentController = cameraController();
       if (!currentController) {
         return sendError(ws, 'No camera available');
       }
-      
+
       const validation = await currentController.validateInterval(interval);
       if (!validation.valid) {
         return sendError(ws, validation.error);
       }
-      
+
       // Clean up any existing session
       if (server.activeIntervalometerSession) {
         server.activeIntervalometerSession.cleanup();
         server.activeIntervalometerSession = null;
       }
-      
+
       // Create and configure new session with title
       const options = { interval };
       if (title && title.trim()) options.title = title.trim();
+      if (stopCondition) options.stopCondition = stopCondition;
       if (shots && shots > 0) options.totalShots = parseInt(shots);
       if (stopTime) {
         // Parse time as HH:MM and create a future date
