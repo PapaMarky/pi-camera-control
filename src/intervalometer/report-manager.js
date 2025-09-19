@@ -115,15 +115,31 @@ export class TimelapseReportManager {
    * Validate report structure
    */
   validateReport(report) {
-    const requiredFields = ['id', 'sessionId', 'title', 'startTime', 'status', 'settings', 'results', 'metadata'];
-    
-    for (const field of requiredFields) {
+    // Support both old and new report structures during transition
+    const requiredFieldsV2 = ['id', 'sessionId', 'title', 'startTime', 'status', 'intervalometer', 'results', 'metadata'];
+    const requiredFieldsV1 = ['id', 'sessionId', 'title', 'startTime', 'status', 'settings', 'results', 'metadata'];
+
+    // Check for v2 structure first
+    let isV2Valid = true;
+    for (const field of requiredFieldsV2) {
+      if (!report.hasOwnProperty(field)) {
+        isV2Valid = false;
+        break;
+      }
+    }
+
+    if (isV2Valid) {
+      return true;
+    }
+
+    // Fall back to v1 structure
+    for (const field of requiredFieldsV1) {
       if (!report.hasOwnProperty(field)) {
         logger.debug('Report missing required field:', { field, reportId: report.id });
         return false;
       }
     }
-    
+
     return true;
   }
   
