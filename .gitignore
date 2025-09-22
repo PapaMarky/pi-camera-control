@@ -265,6 +265,8 @@ Thumbs.db
 
 # Documentation from Canon Cannot be published
 CanonDocs/
+CameraControlAPI_Reference_v140
+
 # Working files
 discovery.txt
 *.log~
