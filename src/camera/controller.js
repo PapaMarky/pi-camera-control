@@ -503,6 +503,74 @@ export class CameraController {
     this._capabilities = value;
   }
 
+  /**
+   * Get camera datetime
+   */
+  async getCameraDateTime() {
+    if (!this.connected) {
+      throw new Error('Camera not connected');
+    }
+
+    try {
+      const response = await this.client.get(`${this.baseUrl}/ccapi/ver100/settings/datetime`);
+
+      // Camera returns datetime in format: "2024-01-15T10:30:45"
+      // May include timezone offset: "2024-01-15T10:30:45+09:00"
+      if (response.data && response.data.datetime) {
+        let dateStr = response.data.datetime;
+        // If no timezone, assume UTC
+        if (!dateStr.includes('+') && !dateStr.includes('-') && !dateStr.includes('Z')) {
+          dateStr += 'Z';
+        }
+        return dateStr;
+      }
+      throw new Error('Invalid datetime response from camera');
+    } catch (error) {
+      logger.error('Failed to get camera datetime:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Set camera datetime
+   */
+  async setCameraDateTime(datetime) {
+    if (!this.connected) {
+      throw new Error('Camera not connected');
+    }
+
+    try {
+      // Convert Date object to camera format
+      const date = datetime instanceof Date ? datetime : new Date(datetime);
+
+      // Format time for camera: "YYYY-MM-DDTHH:MM:SS"
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
+      const hours = String(date.getUTCHours()).padStart(2, '0');
+      const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+      const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+
+      const datetimeStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+
+      logger.info(`Setting camera datetime to: ${datetimeStr}`);
+
+      const response = await this.client.put(`${this.baseUrl}/ccapi/ver100/settings/datetime`, {
+        datetime: datetimeStr
+      });
+
+      if (response.status === 200 || response.status === 204) {
+        logger.info('Camera datetime set successfully');
+        return true;
+      }
+
+      throw new Error(`Failed to set camera datetime: ${response.status}`);
+    } catch (error) {
+      logger.error('Failed to set camera datetime:', error.message);
+      return false;
+    }
+  }
+
   async cleanup() {
     logger.info('Cleaning up camera controller...');
     

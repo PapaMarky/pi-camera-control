@@ -261,6 +261,11 @@ class WebSocketManager {
         this.emit('unsaved_session', data);
         break;
 
+      case 'activity_log':
+        // Handle activity log messages from TimeSync service
+        this.handleActivityLog(data);
+        break;
+
       case 'error':
         console.error('WebSocket error response:', data);
         this.emit('error_response', data);
@@ -269,6 +274,34 @@ class WebSocketManager {
       default:
         console.log('Unknown WebSocket message type:', type, data);
     }
+  }
+
+  handleActivityLog(data) {
+    const { message, type, timestamp } = data;
+
+    // Find the activity log element
+    const activityLog = document.getElementById('activity-log');
+    if (!activityLog) {
+      console.warn('Activity log element not found');
+      return;
+    }
+
+    // Create log entry
+    const logEntry = document.createElement('div');
+    logEntry.className = `log-entry ${type}`;
+
+    // Format timestamp for display
+    const time = new Date(timestamp).toLocaleTimeString();
+
+    logEntry.innerHTML = `
+      <span class="log-time">${time}</span>
+      <span class="log-message">${message}</span>
+    `;
+
+    // Add to activity log (insert at the beginning for newest first)
+    activityLog.insertBefore(logEntry, activityLog.firstChild);
+
+    console.log(`[TimeSync Activity] ${message}`);
   }
 
   // Event emitter functionality

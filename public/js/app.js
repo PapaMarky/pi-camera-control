@@ -31,10 +31,14 @@ class CameraControlApp {
       // Initialize network UI
       this.networkUI = new NetworkUI(wsManager);
       window.networkUI = this.networkUI;
-      
+
       // Initialize timelapse UI
       this.timelapseUI = new TimelapseUI(wsManager);
       window.timelapseUI = this.timelapseUI;
+
+      // Initialize time sync
+      this.timeSync = new TimeSync(wsManager);
+      window.timeSync = this.timeSync;
       
       // Start periodic status updates (fallback if WebSocket fails)
       this.startStatusUpdates();
