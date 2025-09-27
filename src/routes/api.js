@@ -927,6 +927,35 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
     });
   }
 
+  // TimeSync status endpoint
+  router.get('/timesync/status', (req, res) => {
+    try {
+      // Import timeSyncService (dynamic import to avoid circular dependency)
+      import('../timesync/service.js').then(({ default: timeSyncService }) => {
+        const status = timeSyncService.getStatus();
+        const statistics = timeSyncService.getStatistics();
+
+        res.json({
+          success: true,
+          status,
+          statistics
+        });
+      }).catch(error => {
+        logger.error('Failed to import timeSyncService:', error);
+        res.status(500).json({
+          success: false,
+          error: 'TimeSync service not available'
+        });
+      });
+    } catch (error) {
+      logger.error('Failed to get TimeSync status:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to get TimeSync status'
+      });
+    }
+  });
+
   // Error handling middleware for API routes
   router.use((err, req, res, next) => {
     logger.error('API route error:', err);

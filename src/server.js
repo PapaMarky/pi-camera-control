@@ -16,6 +16,7 @@ import { NetworkServiceManager } from './network/service-manager.js';
 import { IntervalometerStateManager } from './intervalometer/state-manager.js';
 import { createApiRouter } from './routes/api.js';
 import { createWebSocketHandler } from './websocket/handler.js';
+import timeSyncService from './timesync/service.js';
 
 // Load environment variables
 dotenv.config();
@@ -60,9 +61,12 @@ class CameraControlServer {
       this.broadcastDiscoveryEvent('cameraDiscovered', deviceInfo);
     });
 
-    this.discoveryManager.on('cameraConnected', ({ uuid, info, controller }) => {
+    this.discoveryManager.on('cameraConnected', async ({ uuid, info, controller }) => {
       logger.info(`Camera connected: ${info.modelName}`);
       this.broadcastDiscoveryEvent('cameraConnected', { uuid, info });
+
+      // Trigger camera time sync on connection
+      await timeSyncService.handleCameraConnection();
     });
 
     this.discoveryManager.on('cameraOffline', (uuid) => {
@@ -298,16 +302,40 @@ class CameraControlServer {
       // Start server (IPv4 only when IPv6 is disabled system-wide)
       // Bind to all interfaces (0.0.0.0) so server is accessible from both WiFi and AP networks
       this.server.listen(PORT, '0.0.0.0', () => {
-        const discoveryInfo = this.discoveryManager 
+        const discoveryInfo = this.discoveryManager
           ? `discovery enabled (fallback: ${CAMERA_IP}:${CAMERA_PORT})`
           : `direct connection: ${CAMERA_IP}:${CAMERA_PORT}`;
-          
+
         logger.info(`Camera Control Server started on port ${PORT}`, {
           environment: process.env.NODE_ENV || 'development',
           camera: discoveryInfo,
           discovery: !!this.discoveryManager,
           pid: process.pid
         });
+
+        // Initialize TimeSync service after server is listening
+        const getCameraController = () => this.discoveryManager.getPrimaryController();
+
+        // Create WebSocket manager interface for TimeSync
+        const wsManager = {
+          broadcast: (message) => {
+            // Handle different message types appropriately
+            if (message.type === 'activity_log') {
+              // Broadcast activity log messages to all clients
+              if (this.wsHandler && this.wsHandler.broadcastActivityLog) {
+                this.wsHandler.broadcastActivityLog(message.data);
+              }
+            } else {
+              // Use the existing broadcastNetworkEvent method for time sync updates
+              if (this.wsHandler && this.wsHandler.broadcastNetworkEvent) {
+                this.wsHandler.broadcastNetworkEvent('time_sync_update', message);
+              }
+            }
+          }
+        };
+
+        timeSyncService.initialize(wsManager, getCameraController);
+        logger.info('TimeSync service initialized after server start');
       });
       
     } catch (error) {
@@ -318,22 +346,25 @@ class CameraControlServer {
 
   async shutdown(signal) {
     logger.info(`Received ${signal}, shutting down gracefully...`);
-    
+
     // Stop accepting new connections
     this.server.close(() => {
       logger.info('HTTP server closed');
     });
-    
+
     // Close WebSocket connections
     this.wss.clients.forEach((client) => {
       client.terminate();
     });
-    
+
+    // Cleanup TimeSync service
+    timeSyncService.cleanup();
+
     // Cleanup discovery, camera and power monitoring
     await this.discoveryManager.stopDiscovery();
     await this.powerManager.cleanup();
     await this.networkManager.cleanup();
-    
+
     // Cleanup intervalometer state manager
     await this.intervalometerStateManager.cleanup();
     

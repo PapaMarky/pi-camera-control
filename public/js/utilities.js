@@ -137,6 +137,9 @@ class UtilitiesManager {
       const clientTime = new Date();
       const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+      // Check last sync status first
+      await this.displayLastSyncStatus();
+
       this.log(`Syncing time and timezone to Pi...`, 'info');
       this.log(`Client time: ${clientTime.toLocaleString('en-US', { timeZone: clientTimezone, timeZoneName: 'short' })}`, 'info');
 
@@ -180,12 +183,79 @@ class UtilitiesManager {
     }
   }
 
+  async displayLastSyncStatus() {
+    try {
+      console.log('Fetching TimeSync status...');
+      const response = await fetch('/api/timesync/status');
+      console.log('TimeSync response status:', response.status);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('TimeSync data:', data);
+        const status = data.status;
+
+        if (status.lastPiSync) {
+          const lastSyncTime = new Date(status.lastPiSync);
+          const now = new Date();
+          const timeSinceSync = now - lastSyncTime;
+          const minutesAgo = Math.floor(timeSinceSync / 60000);
+          const hoursAgo = Math.floor(minutesAgo / 60);
+
+          let timeAgoText;
+          if (minutesAgo < 1) {
+            timeAgoText = 'just now';
+          } else if (minutesAgo < 60) {
+            timeAgoText = `${minutesAgo} minute${minutesAgo !== 1 ? 's' : ''} ago`;
+          } else if (hoursAgo < 24) {
+            timeAgoText = `${hoursAgo} hour${hoursAgo !== 1 ? 's' : ''} ago`;
+          } else {
+            const daysAgo = Math.floor(hoursAgo / 24);
+            timeAgoText = `${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago`;
+          }
+
+          const reliabilityStatus = status.piReliable ? '✓ Reliable' : '⚠ Expired';
+          this.log(`Last auto-sync: ${timeAgoText} (${reliabilityStatus})`, 'info');
+
+          if (status.syncSource) {
+            this.log(`Sync source: ${status.syncSource}`, 'info');
+          }
+        } else {
+          console.log('No lastPiSync found, showing warning message');
+          this.log('No automatic time sync has occurred yet', 'warning');
+        }
+      } else {
+        console.log('TimeSync API response not ok:', response.status);
+      }
+    } catch (error) {
+      // Silently fail if TimeSync status is not available
+      console.error('TimeSync status error:', error.message);
+      this.log('Could not check auto-sync status', 'warning');
+    }
+  }
+
   log(message, type = 'info') {
+    console.log(`[Utilities] Logging message: "${message}" (type: ${type})`);
+
     // Use the existing camera log system if available
     if (window.cameraManager && window.cameraManager.log) {
+      console.log('[Utilities] Using cameraManager.log');
       window.cameraManager.log(message, type);
     } else {
-      console.log(`[Utilities] ${message}`);
+      console.log(`[Utilities] No cameraManager found, using console: ${message}`);
+
+      // Try to log directly to activity log if camera manager isn't available
+      const activityLog = document.getElementById('activity-log');
+      if (activityLog) {
+        const logEntry = document.createElement('div');
+        logEntry.className = `log-entry ${type}`;
+        logEntry.innerHTML = `
+          <span class="log-time">${new Date().toLocaleTimeString()}</span>
+          <span class="log-message">${message}</span>
+        `;
+        activityLog.appendChild(logEntry);
+        activityLog.scrollTop = activityLog.scrollHeight;
+        console.log('[Utilities] Added message directly to activity log');
+      }
     }
   }
 

@@ -1,8 +1,10 @@
 import { logger } from '../utils/logger.js';
 import { IntervalometerSession } from '../intervalometer/session.js';
+import timeSyncService from '../timesync/service.js';
 
 export function createWebSocketHandler(cameraController, powerManager, server, networkManager, discoveryManager, intervalometerStateManager) {
   const clients = new Set();
+  const clientInfo = new Map(); // Track client info for time sync
   
   // Set up network event listeners for real-time updates
   if (networkManager && networkManager.stateManager) {
@@ -147,10 +149,39 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   
   // Handle individual WebSocket connections
   const handleConnection = async (ws, req) => {
-    const clientId = `${req.socket.remoteAddress}:${req.socket.remotePort}`;
-    
+    const clientIP = req.socket.remoteAddress?.replace(/^::ffff:/, '') || 'unknown';
+    const clientId = `${clientIP}:${req.socket.remotePort}`;
+
     logger.info(`WebSocket client connected: ${clientId}`);
     clients.add(ws);
+
+    // Determine client interface (ap0 or wlan0)
+    let clientInterface = 'unknown';
+    if (networkManager) {
+      try {
+        const networkStatus = await networkManager.getNetworkStatus(false);
+        // Check if client IP is in AP range (typically 192.168.4.x)
+        if (clientIP.startsWith('192.168.4.')) {
+          clientInterface = 'ap0';
+        } else {
+          clientInterface = 'wlan0';
+        }
+      } catch (error) {
+        logger.error('Failed to determine client interface:', error);
+      }
+    }
+
+    // Store client info for time sync
+    clientInfo.set(ws, { ip: clientIP, interface: clientInterface });
+
+    // Handle time sync for new connection
+    logger.info(`WebSocket: About to call TimeSync for ${clientIP} on ${clientInterface}`);
+    try {
+      await timeSyncService.handleClientConnection(clientIP, clientInterface, ws);
+      logger.info(`WebSocket: TimeSync call completed for ${clientIP}`);
+    } catch (error) {
+      logger.error(`WebSocket: TimeSync call failed for ${clientIP}:`, error);
+    }
     
     // Send initial status immediately
     try {
@@ -198,12 +229,26 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
     ws.on('close', (code, reason) => {
       logger.info(`WebSocket client disconnected: ${clientId} (${code}: ${reason})`);
       clients.delete(ws);
+
+      // Clean up time sync tracking
+      const info = clientInfo.get(ws);
+      if (info) {
+        timeSyncService.handleClientDisconnection(info.ip);
+        clientInfo.delete(ws);
+      }
     });
-    
+
     // Handle WebSocket errors
     ws.on('error', (error) => {
       logger.error(`WebSocket error for ${clientId}:`, error);
       clients.delete(ws);
+
+      // Clean up time sync tracking
+      const info = clientInfo.get(ws);
+      if (info) {
+        timeSyncService.handleClientDisconnection(info.ip);
+        clientInfo.delete(ws);
+      }
     });
   };
   
@@ -294,7 +339,23 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
         case 'ping':
           sendResponse(ws, 'pong', { timestamp: new Date().toISOString() });
           break;
-          
+
+        case 'time-sync-response':
+          await handleTimeSyncResponse(ws, data);
+          break;
+
+        case 'gps-response':
+          await handleGPSResponse(ws, data);
+          break;
+
+        case 'manual-time-sync':
+          await handleManualTimeSync(ws, data);
+          break;
+
+        case 'get-time-sync-status':
+          await handleGetTimeSyncStatus(ws);
+          break;
+
         default:
           logger.warn(`Unknown WebSocket message type: ${type}`);
           sendError(ws, `Unknown message type: ${type}`);
@@ -925,10 +986,10 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
       data,
       timestamp: new Date().toISOString()
     };
-    
+
     const message = JSON.stringify(timelapseEvent);
     logger.info(`Broadcasting timelapse event ${eventType} to ${clients.size} clients`);
-    
+
     for (const client of clients) {
       try {
         if (client.readyState === client.OPEN) {
@@ -940,11 +1001,109 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
     }
   };
 
+  // Function to broadcast activity log messages to all clients
+  const broadcastActivityLog = (data) => {
+    const activityLogEvent = {
+      type: 'activity_log',
+      data,
+      timestamp: new Date().toISOString()
+    };
+
+    const message = JSON.stringify(activityLogEvent);
+    logger.debug(`Broadcasting activity log to ${clients.size} clients: ${data.message}`);
+
+    for (const client of clients) {
+      try {
+        if (client.readyState === client.OPEN) {
+          client.send(message);
+        }
+      } catch (error) {
+        logger.debug('Failed to broadcast activity log:', error.message);
+      }
+    }
+  };
+
+  // Time sync message handlers
+  const handleTimeSyncResponse = async (ws, data) => {
+    try {
+      const info = clientInfo.get(ws);
+      if (!info) {
+        logger.warn('Received time sync response from unknown client');
+        return;
+      }
+
+      const { clientTime, timezone, gps } = data;
+      await timeSyncService.handleClientTimeResponse(info.ip, clientTime, timezone, gps);
+    } catch (error) {
+      logger.error('Failed to handle time sync response:', error);
+    }
+  };
+
+  const handleGPSResponse = async (ws, data) => {
+    try {
+      const info = clientInfo.get(ws);
+      if (!info) {
+        logger.warn('Received GPS response from unknown client');
+        return;
+      }
+
+      // Store GPS data if valid
+      if (data.latitude && data.longitude) {
+        timeSyncService.lastGPS = {
+          latitude: data.latitude,
+          longitude: data.longitude,
+          accuracy: data.accuracy,
+          timestamp: data.timestamp
+        };
+        logger.info(`GPS location updated from ${info.ip}`);
+      }
+    } catch (error) {
+      logger.error('Failed to handle GPS response:', error);
+    }
+  };
+
+  const handleManualTimeSync = async (ws, data) => {
+    try {
+      const info = clientInfo.get(ws);
+      if (!info) {
+        return sendError(ws, 'Client information not found');
+      }
+
+      const { clientTime, timezone } = data;
+      await timeSyncService.handleClientTimeResponse(info.ip, clientTime, timezone);
+
+      sendResponse(ws, 'manual_sync_complete', {
+        success: true,
+        message: 'Manual time sync completed',
+        status: timeSyncService.getStatus()
+      });
+    } catch (error) {
+      logger.error('Failed to handle manual time sync:', error);
+      sendError(ws, `Manual time sync failed: ${error.message}`);
+    }
+  };
+
+  const handleGetTimeSyncStatus = async (ws) => {
+    try {
+      const status = timeSyncService.getStatus();
+      const statistics = timeSyncService.getStatistics();
+
+      sendResponse(ws, 'time_sync_status', {
+        status,
+        statistics
+      });
+    } catch (error) {
+      logger.error('Failed to get time sync status:', error);
+      sendError(ws, `Failed to get time sync status: ${error.message}`);
+    }
+  };
+
   // Attach cleanup and broadcast functions to the handler for access from server
   handleConnection.cleanup = cleanup;
   handleConnection.broadcastStatus = broadcastStatus;
   handleConnection.broadcastDiscoveryEvent = broadcastDiscoveryEvent;
   handleConnection.broadcastTimelapseEvent = broadcastTimelapseEvent;
+  handleConnection.broadcastActivityLog = broadcastActivityLog;
   
   return handleConnection;
 }
