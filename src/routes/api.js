@@ -10,7 +10,15 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
     try {
       const currentController = getCameraController();
       if (!currentController) {
-        return res.json({ connected: false, error: 'No camera available' });
+        // Return specification-compliant response even when no camera
+        return res.json({
+          connected: false,
+          ip: null,
+          port: null,
+          lastError: 'No camera available',
+          shutterEndpoint: null,
+          hasCapabilities: false
+        });
       }
       const status = currentController.getConnectionStatus();
       res.json(status);
@@ -268,17 +276,32 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
   router.get('/intervalometer/status', (req, res) => {
     try {
       if (!server.activeIntervalometerSession) {
-        return res.json({ 
-          running: false, 
-          state: 'stopped',
-          message: 'No active intervalometer session'
+        // Return specification-compliant response (no 'message' field)
+        return res.json({
+          running: false,
+          state: 'stopped'
         });
       }
-      
+
       const status = server.activeIntervalometerSession.getStatus();
+
+      // Return specification-compliant response with required fields
       res.json({
         running: status.state === 'running',
-        ...status
+        state: status.state,
+        stats: {
+          startTime: status.stats?.startTime || new Date().toISOString(),
+          shotsTaken: status.stats?.shotsTaken || status.progress?.shots || 0,
+          shotsSuccessful: status.stats?.shotsSuccessful || status.stats?.successful || 0,
+          shotsFailed: status.stats?.shotsFailed || status.stats?.failed || 0,
+          currentShot: (status.stats?.shotsTaken || status.progress?.shots || 0) + 1,
+          nextShotTime: status.stats?.nextShotTime || null
+        },
+        options: {
+          interval: status.options?.interval || 30,
+          totalShots: status.options?.totalShots || status.progress?.total || null,
+          stopTime: status.options?.stopTime || null
+        }
       });
     } catch (error) {
       logger.error('Failed to get intervalometer status:', error);

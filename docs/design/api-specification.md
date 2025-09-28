@@ -54,13 +54,17 @@ Returns camera battery status and information.
 {
   "batterylist": [
     {
+      "position": "camera",
       "name": "LP-E17",
-      "level": 85,
-      "quality": "full"
+      "kind": "battery",
+      "level": "85",
+      "quality": "good"
     }
   ]
 }
 ```
+
+**Note:** Format matches Canon CCAPI v1.40 specification. The `level` field is returned as a string, not a number. Additional fields include `position` (camera location), `kind` (battery type), and standard `quality` values ("bad", "normal", "good", "unknown").
 
 #### Take Photo
 ```http
@@ -156,6 +160,16 @@ GET /api/intervalometer/status
   }
 }
 ```
+
+**Response when inactive:**
+```json
+{
+  "running": false,
+  "state": "stopped"
+}
+```
+
+**Note:** The inactive response only includes `running` and `state` fields. No `message` field is included per specification compliance.
 
 ### Timelapse Reports Management
 

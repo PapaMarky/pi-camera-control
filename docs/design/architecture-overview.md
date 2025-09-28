@@ -380,13 +380,14 @@ data/timelapse-reports/         # Persistent session data
 
 **Impact**: Inconsistent error handling in frontend code, requiring multiple error checking patterns.
 
-### WebSocket Message Schema
-**Issue**: WebSocket message types and payloads are not formally documented with schemas.
-- Message types have evolved organically without specification
-- Field names and structures vary between similar messages
-- No validation layer for message contracts
+### WebSocket Message Schema ✅ **RESOLVED**
+**Status**: Comprehensive schema validation system implemented.
+- All message types documented with formal schemas (`test/schemas/`)
+- API specification compliance tests enforce correct behavior
+- Schema validation prevents field name inconsistencies
+- TDD process ensures specifications are followed
 
-**Impact**: Frontend/backend mismatches when adding new features, field name inconsistencies.
+**Resolution**: Test-driven approach with specification compliance testing ensures API and WebSocket message consistency.
 
 ### Time Synchronization Documentation
 **Issue**: The entire time synchronization subsystem was added without updating design documentation.
