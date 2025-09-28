@@ -298,7 +298,10 @@ connectionHistory: [
 - `cameraDiscovered` - New camera found
 - `cameraConnected` - Camera successfully connected
 - `cameraOffline` - Camera disconnected
+- `cameraIPChanged` - Camera IP address changed during network transition
 - `primaryCameraChanged` - Primary camera updated
+- `primaryCameraReconnected` - Primary camera successfully reconnected after IP change
+- `primaryCameraDisconnected` - Primary camera lost connection (manual intervention needed)
 - `photo_taken` - Photo capture successful
 
 ### Event Emitters
@@ -307,8 +310,152 @@ connectionHistory: [
 discoveryManager.on('cameraDiscovered', (deviceInfo) => { ... });
 discoveryManager.on('cameraConnected', ({ uuid, info, controller }) => { ... });
 discoveryManager.on('cameraOffline', (uuid) => { ... });
+discoveryManager.on('cameraIPChanged', ({ uuid, oldIP, newIP }) => { ... });
 discoveryManager.on('primaryCameraChanged', (primaryCamera) => { ... });
+discoveryManager.on('primaryCameraReconnected', ({ uuid, info, controller }) => { ... });
+discoveryManager.on('primaryCameraDisconnected', ({ uuid, reason }) => { ... });
 ```
+
+## Camera IP Change Detection and Network Transition Handling
+
+### IP Change Detection
+The system continuously monitors for camera IP address changes to handle network transitions gracefully:
+
+```javascript
+// From src/camera/state-manager.js:64-84
+// Track IP changes for network transition detection
+const lastIP = this.lastKnownIPs.get(uuid);
+if (lastIP && lastIP !== deviceInfo.ipAddress) {
+  logger.info(`Camera ${uuid} IP changed: ${lastIP} -> ${deviceInfo.ipAddress}`);
+  this.emit('cameraIPChanged', { uuid, oldIP: lastIP, newIP: deviceInfo.ipAddress });
+
+  // If this is our primary camera, we need to reconnect
+  if (uuid === this.primaryCameraUuid && this.primaryController) {
+    logger.info(`Primary camera IP changed, reconnecting from ${lastIP} to ${deviceInfo.ipAddress}...`);
+    try {
+      await this.reconnectPrimaryCamera(deviceInfo.ipAddress, deviceInfo.port || '443');
+      logger.info(`Primary camera successfully reconnected to ${deviceInfo.ipAddress}`);
+    } catch (error) {
+      logger.error(`Failed to reconnect primary camera to new IP ${deviceInfo.ipAddress}:`, error);
+      this.emit('primaryCameraDisconnected', { uuid, reason: 'ip_change_reconnect_failed' });
+    }
+  }
+}
+```
+
+### Automatic Reconnection on Network Transitions
+When the primary camera's IP address changes (common during network transitions), the system automatically attempts to reconnect:
+
+```javascript
+// From src/camera/state-manager.js:397-434
+async reconnectPrimaryCamera(newIP, newPort = '443') {
+  if (!this.primaryCameraUuid || !this.primaryController) {
+    throw new Error('No primary camera to reconnect');
+  }
+
+  const uuid = this.primaryCameraUuid;
+  const cameraData = this.cameras.get(uuid);
+
+  logger.info(`Reconnecting primary camera ${uuid} to new IP ${newIP}:${newPort}`);
+
+  // Clean up old controller
+  await this.primaryController.cleanup();
+
+  // Create new controller with updated IP
+  const controller = new CameraController(newIP, newPort);
+
+  try {
+    const connected = await controller.connect();
+    if (connected) {
+      // Update camera data with new connection info
+      cameraData.info.ipAddress = newIP;
+      cameraData.info.port = newPort;
+      cameraData.info.ccapiUrl = `https://${newIP}:${newPort}/ccapi`;
+      cameraData.status = 'connected';
+      cameraData.controller = controller;
+      cameraData.lastError = null;
+      this.primaryController = controller;
+
+      this.recordConnectionEvent(uuid, 'reconnected', newIP);
+
+      logger.info(`Primary camera ${uuid} successfully reconnected to ${newIP}:${newPort}`);
+      this.emit('primaryCameraReconnected', {
+        uuid,
+        info: cameraData.info,
+        controller
+      });
+
+      return controller;
+    }
+  } catch (error) {
+    logger.error(`Failed to reconnect primary camera to ${newIP}:${newPort}:`, error);
+    cameraData.status = 'failed';
+    cameraData.lastError = error.message;
+
+    // Clear primary camera since reconnection failed
+    this.primaryCameraUuid = null;
+    this.primaryController = null;
+
+    this.recordConnectionEvent(uuid, 'reconnect_failed', newIP, error.message);
+    throw error;
+  }
+}
+```
+
+### Network Transition Auto-Connect Logic
+The system intelligently determines when to auto-connect cameras during network transitions:
+
+```javascript
+// From src/camera/state-manager.js:149-169
+shouldAutoConnect(uuid, deviceInfo) {
+  // Always try to auto-connect if no primary camera is set
+  if (!this.primaryCameraUuid) {
+    return { reason: 'no primary camera set' };
+  }
+
+  // Auto-connect if this is a known camera that was previously connected
+  // (handles network transitions where camera reconnects with new IP)
+  const connectionHistory = this.getConnectionHistory(uuid);
+  if (connectionHistory.length > 0) {
+    const hadSuccessfulConnection = connectionHistory.some(event =>
+      event.event === 'connected' || event.event === 'reconnected'
+    );
+    if (hadSuccessfulConnection) {
+      return { reason: 'previously connected camera reconnected' };
+    }
+  }
+
+  return false; // Don't auto-connect
+}
+```
+
+## Primary Camera Failover Behavior
+
+### Automatic Primary Camera Selection
+The system maintains a primary camera for intervalometer operations with automatic failover:
+
+```javascript
+// From src/camera/state-manager.js:113-130
+// Duplicate handling with primary camera transfer
+if (duplicateUuid === this.primaryCameraUuid) {
+  logger.info(`Transferring primary camera status from ${duplicateUuid} to ${newUuid}`);
+  this.primaryCameraUuid = null; // Will be set when new camera connects
+}
+```
+
+### Primary Camera Events
+The system emits specific events for primary camera state changes:
+
+- **`primaryCameraReconnected`**: Primary camera successfully reconnected to new IP
+- **`primaryCameraDisconnected`**: Primary camera lost due to IP change failure
+- **`primaryCameraChanged`**: New camera designated as primary
+
+### Failover Recovery Process
+1. **IP Change Detected**: System detects primary camera IP change
+2. **Automatic Reconnection**: Attempts to reconnect to new IP address
+3. **Success Path**: Updates camera data and maintains primary status
+4. **Failure Path**: Clears primary camera, emits disconnect event for UI handling
+5. **Manual Recovery**: UI can offer manual reconnection or camera selection
 
 ## Configuration
 

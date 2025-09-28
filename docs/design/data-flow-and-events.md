@@ -99,6 +99,8 @@ this.intervalometerStateManager.on('sessionStarted', (data) => {
 - `cameraOffline` - Camera disconnected or unreachable
 - `primaryCameraChanged` - Primary camera designation changed
 - `primaryCameraDisconnected` - Primary camera lost
+- `cameraIPChanged` - Camera IP address changed (network transition)
+- `primaryCameraReconnected` - Primary camera reconnected after network change
 
 ```javascript
 // Event binding from UPnP and state manager
@@ -108,6 +110,11 @@ this.upnp.on('cameraDiscovered', (deviceInfo) => {
 
 this.cameraStateManager.on('primaryCameraChanged', (data) => {
     this.emit('primaryCameraChanged', data);
+});
+
+// IP change detection
+this.cameraStateManager.on('cameraIPChanged', (data) => {
+    this.emit('cameraIPChanged', data);
 });
 ```
 
@@ -135,13 +142,39 @@ this.serviceManager.on('serviceStateChanged', (data) => {
 - `sessionError` - Session encountered error
 - `reportSaved` - Report saved to persistence
 - `reportDeleted` - Report deleted
-- `unsavedSessionFound` - Unsaved session detected
+- `unsavedSessionFound` - Unsaved session detected on startup
+- `sessionDiscarded` - User chose to discard unsaved session
+- `photo_taken` - Individual photo captured during session
 
 #### 5. PowerManager (`src/system/power.js`)
 **Events Emitted:**
 - `powerStatusChanged` - Battery or thermal status change
 - `thermalWarning` - High temperature detected
 - `batteryLow` - Low battery warning
+
+#### 6. TimeSyncService (`src/timesync/service.js`)
+**Events Emitted:**
+- `pi-sync` - Raspberry Pi time synchronized
+- `camera-sync` - Camera time synchronized
+- `reliability-lost` - Time sync reliability degraded
+- `sync-failed` - Time synchronization attempt failed
+
+```javascript
+// Time sync event examples
+this.emit('pi-sync', {
+    synchronized: true,
+    source: 'client',
+    offset: 1500,
+    reliability: 'high'
+});
+
+this.emit('camera-sync', {
+    success: true,
+    previousTime: oldTime,
+    newTime: newTime,
+    offset: timeDiff
+});
+```
 
 ## Event Broadcasting System
 

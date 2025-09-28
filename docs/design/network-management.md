@@ -334,20 +334,25 @@ sudo ip addr show ap0
 ## API Integration
 
 ### REST Endpoints
-- `GET /api/network/status` - Complete network status
-- `GET /api/network/wifi/scan` - Available WiFi networks
-- `POST /api/network/wifi/connect` - Connect to WiFi
-- `POST /api/network/wifi/disconnect` - Disconnect WiFi
-- `GET /api/network/wifi/saved` - Saved network profiles
-- `POST /api/network/accesspoint/configure` - Configure AP
-- `POST /api/network/wifi/country` - Set regulatory domain
+- `GET /api/network/status` - Complete network status with force refresh option
+- `GET /api/network/wifi/scan` - Available WiFi networks with signal strength
+- `POST /api/network/wifi/connect` - Connect to WiFi with automatic verification
+- `POST /api/network/wifi/disconnect` - Disconnect WiFi gracefully
+- `GET /api/network/wifi/saved` - Saved network profiles from NetworkManager
+- `POST /api/network/accesspoint/configure` - Configure AP with validation
+- `GET /api/network/wifi/country` - Get current WiFi country code
+- `POST /api/network/wifi/country` - Set regulatory domain with validation
+- `GET /api/network/wifi/countries` - Get available country codes
 
 ### WebSocket Events
-- `network_service_changed` - Service state updates
-- `network_interface_changed` - Interface state updates
-- `wifi_connection_started` - Connection attempt initiated
-- `wifi_connection_failed` - Connection failed
+- `network_service_changed` - Service state updates during transitions
+- `network_interface_changed` - Interface state updates with detailed info
+- `wifi_connection_started` - Connection attempt initiated with verification delay
+- `wifi_connection_verified` - Connection verified after 5-second delay
+- `wifi_connection_failed` - Connection failed with detailed error info
 - `access_point_configured` - AP configuration updated
+- `wifi_country_changed` - Regulatory domain updated
+- `network_transition_complete` - Network mode transition finished
 
 ### Network Status Response
 ```javascript

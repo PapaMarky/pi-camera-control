@@ -275,14 +275,89 @@ graph LR
     DISCARD --> CLEANUP[Session Cleanup]
 ```
 
-### Decision Workflow Events
-```javascript
-// From IntervalometerStateManager event handling
-session.on('completed', (completionData) => {
-    // Mark session as needing user decision
-    this.markSessionForDecision(completionData.sessionId);
+### Enhanced Session Management Implementation
+The system implements sophisticated session state management with user decision workflows:
 
-    // Broadcast to UI
+```javascript
+// From src/intervalometer/state-manager.js:20-29
+// Session state tracking
+this.sessionState = {
+  hasActiveSession: false,
+  currentSessionId: null,
+  lastSessionId: null,
+  lastUpdate: null
+};
+
+// Unsaved session for cross-reboot recovery
+this.unsavedSession = null;
+```
+
+### Session Completion Workflow
+When sessions complete, stop, or encounter errors, they require user decisions:
+
+```javascript
+// From src/websocket/handler.js:79-86
+// Session completed event handling
+session.on('completed', (completionData) => {
+  logger.info('Session completed event received, broadcasting:', completionData);
+  broadcastEvent('intervalometer_completed', completionData);
+  // Broadcast that there's an unsaved session needing user decision
+  broadcastEvent('timelapse_session_needs_decision', {
+    sessionId: completionData.sessionId,
+    title: completionData.title,
+    stats: completionData.stats,
+    reason: 'completed'
+  });
+});
+
+// Session stopped event handling
+session.on('stopped', (stopData) => {
+  logger.info('Session stopped event received, broadcasting:', stopData);
+  broadcastEvent('intervalometer_stopped', stopData);
+  // Broadcast that there's an unsaved session needing user decision
+  broadcastEvent('timelapse_session_needs_decision', {
+    sessionId: stopData.sessionId,
+    title: stopData.title,
+    stats: stopData.stats,
+    reason: 'stopped'
+  });
+});
+
+// Session error event handling
+session.on('error', (errorData) => {
+  logger.info('Session error event received, broadcasting:', errorData);
+  broadcastEvent('intervalometer_error', errorData);
+  // Broadcast that there's an unsaved session needing user decision
+  broadcastEvent('timelapse_session_needs_decision', {
+    sessionId: errorData.sessionId,
+    title: errorData.title,
+    stats: errorData.stats,
+    reason: 'error'
+  });
+});
+```
+
+### Decision Workflow Events
+The system maintains session data and prompts users for save/discard decisions:
+
+```javascript
+// Session completion triggers decision workflow
+session.on('completed', (completionData) => {
+    // Store session data for potential saving
+    this.sessionHistory.set(completionData.sessionId, completionData);
+
+    // Mark as unsaved session
+    this.unsavedSession = {
+        sessionId: completionData.sessionId,
+        title: completionData.title,
+        completionData: completionData,
+        timestamp: new Date().toISOString()
+    };
+
+    // Save to disk for cross-reboot recovery
+    await this.saveUnsavedSession();
+
+    // Broadcast to UI for user decision
     this.emit('unsavedSessionFound', {
         sessionId: completionData.sessionId,
         title: completionData.title,
@@ -291,24 +366,215 @@ session.on('completed', (completionData) => {
 });
 ```
 
-### User Actions
-```javascript
-// Save session as permanent report
-async saveSessionReport(sessionId, title) {
-    const session = this.getSession(sessionId);
-    const report = await this.reportManager.createReport(session, title);
+### User Decision Actions
+Users can save sessions as reports or discard them entirely:
 
-    this.emit('reportSaved', { report });
-    this.cleanupSession(sessionId);
-    return report;
+```javascript
+// From src/intervalometer/state-manager.js:223-254
+// Save session as permanent report
+async saveSessionReport(sessionId, customTitle = null) {
+  try {
+    const sessionData = this.sessionHistory.get(sessionId);
+    if (!sessionData) {
+      throw new Error(`Session ${sessionId} not found in history`);
+    }
+
+    logger.info('Creating report from session', { sessionId, customTitle });
+
+    // Create report with custom title if provided
+    const title = customTitle || sessionData.title || `Timelapse Session ${sessionId.slice(0, 8)}`;
+    const report = await this.reportManager.createReportFromSession(sessionData, title);
+
+    // Save the report
+    const savedReport = await this.reportManager.saveReport(report);
+
+    // Clear unsaved session
+    if (this.unsavedSession && this.unsavedSession.sessionId === sessionId) {
+      this.unsavedSession = null;
+      await this.clearUnsavedSession();
+    }
+
+    // Clean up session from history
+    this.sessionHistory.delete(sessionId);
+
+    logger.info('Session saved as report', {
+      sessionId,
+      reportId: savedReport.id,
+      title: savedReport.title
+    });
+
+    this.emit('reportSaved', { report: savedReport, sessionId });
+    return savedReport;
+  } catch (error) {
+    logger.error('Failed to save session report:', error);
+    this.emit('reportSaveFailed', { sessionId, error: error.message });
+    throw error;
+  }
 }
 
+// From src/intervalometer/state-manager.js:256-277
 // Discard session without saving
 async discardSession(sessionId) {
-    this.cleanupSession(sessionId);
+  try {
+    logger.info('Discarding session', { sessionId });
+
+    // Clear unsaved session
+    if (this.unsavedSession && this.unsavedSession.sessionId === sessionId) {
+      this.unsavedSession = null;
+      await this.clearUnsavedSession();
+    }
+
+    // Clean up session from history
+    this.sessionHistory.delete(sessionId);
+
+    logger.info('Session discarded successfully', { sessionId });
     this.emit('sessionDiscarded', { sessionId });
+  } catch (error) {
+    logger.error('Failed to discard session:', error);
+    throw error;
+  }
 }
 ```
+
+### WebSocket Decision Handlers
+Real-time WebSocket handlers for user decision actions:
+
+```javascript
+// From src/websocket/handler.js:346-380
+// Save session as report via WebSocket
+const handleSaveSessionAsReport = async (ws, data) => {
+  try {
+    const { sessionId, title } = data;
+
+    if (!sessionId) {
+      return sendError(ws, 'Session ID is required');
+    }
+
+    const savedReport = await intervalometerStateManager.saveSessionReport(sessionId, title);
+    sendResponse(ws, 'session_saved', {
+      sessionId,
+      reportId: savedReport.id,
+      title: savedReport.title,
+      message: 'Session saved as report successfully'
+    });
+
+    // Broadcast the save action to all clients
+    broadcastTimelapseEvent('report_saved', { report: savedReport });
+  } catch (error) {
+    logger.error('Failed to save session as report via WebSocket:', error);
+    sendError(ws, `Failed to save session as report: ${error.message}`);
+  }
+};
+
+// From src/websocket/handler.js:382-404
+// Discard session via WebSocket
+const handleDiscardSession = async (ws, data) => {
+  try {
+    const { sessionId } = data;
+
+    if (!sessionId) {
+      return sendError(ws, 'Session ID is required');
+    }
+
+    await intervalometerStateManager.discardSession(sessionId);
+    sendResponse(ws, 'session_discarded', {
+      sessionId,
+      message: 'Session discarded successfully'
+    });
+
+    // Broadcast the discard action to all clients
+    broadcastTimelapseEvent('session_discarded', { sessionId });
+  } catch (error) {
+    logger.error('Failed to discard session via WebSocket:', error);
+    sendError(ws, `Failed to discard session: ${error.message}`);
+  }
+};
+```
+
+## Unsaved Session Recovery Across Reboots
+
+### Cross-Reboot Session Persistence
+The system preserves session data across system reboots to prevent data loss:
+
+```javascript
+// From src/intervalometer/state-manager.js:46-47
+// Check for unsaved session from previous run
+await this.checkForUnsavedSession();
+```
+
+### Session Recovery Implementation
+```javascript
+// From src/intervalometer/state-manager.js:313-335
+// Check for unsaved session from previous run
+async checkForUnsavedSession() {
+  try {
+    logger.debug('Checking for unsaved session from previous run...');
+
+    // Load unsaved session from disk
+    this.unsavedSession = await this.reportManager.loadUnsavedSession();
+
+    if (this.unsavedSession) {
+      logger.info('Found unsaved session from previous run', {
+        sessionId: this.unsavedSession.sessionId,
+        title: this.unsavedSession.title
+      });
+
+      this.emit('unsavedSessionFound', {
+        sessionId: this.unsavedSession.sessionId,
+        title: this.unsavedSession.title,
+        completionData: this.unsavedSession.completionData
+      });
+    } else {
+      logger.debug('No unsaved session found from previous run');
+    }
+
+  } catch (error) {
+    logger.debug('No unsaved session found (this is normal):', error.message);
+  }
+}
+```
+
+### Unsaved Session Storage
+```javascript
+// From src/intervalometer/state-manager.js:337-347
+// Save unsaved session to disk for cross-reboot recovery
+async saveUnsavedSession() {
+  if (!this.unsavedSession) return;
+
+  try {
+    await this.reportManager.saveUnsavedSession(this.unsavedSession);
+    logger.debug('Saved unsaved session data for recovery');
+  } catch (error) {
+    logger.error('Failed to save unsaved session data:', error);
+  }
+}
+
+// From src/intervalometer/state-manager.js:349-359
+// Clear unsaved session from disk
+async clearUnsavedSession() {
+  try {
+    await this.reportManager.clearUnsavedSession();
+    logger.debug('Cleared unsaved session data');
+  } catch (error) {
+    logger.error('Failed to clear unsaved session data:', error);
+  }
+}
+```
+
+### Session Recovery Workflow
+1. **System Startup**: Check for unsaved session file on initialization
+2. **Session Found**: Load session data and emit `unsavedSessionFound` event
+3. **UI Notification**: WebSocket broadcasts decision prompt to connected clients
+4. **User Decision**: Save as report or discard via WebSocket commands
+5. **Cleanup**: Remove unsaved session file after user decision
+
+### Recovery File Management
+Unsaved sessions are stored in persistent storage managed by the `TimelapseReportManager`:
+
+- **Storage Location**: Reports directory with special `.unsaved` extension
+- **File Format**: JSON with complete session data and metadata
+- **Cleanup Policy**: Automatically removed after save/discard decision
+- **Persistence**: Survives system reboots, power cycles, and service restarts
 
 ## Report Management and Persistence
 
@@ -429,8 +695,10 @@ this.emit('sessionCompleted', data);
 this.emit('sessionStopped', data);
 this.emit('sessionError', data);
 this.emit('reportSaved', data);
+this.emit('reportSaveFailed', data);
 this.emit('reportDeleted', data);
-this.emit('unsavedSessionFound', data);
+this.emit('sessionDiscarded', data);
+this.emit('unsavedSessionFound', data); // Fired on startup recovery
 ```
 
 ### WebSocket Broadcasting
@@ -439,7 +707,30 @@ this.emit('unsavedSessionFound', data);
 broadcastTimelapseEvent('session_started', sessionData);
 broadcastTimelapseEvent('photo_taken', photoData);
 broadcastTimelapseEvent('session_completed', completionData);
-broadcastTimelapseEvent('session_needs_decision', decisionData);
+broadcastTimelapseEvent('timelapse_session_needs_decision', {
+  sessionId: sessionId,
+  title: title,
+  stats: stats,
+  reason: 'completed|stopped|error'
+});
+broadcastTimelapseEvent('report_saved', { report: savedReport });
+broadcastTimelapseEvent('session_discarded', { sessionId });
+```
+
+### WebSocket Command Handlers
+```javascript
+// User decision WebSocket commands
+case 'save_session_as_report':
+  await handleSaveSessionAsReport(ws, data);
+  break;
+
+case 'discard_session':
+  await handleDiscardSession(ws, data);
+  break;
+
+case 'get_unsaved_session':
+  await handleGetUnsavedSession(ws);
+  break;
 ```
 
 ## Performance Optimizations
