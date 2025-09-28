@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger.js';
 import { IntervalometerSession } from '../intervalometer/session.js';
 import timeSyncService from '../timesync/service.js';
+import { createStandardError, broadcastError, ErrorCodes, Components } from '../utils/error-handlers.js';
 
 export function createWebSocketHandler(cameraController, powerManager, server, networkManager, discoveryManager, intervalometerStateManager) {
   const clients = new Set();
@@ -387,7 +388,10 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
       broadcastEvent('photo_taken', { timestamp: new Date().toISOString() });
       
     } catch (error) {
-      sendError(ws, `Failed to take photo: ${error.message}`);
+      sendError(ws, `Failed to take photo: ${error.message}`, {
+        code: ErrorCodes.PHOTO_FAILED,
+        operation: 'takePhoto'
+      });
     }
   };
   
@@ -893,8 +897,21 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
     }
   };
   
-  const sendError = (ws, error) => {
-    sendResponse(ws, 'error', { message: error });
+  const sendError = (ws, message, options = {}) => {
+    try {
+      const standardError = createStandardError(message, {
+        code: options.code || ErrorCodes.OPERATION_FAILED,
+        operation: options.operation,
+        component: options.component || Components.WEBSOCKET_HANDLER,
+        details: options.details
+      });
+
+      if (ws.readyState === ws.OPEN) {
+        ws.send(JSON.stringify(standardError));
+      }
+    } catch (error) {
+      logger.error('Failed to send error to WebSocket client:', error);
+    }
   };
 
   // Universal method to send operation results with consistent structure
