@@ -124,7 +124,7 @@ export class CameraController {
     const endpoints = [];
     
     // Search through all API versions for shutter endpoints
-    for (const [_version, endpointsList] of Object.entries(capabilities)) {
+    for (const [_version, endpointsList] of Object.entries(capabilities)) { // TODO: Consider using version for endpoint selection
       if (Array.isArray(endpointsList)) {
         for (const endpoint of endpointsList) {
           if (endpoint?.path && endpoint.path.includes('shutterbutton') && endpoint.post) {
@@ -276,7 +276,7 @@ export class CameraController {
     }
   }
 
-  async pressShutter(_useAutofocus = false) {
+  async pressShutter(useAutofocus = false) {
     // Determine payload based on endpoint type
     let payload;
     const isManualEndpoint = this.shutterEndpoint && this.shutterEndpoint.includes('manual');
@@ -284,13 +284,13 @@ export class CameraController {
     if (isManualEndpoint) {
       // Manual endpoint requires action parameter
       payload = {
-        af: false, // Always false for timelapses as per documentation
+        af: useAutofocus,
         action: 'full_press'
       };
     } else {
       // Regular shooting endpoint
       payload = {
-        af: false // Always false for timelapses
+        af: useAutofocus
       };
     }
 

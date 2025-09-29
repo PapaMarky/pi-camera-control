@@ -795,7 +795,7 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
     router.post('/discovery/primary/:uuid', async (req, res) => {
       try {
         const { uuid } = req.params;
-        const _controller = await discoveryManager.setPrimaryCamera(uuid);
+        const _controller = await discoveryManager.setPrimaryCamera(uuid); // TODO: Use controller return value or remove if not needed
         res.json({ success: true, message: 'Primary camera set', uuid });
       } catch (error) {
         logger.error('Failed to set primary camera:', error);
@@ -811,7 +811,7 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
           return res.status(400).json({ error: 'IP address is required' });
         }
         
-        const _controller = await discoveryManager.connectToIp(ip, port);
+        const _controller = await discoveryManager.connectToIp(ip, port); // TODO: Use controller return value or remove if not needed
         res.json({ success: true, message: 'Connected to camera', ip, port });
       } catch (error) {
         logger.error('Failed to connect to camera:', error);
