@@ -55,10 +55,10 @@ describe('TimeSyncService', () => {
     timeSyncService.initialize(mockWsManager, mockCameraController);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     jest.clearAllMocks();
     if (timeSyncService) {
-      timeSyncService.cleanup();
+      await timeSyncService.cleanup();
     }
   });
 
