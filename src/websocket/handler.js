@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger.js';
-import { IntervalometerSession } from '../intervalometer/session.js';
+// Removed unused import: IntervalometerSession
 import timeSyncService from '../timesync/service.js';
-import { createStandardError, broadcastError, ErrorCodes, Components } from '../utils/error-handlers.js';
+import { createStandardError, ErrorCodes, Components } from '../utils/error-handlers.js';
 
 export function createWebSocketHandler(cameraController, powerManager, server, networkManager, discoveryManager, intervalometerStateManager) {
   const clients = new Set();
@@ -160,7 +160,7 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
     let clientInterface = 'unknown';
     if (networkManager) {
       try {
-        const networkStatus = await networkManager.getNetworkStatus(false);
+        const _networkStatus = await networkManager.getNetworkStatus(false);
         // Check if client IP is in AP range (typically 192.168.4.x)
         if (clientIP.startsWith('192.168.4.')) {
           clientInterface = 'ap0';
@@ -387,7 +387,7 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
     }
   };
   
-  const handleTakePhoto = async (ws, data) => {
+  const handleTakePhoto = async (ws, _data) => {
     try {
       const currentController = cameraController();
       if (!currentController) {
