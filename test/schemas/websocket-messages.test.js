@@ -251,9 +251,15 @@ describe('Schema-Code Consistency Checks', () => {
         // Check if handler has a case for this message type
         const hasHandler =
           handlerCode.includes(`case '${msgType}'`) ||
+          handlerCode.includes(`case "${msgType}"`) ||
           handlerCode.includes(`type === '${msgType}'`) ||
-          handlerCode.includes(`handleMessage('${msgType}'`);
+          handlerCode.includes(`type === "${msgType}"`) ||
+          handlerCode.includes(`handleMessage('${msgType}'`) ||
+          handlerCode.includes(`handleMessage("${msgType}"`);
 
+        if (!hasHandler) {
+          console.log(`Missing handler for message type: ${msgType}`);
+        }
         expect(hasHandler).toBe(true);
       }
     }
