@@ -3,6 +3,10 @@ module.exports = {
     node: true,
     es2022: true
   },
+  globals: {
+    URL: 'readonly',
+    Intl: 'readonly'
+  },
   extends: [
     'eslint:recommended'
   ],

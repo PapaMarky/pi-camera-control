@@ -124,7 +124,7 @@ export class CameraController {
     const endpoints = [];
     
     // Search through all API versions for shutter endpoints
-    for (const [version, endpointsList] of Object.entries(capabilities)) {
+    for (const [_version, endpointsList] of Object.entries(capabilities)) {
       if (Array.isArray(endpointsList)) {
         for (const endpoint of endpointsList) {
           if (endpoint?.path && endpoint.path.includes('shutterbutton') && endpoint.post) {
@@ -276,7 +276,7 @@ export class CameraController {
     }
   }
 
-  async pressShutter(useAutofocus = false) {
+  async pressShutter(_useAutofocus = false) {
     // Determine payload based on endpoint type
     let payload;
     const isManualEndpoint = this.shutterEndpoint && this.shutterEndpoint.includes('manual');

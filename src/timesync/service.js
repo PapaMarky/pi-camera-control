@@ -501,6 +501,9 @@ class TimeSyncService {
   }
 }
 
-// Export singleton instance
+// Export both class and singleton instance for testing
+export { TimeSyncService };
+
+// Export singleton instance as default
 const timeSyncService = new TimeSyncService();
 export default timeSyncService;

@@ -205,7 +205,7 @@ export class UPnPDiscovery extends EventEmitter {
       for (const iface of interfaces) {
         try {
           // Set the outbound interface for this search
-          await new Promise((resolve, reject) => {
+          await new Promise((resolve, _reject) => {
             this.socket.send(searchMessage, this.MULTICAST_PORT, this.MULTICAST_ADDRESS, (error) => {
               if (error) {
                 logger.warn(`M-SEARCH failed for ${serviceType} on ${iface.name}:`, error);

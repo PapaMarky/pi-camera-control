@@ -161,7 +161,7 @@ export class CameraStateManager extends EventEmitter {
   /**
    * Determine if a camera should auto-connect
    */
-  shouldAutoConnect(uuid, deviceInfo) {
+  shouldAutoConnect(uuid, _deviceInfo) {
     // Always try to auto-connect if no primary camera is set
     if (!this.primaryCameraUuid) {
       return { reason: 'no primary camera set' };
@@ -554,7 +554,7 @@ export class CameraStateManager extends EventEmitter {
     }
     
     // Clean up all controllers
-    for (const [uuid, camera] of this.cameras) {
+    for (const [_uuid, camera] of this.cameras) {
       if (camera.controller) {
         await camera.controller.cleanup();
       }

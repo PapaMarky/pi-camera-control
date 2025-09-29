@@ -5,7 +5,7 @@
  */
 
 import { jest } from '@jest/globals';
-import TimeSyncService from '../../src/timesync/service.js';
+import { TimeSyncService } from '../../src/timesync/service.js';
 
 // Mock child_process spawn
 jest.mock('child_process', () => ({
