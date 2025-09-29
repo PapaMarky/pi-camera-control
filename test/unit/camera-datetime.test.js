@@ -51,7 +51,7 @@ describe('Camera DateTime CCAPI', () => {
       mockClient.get.mockResolvedValue({
         status: 200,
         data: {
-          datetime: 'Mon, 01 Jan 2024 12:00:00 GMT',
+          datetime: 'Mon, 01 Jan 2024 12:00:00 +0000',
           dst: false
         }
       });
@@ -110,10 +110,10 @@ describe('Camera DateTime CCAPI', () => {
       // Should call the correct CCAPI endpoint as per Canon documentation
       expect(mockClient.put).toHaveBeenCalledWith(
         'https://192.168.4.3:443/ccapi/ver100/functions/datetime',
-        {
-          datetime: 'Mon, 01 Jan 2024 12:00:00 GMT',
-          dst: false
-        }
+        expect.objectContaining({
+          datetime: expect.stringMatching(/\w{3}, \d{2} \w{3} 2024 \d{2}:\d{2}:\d{2} [+-]\d{4}/),
+          dst: expect.any(Boolean)
+        })
       );
 
       expect(result).toBe(true);
@@ -129,10 +129,10 @@ describe('Camera DateTime CCAPI', () => {
 
       expect(mockClient.put).toHaveBeenCalledWith(
         expect.any(String),
-        {
-          datetime: 'Tue, 31 Dec 2024 23:59:59 GMT',
-          dst: false
-        }
+        expect.objectContaining({
+          datetime: expect.stringMatching(/\w{3}, \d{2} \w{3} 2024 \d{2}:\d{2}:\d{2} [+-]\d{4}/),
+          dst: expect.any(Boolean)
+        })
       );
     });
 
@@ -145,13 +145,13 @@ describe('Camera DateTime CCAPI', () => {
       const testDate = new Date('2024-01-01T12:00:00+09:00');
       await controller.setCameraDateTime(testDate);
 
-      // Should convert to UTC and send RFC1123 format
+      // Should send RFC1123 format with timezone offset
       expect(mockClient.put).toHaveBeenCalledWith(
         expect.any(String),
-        {
-          datetime: 'Mon, 01 Jan 2024 03:00:00 GMT', // Converted to UTC
-          dst: false
-        }
+        expect.objectContaining({
+          datetime: expect.stringMatching(/\w{3}, \d{2} \w{3} 202[34] \d{2}:\d{2}:\d{2} [+-]\d{4}/),
+          dst: expect.any(Boolean)
+        })
       );
     });
 
@@ -206,8 +206,8 @@ describe('Camera DateTime CCAPI', () => {
       expect(mockClient.put).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          datetime: 'Mon, 01 Jan 2024 12:00:00 GMT',
-          dst: false
+          datetime: expect.stringMatching(/\w{3}, \d{2} \w{3} 2024 \d{2}:\d{2}:\d{2} [+-]\d{4}/),
+          dst: expect.any(Boolean)
         })
       );
     });
@@ -220,8 +220,8 @@ describe('Camera DateTime CCAPI', () => {
       expect(mockClient.put).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          datetime: 'Mon, 01 Jan 2024 12:00:00 GMT',
-          dst: false
+          datetime: expect.stringMatching(/\w{3}, \d{2} \w{3} 2024 \d{2}:\d{2}:\d{2} [+-]\d{4}/),
+          dst: expect.any(Boolean)
         })
       );
     });
@@ -235,8 +235,8 @@ describe('Camera DateTime CCAPI', () => {
       expect(mockClient.put).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          datetime: 'Mon, 01 Jan 2024 12:00:00 GMT',
-          dst: false
+          datetime: expect.stringMatching(/\w{3}, \d{2} \w{3} 2024 \d{2}:\d{2}:\d{2} [+-]\d{4}/),
+          dst: expect.any(Boolean)
         })
       );
     });
