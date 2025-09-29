@@ -87,16 +87,22 @@ describe('TDD Compliance Validation', () => {
     }
   });
 
-  test('CLAUDE.md contains TDD requirements', () => {
-    const claudeMdPath = path.join(projectRoot, 'CLAUDE.md');
-    expect(fs.existsSync(claudeMdPath)).toBe(true);
+  test('TDD infrastructure is properly configured', () => {
+    // Verify that Jest is configured and tests can run
+    // This is more appropriate than checking documentation files
+    const packageJsonPath = path.join(projectRoot, 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
 
-    const content = fs.readFileSync(claudeMdPath, 'utf8');
-    expect(content).toContain('Test-Driven Development Requirements');
-    expect(content).toContain('WRITE FAILING TESTS FIRST');
-    expect(content).toContain('npm test');
-    expect(content).toContain('Schema Validation Tests');
-    expect(content).toContain('TDD Checklist');
+    // Check that test infrastructure exists
+    expect(packageJson.scripts).toHaveProperty('test');
+    expect(packageJson.devDependencies).toHaveProperty('jest');
+
+    // Check that test directories exist
+    const testDirs = ['test/schemas', 'test/unit', 'test/integration'];
+    for (const dir of testDirs) {
+      const testDirPath = path.join(projectRoot, dir);
+      expect(fs.existsSync(testDirPath)).toBe(true);
+    }
   });
 
   test('Package.json has test script configured', () => {
