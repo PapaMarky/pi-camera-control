@@ -2,7 +2,11 @@
 
 ## Overview
 
-The Time Synchronization System ensures accurate timekeeping across the Pi Camera Control system, including the Raspberry Pi controller and connected Canon cameras. This is critical for timelapse photography where consistent timestamps are essential for proper sequencing and metadata accuracy.
+The Time Synchronization System ensures accurate timekeeping across the Pi Camera Control system, including the 
+Raspberry Pi controller and connected Canon cameras. The Raspberry Pi does not have a battery back up for its
+RTC. When in the field with no Wi-Fi connection, other than the UI there is no way to check or set the system
+time. We only allow clients connected via the access point to sync because they must be physically close to 
+the Pi to connect. This assures that they are in the same timezone and under the control of the operator of the Pi.
 
 ## Architecture
 
@@ -11,7 +15,6 @@ The Time Synchronization System ensures accurate timekeeping across the Pi Camer
 #### TimeSyncService (`src/timesync/service.js`)
 The main service responsible for time synchronization operations:
 - Client-server time synchronization protocol
-- GPS integration support (future enhancement)
 - Camera time synchronization via CCAPI
 - Manual time setting capabilities
 - Activity logging for synchronization events
@@ -29,8 +32,6 @@ State management for time synchronization:
 graph TD
     subgraph "Time Sources"
         CLIENT[Web Client<br/>Browser Time]
-        GPS[GPS Module<br/>Future]
-        MANUAL[Manual Setting<br/>User Input]
     end
 
     subgraph "Time Sync System"
@@ -45,8 +46,6 @@ graph TD
     end
 
     CLIENT -->|WebSocket| SERVICE
-    GPS -->|Serial/USB| SERVICE
-    MANUAL -->|API/WS| SERVICE
 
     SERVICE --> STATE
     SERVICE --> LOG
@@ -126,7 +125,7 @@ Camera time synchronization uses the Canon CCAPI:
 {
   isSynchronized: boolean,      // Overall sync status
   lastSyncTime: Date,           // Last successful sync
-  syncSource: string,           // "client" | "gps" | "manual" | "none"
+  syncSource: string,           // "client" | "manual" | "none"
   reliability: string,          // "high" | "medium" | "low" | "none"
   activityLog: Array            // Recent sync activities
 }
@@ -151,19 +150,6 @@ Camera time synchronization uses the Canon CCAPI:
     "clientTime": 1704110401000,
     "serverTime": 1704110400000,
     "requestId": "sync-123"
-  }
-}
-```
-
-#### GPS Data (Future)
-```json
-{
-  "type": "gps-response",
-  "data": {
-    "timestamp": 1704110400000,
-    "latitude": 37.7749,
-    "longitude": -122.4194,
-    "accuracy": 5
   }
 }
 ```
@@ -310,6 +296,14 @@ Synchronizes camera time with system time.
    - Re-sync before starting timelapse session
    - Option for manual camera sync via UI
 
+### Client User Interface
+
+* **Controller Status**
+  * Camera Status
+    * `TimeSync:` _TimeSyncStatus of camera_ or blank if no camera connected
+  * Controller Info
+    * `TimeSync:` _TimeSyncStatus of controller_ 
+
 ### Error Handling
 
 1. **Network Failures**
@@ -349,22 +343,6 @@ The system maintains an activity log for debugging and user visibility:
 - Keep last 100 entries in memory
 - Clear log on service restart
 - Include in status broadcasts for UI display
-
-## Future Enhancements
-
-### GPS Integration
-- Support for USB/serial GPS modules
-- High-precision time source for remote locations
-- Automatic timezone detection from GPS coordinates
-
-### NTP Client
-- Network Time Protocol support when internet available
-- Fallback time source hierarchy: GPS > NTP > Client > Manual
-
-### Persistent Time Sync
-- Save last known good time offset
-- Apply saved offset on boot before sync available
-- Detect and warn about RTC drift
 
 ## Configuration
 
@@ -409,22 +387,7 @@ TIME_SYNC_RETRY_DELAY=5000      # Retry delay for failed syncs
 
 ## Known Issues
 
-1. **Permission Requirements**
-   - Setting system time requires root privileges
-   - May fail in containerized environments
-   - User warning needed for permission failures
-
-2. **Camera Sync Limitations**
-   - Some camera models may not support time setting via CCAPI
-   - Time zone handling varies by camera model
-   - Sync accuracy limited to seconds (no millisecond precision)
-
-3. **Client Time Trust**
-   - System trusts client time without verification
-   - No protection against malicious time setting
-   - Consider adding time bounds checking
-
-4. **Documentation Gap**
+1. **Documentation Gap**
    - This system was implemented without design documentation
    - WebSocket protocol evolved organically
    - Need to maintain this document with implementation changes

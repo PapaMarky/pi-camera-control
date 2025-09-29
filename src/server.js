@@ -74,12 +74,15 @@ class CameraControlServer {
       this.broadcastDiscoveryEvent('cameraOffline', { uuid });
     });
 
-    this.discoveryManager.on('primaryCameraChanged', (primaryCamera) => {
+    this.discoveryManager.on('primaryCameraChanged', async (primaryCamera) => {
       logger.info(`Primary camera changed: ${primaryCamera.info.modelName}`);
       this.broadcastDiscoveryEvent('primaryCameraChanged', {
         uuid: primaryCamera.uuid,
         info: primaryCamera.info
       });
+
+      // Trigger camera time sync when primary camera changes (new camera connected)
+      await timeSyncService.handleCameraConnection();
     });
 
     this.discoveryManager.on('primaryCameraDisconnected', () => {
@@ -325,8 +328,13 @@ class CameraControlServer {
               if (this.wsHandler && this.wsHandler.broadcastActivityLog) {
                 this.wsHandler.broadcastActivityLog(message.data);
               }
+            } else if (message.type === 'time-sync-status') {
+              // Broadcast time sync status directly to all clients
+              if (this.wsHandler && this.wsHandler.broadcast) {
+                this.wsHandler.broadcast(JSON.stringify(message));
+              }
             } else {
-              // Use the existing broadcastNetworkEvent method for time sync updates
+              // Use the existing broadcastNetworkEvent method for other messages
               if (this.wsHandler && this.wsHandler.broadcastNetworkEvent) {
                 this.wsHandler.broadcastNetworkEvent('time_sync_update', message);
               }

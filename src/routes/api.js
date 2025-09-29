@@ -58,6 +58,21 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
     }
   });
 
+  // Get camera datetime with timezone and DST information
+  router.get('/camera/datetime', async (req, res) => {
+    try {
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json({ error: 'No camera available' });
+      }
+      const datetimeDetails = await currentController.getCameraDateTimeDetails();
+      res.json(datetimeDetails);
+    } catch (error) {
+      logger.error('Failed to get camera datetime:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Debug endpoint to see all available CCAPI endpoints
   router.get('/camera/debug/endpoints', (req, res) => {
     try {
@@ -975,6 +990,69 @@ export function createApiRouter(getCameraController, powerManager, server, netwo
       res.status(500).json({
         success: false,
         error: 'Failed to get TimeSync status'
+      });
+    }
+  });
+
+  // Camera time sync endpoint
+  router.post('/timesync/camera', async (req, res) => {
+    try {
+      // Import timeSyncService (dynamic import to avoid circular dependency)
+      const { default: timeSyncService } = await import('../timesync/service.js');
+
+      // Get the camera controller from the discovery manager
+      const cameraController = getCameraController();
+
+      // Check if camera controller exists and is connected
+      if (!cameraController) {
+        return res.status(400).json({
+          success: false,
+          error: 'No camera available'
+        });
+      }
+
+      if (!cameraController.connected) {
+        return res.status(400).json({
+          success: false,
+          error: 'Camera not connected'
+        });
+      }
+
+      // Get current camera time first
+      const previousCameraTime = await cameraController.getCameraDateTime();
+
+      // Get Pi time and sync camera to it
+      const piTime = new Date();
+      const success = await cameraController.setCameraDateTime(piTime);
+
+      if (success) {
+        // Calculate offset in milliseconds
+        const previousTime = previousCameraTime ? new Date(previousCameraTime) : piTime;
+        const offset = previousTime.getTime() - piTime.getTime();
+
+        // Record the sync event in TimeSyncService
+        timeSyncService.state.recordCameraSync(offset);
+
+        // Trigger a status broadcast to update UI
+        timeSyncService.broadcastSyncStatus();
+
+        res.json({
+          success: true,
+          previousTime: previousTime.toISOString(),
+          newTime: piTime.toISOString(),
+          offset: offset
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: 'Failed to synchronize camera time'
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to sync camera time:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
       });
     }
   });
