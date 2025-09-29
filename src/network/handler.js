@@ -317,7 +317,7 @@ export function createWebSocketHandler(
     }
   };
 
-  const handleTakePhoto = async (ws, data) => {
+  const handleTakePhoto = async (ws, _data) => {
     try {
       const currentController = cameraController();
       if (!currentController) {

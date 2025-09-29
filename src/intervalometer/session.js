@@ -125,7 +125,7 @@ export class IntervalometerSession extends EventEmitter {
   /**
    * Update legacy state properties from timelapse session
    */
-  updateLegacyState(data) {
+  updateLegacyState(_data) {
     if (!this.timelapseSession) return;
     
     const status = this.timelapseSession.getStatus();

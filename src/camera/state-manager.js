@@ -161,8 +161,8 @@ export class CameraStateManager extends EventEmitter {
   /**
    * Determine if a camera should auto-connect
    */
-  shouldAutoConnect(uuid, deviceInfo) {
-    // TODO: Consider deviceInfo (model, IP, capabilities) for auto-connect decisions
+  shouldAutoConnect(uuid, _deviceInfo) {
+    // TODO: Consider _deviceInfo (model, IP, capabilities) for auto-connect decisions
     // Always try to auto-connect if no primary camera is set
     if (!this.primaryCameraUuid) {
       return { reason: 'no primary camera set' };

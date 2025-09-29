@@ -1,5 +1,6 @@
 import { readFile, writeFile, readdir, mkdir, unlink, access, constants } from 'fs/promises';
-import { join, dirname } from 'path';
+import { join } from 'path';
+// import { dirname } from 'path'; // Unused import - TODO: remove if not needed
 import { randomUUID } from 'crypto';
 import { logger } from '../utils/logger.js';
 
