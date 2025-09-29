@@ -278,3 +278,11 @@ debian/files
 debian/debhelper-build-stamp
 debian/*.substvars
 debian/*.log
+
+# Miscellaneous
+agents/
+debug/
+experiments/
+archive/
+# Work in progress - notes, feature planning, etc
+WIP/
