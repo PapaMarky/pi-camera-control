@@ -512,22 +512,41 @@ export class CameraController {
     }
 
     try {
-      const response = await this.client.get(`${this.baseUrl}/ccapi/ver100/settings/datetime`);
+      const response = await this.client.get(`${this.baseUrl}/ccapi/ver100/functions/datetime`);
 
-      // Camera returns datetime in format: "2024-01-15T10:30:45"
-      // May include timezone offset: "2024-01-15T10:30:45+09:00"
+      // Camera returns datetime in RFC1123 format: "Tue, 01 Jan 2019 01:23:45 +0900"
       if (response.data && response.data.datetime) {
-        let dateStr = response.data.datetime;
-        // If no timezone, assume UTC
-        if (!dateStr.includes('+') && !dateStr.includes('-') && !dateStr.includes('Z')) {
-          dateStr += 'Z';
+        // Parse RFC1123 date string to Date object
+        const date = new Date(response.data.datetime);
+        if (isNaN(date.getTime())) {
+          throw new Error('Invalid datetime format from camera');
         }
-        return dateStr;
+        // Return ISO string for consistency with rest of system
+        return date.toISOString();
       }
       throw new Error('Invalid datetime response from camera');
     } catch (error) {
       logger.error('Failed to get camera datetime:', error.message);
-      throw error;
+      return null;
+    }
+  }
+
+  /**
+   * Get camera datetime with full details including DST
+   */
+  async getCameraDateTimeDetails() {
+    if (!this.connected) {
+      throw new Error('Camera not connected');
+    }
+
+    try {
+      const response = await this.client.get(`${this.baseUrl}/ccapi/ver100/functions/datetime`);
+      logger.info('Raw camera datetime response:', JSON.stringify(response.data));
+
+      return response.data;
+    } catch (error) {
+      logger.error('Failed to get camera datetime details:', error.message);
+      return null;
     }
   }
 
@@ -540,23 +559,47 @@ export class CameraController {
     }
 
     try {
-      // Convert Date object to camera format
+      // Convert to Date object
       const date = datetime instanceof Date ? datetime : new Date(datetime);
 
-      // Format time for camera: "YYYY-MM-DDTHH:MM:SS"
-      const year = date.getUTCFullYear();
-      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(date.getUTCDate()).padStart(2, '0');
-      const hours = String(date.getUTCHours()).padStart(2, '0');
-      const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-      const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+      // Format as RFC1123 string for camera in local timezone
+      // Example: "Tue, 01 Jan 2019 01:23:45 -0800"
 
-      const datetimeStr = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      // Get current timezone offset and determine if we're in DST
+      const currentOffset = date.getTimezoneOffset(); // minutes, positive for west of UTC
+      const januaryOffset = new Date(date.getFullYear(), 0, 1).getTimezoneOffset(); // Standard time offset
+      const isDST = currentOffset !== januaryOffset;
 
-      logger.info(`Setting camera datetime to: ${datetimeStr}`);
+      // Use the standard timezone offset (not current DST-adjusted offset)
+      // For Pacific timezone: PST = UTC-8 = +480 minutes
+      const standardOffsetMinutes = Math.max(currentOffset, januaryOffset); // Pick the larger (more westward) offset
+      const standardOffsetHours = Math.floor(standardOffsetMinutes / 60);
+      const standardOffsetMins = standardOffsetMinutes % 60;
+      const offsetSign = standardOffsetMinutes >= 0 ? '-' : '+'; // Flip sign for RFC1123 format
+      const offsetString = `${offsetSign}${standardOffsetHours.toString().padStart(2, '0')}${standardOffsetMins.toString().padStart(2, '0')}`;
 
-      const response = await this.client.put(`${this.baseUrl}/ccapi/ver100/settings/datetime`, {
-        datetime: datetimeStr
+      // Format date in RFC1123 format with local timezone
+      // Create a properly formatted RFC1123 date string for local time
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+      const dayName = dayNames[date.getDay()];
+      const day = date.getDate().toString().padStart(2, '0');
+      const monthName = monthNames[date.getMonth()];
+      const year = date.getFullYear();
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      const seconds = date.getSeconds().toString().padStart(2, '0');
+
+      const localDateString = `${dayName}, ${day} ${monthName} ${year} ${hours}:${minutes}:${seconds}`;
+
+      const rfc1123Date = `${localDateString} ${offsetString}`;
+
+      logger.info(`Setting camera datetime to standard time: ${rfc1123Date}, DST: ${isDST}`);
+
+      const response = await this.client.put(`${this.baseUrl}/ccapi/ver100/functions/datetime`, {
+        datetime: rfc1123Date,
+        dst: isDST
       });
 
       if (response.status === 200 || response.status === 204) {

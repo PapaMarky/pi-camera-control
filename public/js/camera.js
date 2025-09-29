@@ -288,6 +288,11 @@ class CameraManager {
       this.log('Connected to camera control server', 'success');
       this.handleStatusUpdate(data);
     });
+
+    // Time sync status updates
+    wsManager.on('time_sync_status', (data) => {
+      this.updateTimeSyncStatus(data);
+    });
   }
 
   async updateCameraStatus() {
@@ -1080,6 +1085,12 @@ class CameraManager {
       console.log('No intervalometer data in welcome/status message. Data keys:', Object.keys(data || {}));
     }
 
+    // Update timesync status if we have timesync data
+    if (data && data.timesync) {
+      console.log('Updating timesync status from welcome/status message:', data.timesync);
+      this.updateTimeSyncStatus(data.timesync);
+    }
+
     this.updateUI();
   }
 
@@ -1188,6 +1199,62 @@ class CameraManager {
     if (this.status.settings?.shootingmodedial?.value) {
       document.getElementById('camera-mode').textContent = 
         this.status.settings.shootingmodedial.value.toUpperCase();
+    }
+  }
+
+  updateTimeSyncStatus(data) {
+    console.log('Time sync status received:', data);
+
+    // Update controller time sync status
+    const controllerTimeSync = document.getElementById('controller-timesync');
+    if (controllerTimeSync && data.pi) {
+      let status = 'none';
+      let text = 'Not Synced';
+
+      if (data.pi.isSynchronized) {
+        status = data.pi.reliability || 'low';
+        text = status.charAt(0).toUpperCase() + status.slice(1);
+      }
+
+      controllerTimeSync.textContent = text;
+      controllerTimeSync.className = `sync-${status}`;
+    }
+
+    // Update camera time sync status
+    const cameraTimeSync = document.getElementById('camera-timesync');
+    if (cameraTimeSync && data.camera) {
+      let status = 'none';
+      let text = '-';
+
+      if (!this.status.connected) {
+        text = 'Not Connected';
+      } else if (data.camera.isSynchronized) {
+        // Camera is synchronized
+        const lastSync = data.camera.lastSyncTime;
+        if (lastSync) {
+          const timeSinceSync = Date.now() - new Date(lastSync).getTime();
+          const minutes = Math.floor(timeSinceSync / 60000);
+
+          if (minutes < 5) {
+            status = 'high';
+            text = 'Synced';
+          } else if (minutes < 60) {
+            status = 'medium';
+            text = `${minutes}m ago`;
+          } else {
+            status = 'low';
+            text = `${Math.floor(minutes / 60)}h ago`;
+          }
+        } else {
+          status = 'medium';
+          text = 'Synced';
+        }
+      } else {
+        text = 'Not Synced';
+      }
+
+      cameraTimeSync.textContent = text;
+      cameraTimeSync.className = `sync-${status}`;
     }
   }
 

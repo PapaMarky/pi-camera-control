@@ -27,6 +27,12 @@ class TimeSyncService {
     // Start scheduled sync checks
     this.startScheduledChecks();
 
+    // Send initial status broadcast after a short delay
+    setTimeout(() => {
+      logger.info('TimeSyncService: Sending initial status broadcast');
+      this.broadcastSyncStatus();
+    }, 2000);
+
     logger.info('TimeSync service initialized');
   }
 
@@ -154,7 +160,11 @@ class TimeSyncService {
         this.broadcastSyncStatus();
 
         // If camera is connected and Pi is now reliable, sync camera
-        if (this.cameraController?.isConnected() && this.state.isPiTimeReliable()) {
+        const cameraController = typeof this.cameraController === 'function'
+          ? this.cameraController()
+          : this.cameraController;
+
+        if (cameraController?.connected && this.state.isPiTimeReliable()) {
           await this.syncCameraTime();
         }
       } else {
@@ -243,7 +253,12 @@ class TimeSyncService {
    * Sync camera time from Pi
    */
   async syncCameraTime() {
-    if (!this.cameraController?.isConnected()) {
+    // Get current camera controller instance
+    const cameraController = typeof this.cameraController === 'function'
+      ? this.cameraController()
+      : this.cameraController;
+
+    if (!cameraController?.connected) {
       logger.debug('Camera not connected, skipping sync');
       return false;
     }
@@ -255,7 +270,7 @@ class TimeSyncService {
 
     try {
       // Get current camera time
-      const cameraTime = await this.cameraController.getCameraDateTime();
+      const cameraTime = await cameraController.getCameraDateTime();
       if (!cameraTime) {
         logger.error('Could not get camera time');
         return false;
@@ -269,7 +284,7 @@ class TimeSyncService {
 
       // Sync if drift exceeds threshold
       if (Math.abs(driftMs) > this.state.config.DRIFT_THRESHOLD) {
-        const success = await this.cameraController.setCameraDateTime(piTime);
+        const success = await cameraController.setCameraDateTime(piTime);
 
         if (success) {
           this.state.recordCameraSync(driftMs);
@@ -374,13 +389,76 @@ class TimeSyncService {
    * Broadcast sync status to all clients
    */
   broadcastSyncStatus() {
-    if (!this.wsManager) return;
+    if (!this.wsManager) {
+      logger.warn('TimeSyncService: Cannot broadcast - no wsManager');
+      return;
+    }
 
-    const status = this.state.getStatus();
+    const rawStatus = this.state.getStatus();
+
+    // Transform to UI format
+    const uiStatus = {
+      pi: {
+        isSynchronized: rawStatus.piReliable,
+        reliability: this.getPiReliability(rawStatus),
+        lastSyncTime: rawStatus.lastPiSync
+      },
+      camera: {
+        isSynchronized: this.isCameraSynchronized(rawStatus),
+        lastSyncTime: rawStatus.lastCameraSync
+      }
+    };
+
+    logger.info('TimeSyncService: Broadcasting sync status', {
+      piSynchronized: uiStatus.pi.isSynchronized,
+      piReliability: uiStatus.pi.reliability,
+      cameraSynchronized: uiStatus.camera.isSynchronized
+    });
+
     this.wsManager.broadcast({
       type: 'time-sync-status',
-      data: status
+      data: uiStatus
     });
+  }
+
+  /**
+   * Get Pi reliability level for UI
+   */
+  getPiReliability(status) {
+    if (!status.lastPiSync) return 'none';
+
+    const timeSinceSync = Date.now() - new Date(status.lastPiSync).getTime();
+    const minutes = timeSinceSync / (60 * 1000);
+
+    if (minutes < 5) return 'high';
+    if (minutes < 60) return 'medium';
+    if (minutes < 24 * 60) return 'low';
+    return 'none';
+  }
+
+  /**
+   * Check if camera is currently synchronized
+   */
+  isCameraSynchronized(status) {
+    // Check if camera is currently connected
+    const cameraController = typeof this.cameraController === 'function'
+      ? this.cameraController()
+      : this.cameraController;
+
+    if (!cameraController?.connected) {
+      return false;
+    }
+
+    // Check if we have a recent sync
+    if (!status.lastCameraSync) {
+      return false;
+    }
+
+    // Consider camera synchronized if synced within last 30 minutes
+    const timeSinceSync = Date.now() - new Date(status.lastCameraSync).getTime();
+    const minutes = timeSinceSync / (60 * 1000);
+
+    return minutes < 30;
   }
 
   /**

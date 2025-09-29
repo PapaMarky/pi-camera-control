@@ -203,6 +203,13 @@ export class DiscoveryManager extends EventEmitter {
   }
 
   /**
+   * Get primary camera controller
+   */
+  getPrimaryController() {
+    return this.cameraStateManager.getPrimaryController();
+  }
+
+  /**
    * Get all discovered cameras
    */
   getDiscoveredCameras() {

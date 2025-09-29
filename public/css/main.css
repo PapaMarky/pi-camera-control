@@ -316,6 +316,27 @@ body {
   font-weight: 500;
 }
 
+/* Time Sync Status Indicators */
+.sync-high {
+  color: #4CAF50;
+  font-weight: 600;
+}
+
+.sync-medium {
+  color: #FFA500;
+  font-weight: 600;
+}
+
+.sync-low {
+  color: #FF6347;
+  font-weight: 600;
+}
+
+.sync-none {
+  color: #888;
+  font-style: italic;
+}
+
 /* Controls */
 .controls-section {
   display: flex;

@@ -266,6 +266,16 @@ class WebSocketManager {
         this.handleActivityLog(data);
         break;
 
+      case 'time-sync-request':
+        // Server is requesting time sync from client
+        this.handleTimeSyncRequest(message);
+        break;
+
+      case 'time-sync-status':
+        // Time sync status update
+        this.emit('time_sync_status', data);
+        break;
+
       case 'error':
         console.error('WebSocket error response:', data);
         this.emit('error_response', data);
@@ -302,6 +312,23 @@ class WebSocketManager {
     activityLog.insertBefore(logEntry, activityLog.firstChild);
 
     console.log(`[TimeSync Activity] ${message}`);
+  }
+
+  handleTimeSyncRequest(message) {
+    const { requestId } = message;
+
+    // Get current client time and timezone
+    const clientTime = new Date().toISOString();
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    // Respond with client time
+    this.send('time-sync-response', {
+      clientTime,
+      timezone,
+      requestId
+    });
+
+    console.log('Sent time sync response to server');
   }
 
   // Event emitter functionality

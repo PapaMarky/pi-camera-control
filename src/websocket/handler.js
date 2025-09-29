@@ -205,12 +205,31 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
         camera: cameraController() ? cameraController().getConnectionStatus() : { connected: false, error: 'No camera available' },
         power: powerManager.getStatus(),
         network: networkStatus,
-        intervalometer: server.activeIntervalometerSession ? 
+        intervalometer: server.activeIntervalometerSession ?
           server.activeIntervalometerSession.getStatus() : null,
+        timesync: (() => {
+          const rawStatus = timeSyncService.getStatus();
+          return {
+            pi: {
+              isSynchronized: rawStatus.piReliable,
+              reliability: timeSyncService.getPiReliability ? timeSyncService.getPiReliability(rawStatus) : 'none',
+              lastSyncTime: rawStatus.lastPiSync
+            },
+            camera: {
+              isSynchronized: !!rawStatus.lastCameraSync,
+              lastSyncTime: rawStatus.lastCameraSync
+            }
+          };
+        })(),
         clientId
       };
       
       ws.send(JSON.stringify(initialStatus));
+
+      // Send current TimeSyncService status separately
+      setTimeout(() => {
+        timeSyncService.broadcastSyncStatus();
+      }, 100);
     } catch (error) {
       logger.error('Failed to send welcome message:', error);
     }
@@ -257,7 +276,7 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
   const handleClientMessage = async (ws, message, clientId) => {
     const { type, data } = message;
     
-    logger.debug(`WebSocket message from ${clientId}:`, { type, data });
+    logger.info(`WebSocket message from ${clientId}: type=${type}`);
     
     try {
       switch (type) {
@@ -342,6 +361,7 @@ export function createWebSocketHandler(cameraController, powerManager, server, n
           break;
 
         case 'time-sync-response':
+          logger.info(`Received time-sync-response from ${clientId}`, data);
           await handleTimeSyncResponse(ws, data);
           break;
 
