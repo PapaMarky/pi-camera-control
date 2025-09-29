@@ -33,7 +33,7 @@ export default [
       'coverage/**',
       'docs/**',
       'test/**',
-      'src/network.js' // Client-side file with DOM globals
+      'public/**' // Client-side files with DOM globals
     ]
   }
 ];
