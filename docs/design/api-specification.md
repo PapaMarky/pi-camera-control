@@ -422,6 +422,8 @@ GET /health
 
 The WebSocket server provides real-time bidirectional communication for status updates and control operations.
 
+**📋 Detailed Sequence Diagrams**: For complete message flows and interaction patterns, see [WebSocket Sequence Diagrams](./websocket-sequence-diagrams.md) which provides step-by-step sequences for all major operations including intervalometer sessions, network transitions, camera discovery, and time synchronization.
+
 ```mermaid
 graph LR
     subgraph "Client Events"

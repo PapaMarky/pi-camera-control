@@ -17,15 +17,15 @@
  */
 export function createStandardError(message, options = {}) {
   return {
-    type: 'error',
+    type: "error",
     timestamp: new Date().toISOString(),
     error: {
       message,
       code: options.code || undefined,
       operation: options.operation || undefined,
       component: options.component || undefined,
-      details: options.details || undefined
-    }
+      details: options.details || undefined,
+    },
   };
 }
 
@@ -39,7 +39,7 @@ export function createApiError(message, options = {}) {
   const error = createStandardError(message, options);
   return {
     error: error.error,
-    timestamp: error.timestamp
+    timestamp: error.timestamp,
   };
 }
 
@@ -62,7 +62,7 @@ export function broadcastError(clients, message, options = {}) {
           client.send(errorMessage);
         } catch (sendError) {
           // Log failed send, but don't throw - other clients should still receive the message
-          console.error('Failed to send error to client:', sendError);
+          console.error("Failed to send error to client:", sendError);
         }
       }
     }
@@ -77,28 +77,28 @@ export function broadcastError(clients, message, options = {}) {
  * @param {string} component - Component name for context
  * @returns {Object} Standardized error object
  */
-export function convertLegacyError(legacyError, component = 'Unknown') {
+export function convertLegacyError(legacyError, component = "Unknown") {
   // Handle different legacy formats
-  if (legacyError.type === 'operation_result' && !legacyError.success) {
+  if (legacyError.type === "operation_result" && !legacyError.success) {
     // Convert operation_result format
     return createStandardError(legacyError.error, {
-      code: 'OPERATION_FAILED',
-      component: component
+      code: "OPERATION_FAILED",
+      component: component,
     });
   }
 
   if (legacyError.data && legacyError.data.message) {
     // Convert old WebSocket error format
     return createStandardError(legacyError.data.message, {
-      component: component
+      component: component,
     });
   }
 
-  if (legacyError.error && typeof legacyError.error === 'string') {
+  if (legacyError.error && typeof legacyError.error === "string") {
     // Convert API error format
     return createStandardError(legacyError.error, {
       code: legacyError.code,
-      component: component
+      component: component,
     });
   }
 
@@ -111,42 +111,42 @@ export function convertLegacyError(legacyError, component = 'Unknown') {
  */
 export const ErrorCodes = {
   // Camera errors
-  CAMERA_OFFLINE: 'CAMERA_OFFLINE',
-  CAMERA_BUSY: 'CAMERA_BUSY',
-  PHOTO_FAILED: 'PHOTO_FAILED',
-  CAMERA_TIMEOUT: 'CAMERA_TIMEOUT',
+  CAMERA_OFFLINE: "CAMERA_OFFLINE",
+  CAMERA_BUSY: "CAMERA_BUSY",
+  PHOTO_FAILED: "PHOTO_FAILED",
+  CAMERA_TIMEOUT: "CAMERA_TIMEOUT",
 
   // Network errors
-  NETWORK_ERROR: 'NETWORK_ERROR',
-  CONNECTION_FAILED: 'CONNECTION_FAILED',
-  WIFI_SCAN_FAILED: 'WIFI_SCAN_FAILED',
+  NETWORK_ERROR: "NETWORK_ERROR",
+  CONNECTION_FAILED: "CONNECTION_FAILED",
+  WIFI_SCAN_FAILED: "WIFI_SCAN_FAILED",
 
   // System errors
-  PERMISSION_DENIED: 'PERMISSION_DENIED',
-  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-  SYSTEM_ERROR: 'SYSTEM_ERROR',
+  PERMISSION_DENIED: "PERMISSION_DENIED",
+  SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
+  SYSTEM_ERROR: "SYSTEM_ERROR",
 
   // Validation errors
-  INVALID_PARAMETER: 'INVALID_PARAMETER',
-  MISSING_PARAMETER: 'MISSING_PARAMETER',
-  VALIDATION_FAILED: 'VALIDATION_FAILED',
+  INVALID_PARAMETER: "INVALID_PARAMETER",
+  MISSING_PARAMETER: "MISSING_PARAMETER",
+  VALIDATION_FAILED: "VALIDATION_FAILED",
 
   // Session errors
-  SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
-  SESSION_EXPIRED: 'SESSION_EXPIRED',
-  OPERATION_FAILED: 'OPERATION_FAILED'
+  SESSION_NOT_FOUND: "SESSION_NOT_FOUND",
+  SESSION_EXPIRED: "SESSION_EXPIRED",
+  OPERATION_FAILED: "OPERATION_FAILED",
 };
 
 /**
  * Component names for error tracking
  */
 export const Components = {
-  CAMERA_CONTROLLER: 'CameraController',
-  DISCOVERY_MANAGER: 'DiscoveryManager',
-  NETWORK_MANAGER: 'NetworkManager',
-  INTERVALOMETER: 'IntervalometerManager',
-  POWER_MANAGER: 'PowerManager',
-  WEBSOCKET_HANDLER: 'WebSocketHandler',
-  API_ROUTER: 'ApiRouter',
-  TIME_SYNC: 'TimeSyncService'
+  CAMERA_CONTROLLER: "CameraController",
+  DISCOVERY_MANAGER: "DiscoveryManager",
+  NETWORK_MANAGER: "NetworkManager",
+  INTERVALOMETER: "IntervalometerManager",
+  POWER_MANAGER: "PowerManager",
+  WEBSOCKET_HANDLER: "WebSocketHandler",
+  API_ROUTER: "ApiRouter",
+  TIME_SYNC: "TimeSyncService",
 };

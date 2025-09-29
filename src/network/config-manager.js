@@ -1,6 +1,6 @@
-import { readFile, writeFile, access, constants, mkdir } from 'fs/promises';
-import { dirname } from 'path';
-import { logger } from '../utils/logger.js';
+import { readFile, writeFile, access, constants, mkdir } from "fs/promises";
+import { dirname } from "path";
+import { logger } from "../utils/logger.js";
 
 /**
  * Centralized Network Configuration Management
@@ -14,63 +14,62 @@ export class NetworkConfigManager {
       hostapd: {
         template: null,
         current: null,
-        path: '/etc/hostapd/hostapd.conf'
+        path: "/etc/hostapd/hostapd.conf",
       },
       dnsmasq: {
         template: null,
         current: null,
-        path: '/etc/dnsmasq.conf'
+        path: "/etc/dnsmasq.conf",
       },
       dhcpcd: {
         template: null,
         current: null,
-        path: '/etc/dhcpcd.conf'
-      }
+        path: "/etc/dhcpcd.conf",
+      },
     };
 
     // Default configuration values
     this.defaults = {
       accessPoint: {
-        ssid: 'PiCameraController',
-        passphrase: 'camera123',
+        ssid: "PiCameraController",
+        passphrase: "camera123",
         channel: 7,
         hidden: false,
-        interface: 'ap0',
-        ipAddress: '192.168.4.1',
-        ipRange: '192.168.4.2,192.168.4.20'
+        interface: "ap0",
+        ipAddress: "192.168.4.1",
+        ipRange: "192.168.4.2,192.168.4.20",
       },
       wifiClient: {
-        interface: 'wlan0',
-        country: 'US'
-      }
+        interface: "wlan0",
+        country: "US",
+      },
     };
 
     // Backup file suffix
-    this.backupSuffix = '.pi-camera-control.backup';
+    this.backupSuffix = ".pi-camera-control.backup";
   }
-  
+
   /**
    * Initialize configuration manager
    */
   async initialize() {
     try {
-      logger.info('Initializing NetworkConfigManager...');
-      
+      logger.info("Initializing NetworkConfigManager...");
+
       // Load current configurations
       await this.loadCurrentConfigs();
-      
+
       // Generate default templates
       this.generateTemplates();
-      
-      logger.info('NetworkConfigManager initialized successfully');
+
+      logger.info("NetworkConfigManager initialized successfully");
       return true;
-      
     } catch (error) {
-      logger.error('NetworkConfigManager initialization failed:', error);
+      logger.error("NetworkConfigManager initialization failed:", error);
       throw error;
     }
   }
-  
+
   /**
    * Load current configuration files
    */
@@ -78,7 +77,7 @@ export class NetworkConfigManager {
     for (const [name, config] of Object.entries(this.configs)) {
       try {
         await access(config.path, constants.R_OK);
-        config.current = await readFile(config.path, 'utf8');
+        config.current = await readFile(config.path, "utf8");
         logger.debug(`Loaded current ${name} configuration`);
       } catch (error) {
         logger.debug(`Current ${name} configuration not found or not readable`);
@@ -97,37 +96,38 @@ export class NetworkConfigManager {
   async parseCurrentAccessPointConfig() {
     const hostapdConfig = this.configs.hostapd.current;
     if (!hostapdConfig) {
-      logger.debug('No existing hostapd configuration to parse');
+      logger.debug("No existing hostapd configuration to parse");
       return;
     }
 
     try {
       const currentSettings = {};
-      const lines = hostapdConfig.split('\n');
+      const lines = hostapdConfig.split("\n");
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (trimmed.startsWith('#') || !trimmed.includes('=')) {
+        if (trimmed.startsWith("#") || !trimmed.includes("=")) {
           continue; // Skip comments and non-key-value lines
         }
 
-        const [key, ...valueParts] = trimmed.split('=');
-        const value = valueParts.join('=').trim();
+        const [key, ...valueParts] = trimmed.split("=");
+        const value = valueParts.join("=").trim();
 
         switch (key) {
-          case 'ssid':
+          case "ssid":
             currentSettings.ssid = value;
             break;
-          case 'wpa_passphrase':
+          case "wpa_passphrase":
             currentSettings.passphrase = value;
             break;
-          case 'channel':
-            currentSettings.channel = parseInt(value) || this.defaults.accessPoint.channel;
+          case "channel":
+            currentSettings.channel =
+              parseInt(value) || this.defaults.accessPoint.channel;
             break;
-          case 'ignore_broadcast_ssid':
-            currentSettings.hidden = value === '1';
+          case "ignore_broadcast_ssid":
+            currentSettings.hidden = value === "1";
             break;
-          case 'interface':
+          case "interface":
             currentSettings.interface = value;
             break;
         }
@@ -135,15 +135,23 @@ export class NetworkConfigManager {
 
       // Update defaults with current settings to preserve them
       if (Object.keys(currentSettings).length > 0) {
-        logger.info('Preserving current AP configuration from hostapd.conf', currentSettings);
-        this.defaults.accessPoint = { ...this.defaults.accessPoint, ...currentSettings };
+        logger.info(
+          "Preserving current AP configuration from hostapd.conf",
+          currentSettings,
+        );
+        this.defaults.accessPoint = {
+          ...this.defaults.accessPoint,
+          ...currentSettings,
+        };
       }
-
     } catch (error) {
-      logger.warn('Failed to parse current hostapd configuration:', error.message);
+      logger.warn(
+        "Failed to parse current hostapd configuration:",
+        error.message,
+      );
     }
   }
-  
+
   /**
    * Generate configuration templates
    */
@@ -152,13 +160,13 @@ export class NetworkConfigManager {
     this.configs.dnsmasq.template = this.generateDnsmasqTemplate();
     this.configs.dhcpcd.template = this.generateDhcpcdTemplate();
   }
-  
+
   /**
    * Generate hostapd configuration template
    */
   generateHostapdTemplate(options = {}) {
     const config = { ...this.defaults.accessPoint, ...options };
-    
+
     return `# Pi Camera Control Access Point Configuration
 # Generated by NetworkConfigManager
 
@@ -173,7 +181,7 @@ channel=${config.channel}
 wmm_enabled=0
 macaddr_acl=0
 auth_algs=1
-ignore_broadcast_ssid=${config.hidden ? '1' : '0'}
+ignore_broadcast_ssid=${config.hidden ? "1" : "0"}
 
 # Security configuration
 wpa=2
@@ -187,13 +195,13 @@ max_num_sta=10
 wpa_group_rekey=86400
 `;
   }
-  
+
   /**
    * Generate dnsmasq configuration template
    */
   generateDnsmasqTemplate(options = {}) {
     const config = { ...this.defaults.accessPoint, ...options };
-    
+
     return `# Pi Camera Control dnsmasq Configuration
 # Generated by NetworkConfigManager
 
@@ -226,13 +234,13 @@ cache-size=1000
 neg-ttl=60
 `;
   }
-  
+
   /**
    * Generate dhcpcd configuration template for AP interface
    */
   generateDhcpcdTemplate(options = {}) {
     const config = { ...this.defaults.accessPoint, ...options };
-    
+
     return `
 # Pi Camera Control AP configuration
 # Generated by NetworkConfigManager
@@ -241,60 +249,58 @@ static ip_address=${config.ipAddress}/24
 nohook wpa_supplicant
 `;
   }
-  
+
   /**
    * Ensure access point configuration is present and up to date
    */
   async ensureAccessPointConfig(options = {}) {
     try {
-      logger.info('Ensuring access point configuration...');
-      
+      logger.info("Ensuring access point configuration...");
+
       const config = { ...this.defaults.accessPoint, ...options };
-      
+
       // Generate configurations with current options
       const hostapdConfig = this.generateHostapdTemplate(config);
       const dnsmasqConfig = this.generateDnsmasqTemplate(config);
-      
+
       // Update hostapd configuration
-      await this.updateConfigFile('hostapd', hostapdConfig);
-      
+      await this.updateConfigFile("hostapd", hostapdConfig);
+
       // Update dnsmasq configuration
-      await this.updateConfigFile('dnsmasq', dnsmasqConfig);
-      
+      await this.updateConfigFile("dnsmasq", dnsmasqConfig);
+
       // Update dhcpcd configuration (append AP section if not present)
       await this.updateDhcpcdForAP(config);
-      
+
       // Update daemon configuration
       await this.updateHostapdDaemon();
-      
-      logger.info('Access point configuration ensured');
-      
+
+      logger.info("Access point configuration ensured");
     } catch (error) {
-      logger.error('Failed to ensure access point configuration:', error);
+      logger.error("Failed to ensure access point configuration:", error);
       throw error;
     }
   }
-  
+
   /**
    * Ensure WiFi client configuration
    */
   async ensureWiFiClientConfig(options = {}) {
     try {
-      logger.info('Ensuring WiFi client configuration...');
-      
+      logger.info("Ensuring WiFi client configuration...");
+
       const config = { ...this.defaults.wifiClient, ...options };
-      
+
       // Ensure wpa_supplicant configuration exists
       await this.ensureWpaSupplicantConfig(config);
-      
-      logger.info('WiFi client configuration ensured');
-      
+
+      logger.info("WiFi client configuration ensured");
     } catch (error) {
-      logger.error('Failed to ensure WiFi client configuration:', error);
+      logger.error("Failed to ensure WiFi client configuration:", error);
       throw error;
     }
   }
-  
+
   /**
    * Update configuration file with backup
    */
@@ -303,11 +309,11 @@ nohook wpa_supplicant
     if (!config) {
       throw new Error(`Unknown configuration: ${configName}`);
     }
-    
+
     try {
       // Create backup if original file exists and we haven't backed it up yet
       const backupPath = `${config.path}${this.backupSuffix}`;
-      
+
       try {
         await access(config.path, constants.R_OK);
         // File exists, check if we need to back it up
@@ -316,133 +322,130 @@ nohook wpa_supplicant
           // Backup already exists
         } catch {
           // Create backup
-          const originalContent = await readFile(config.path, 'utf8');
-          await writeFile(backupPath, originalContent, 'utf8');
+          const originalContent = await readFile(config.path, "utf8");
+          await writeFile(backupPath, originalContent, "utf8");
           logger.info(`Created backup: ${backupPath}`);
         }
       } catch {
         // Original file doesn't exist, no backup needed
       }
-      
+
       // Ensure directory exists
       const dir = dirname(config.path);
       await mkdir(dir, { recursive: true });
-      
+
       // Write new configuration
-      await writeFile(config.path, newContent, 'utf8');
+      await writeFile(config.path, newContent, "utf8");
       config.current = newContent;
-      
+
       logger.info(`Updated ${configName} configuration: ${config.path}`);
-      
     } catch (error) {
       logger.error(`Failed to update ${configName} configuration:`, error);
       throw error;
     }
   }
-  
+
   /**
    * Update dhcpcd configuration for AP interface
    */
   async updateDhcpcdForAP(apConfig) {
-    const dhcpcdPath = '/etc/dhcpcd.conf';
+    const dhcpcdPath = "/etc/dhcpcd.conf";
     const apSection = this.generateDhcpcdTemplate(apConfig);
-    
+
     try {
-      let dhcpcdContent = '';
-      
+      let dhcpcdContent = "";
+
       try {
-        dhcpcdContent = await readFile(dhcpcdPath, 'utf8');
+        dhcpcdContent = await readFile(dhcpcdPath, "utf8");
       } catch {
         // File doesn't exist, create new
-        logger.info('dhcpcd.conf not found, creating new one');
+        logger.info("dhcpcd.conf not found, creating new one");
       }
-      
+
       // Check if AP section already exists
       if (dhcpcdContent.includes(`interface ${apConfig.interface}`)) {
-        logger.debug('AP interface already configured in dhcpcd.conf');
+        logger.debug("AP interface already configured in dhcpcd.conf");
         return;
       }
-      
+
       // Append AP configuration
       const updatedContent = dhcpcdContent + apSection;
-      
+
       // Create backup if content exists
       if (dhcpcdContent.length > 0) {
         const backupPath = `${dhcpcdPath}${this.backupSuffix}`;
         try {
           await access(backupPath, constants.R_OK);
         } catch {
-          await writeFile(backupPath, dhcpcdContent, 'utf8');
+          await writeFile(backupPath, dhcpcdContent, "utf8");
           logger.info(`Created dhcpcd.conf backup: ${backupPath}`);
         }
       }
-      
+
       // Write updated configuration
-      await writeFile(dhcpcdPath, updatedContent, 'utf8');
-      logger.info('Updated dhcpcd.conf with AP configuration');
-      
+      await writeFile(dhcpcdPath, updatedContent, "utf8");
+      logger.info("Updated dhcpcd.conf with AP configuration");
     } catch (error) {
-      logger.error('Failed to update dhcpcd configuration:', error);
+      logger.error("Failed to update dhcpcd configuration:", error);
       throw error;
     }
   }
-  
+
   /**
    * Update hostapd daemon configuration
    */
   async updateHostapdDaemon() {
-    const daemonPath = '/etc/default/hostapd';
+    const daemonPath = "/etc/default/hostapd";
     const configLine = 'DAEMON_CONF="/etc/hostapd/hostapd.conf"';
-    
+
     try {
-      let daemonContent = '';
-      
+      let daemonContent = "";
+
       try {
-        daemonContent = await readFile(daemonPath, 'utf8');
+        daemonContent = await readFile(daemonPath, "utf8");
       } catch {
         // File doesn't exist, create new
         daemonContent = `# Defaults for hostapd initscript\n`;
       }
-      
+
       // Check if configuration is already set
       if (daemonContent.includes('DAEMON_CONF="/etc/hostapd/hostapd.conf"')) {
-        logger.debug('hostapd daemon already configured');
+        logger.debug("hostapd daemon already configured");
         return;
       }
-      
+
       // Update or add configuration
       let updatedContent;
       if (daemonContent.includes('#DAEMON_CONF=""')) {
         // Replace commented line
         updatedContent = daemonContent.replace(/#DAEMON_CONF=""/, configLine);
-      } else if (daemonContent.includes('DAEMON_CONF=')) {
+      } else if (daemonContent.includes("DAEMON_CONF=")) {
         // Replace existing line
         updatedContent = daemonContent.replace(/^DAEMON_CONF=.*$/m, configLine);
       } else {
         // Add new line
         updatedContent = daemonContent + `\n${configLine}\n`;
       }
-      
-      await writeFile(daemonPath, updatedContent, 'utf8');
-      logger.info('Updated hostapd daemon configuration');
-      
+
+      await writeFile(daemonPath, updatedContent, "utf8");
+      logger.info("Updated hostapd daemon configuration");
     } catch (error) {
-      logger.error('Failed to update hostapd daemon configuration:', error);
+      logger.error("Failed to update hostapd daemon configuration:", error);
       // Don't throw - this is not critical
     }
   }
-  
+
   /**
    * Ensure wpa_supplicant configuration exists
    */
   async ensureWpaSupplicantConfig(clientConfig) {
-    const wpaPath = '/etc/wpa_supplicant/wpa_supplicant.conf';
-    
+    const wpaPath = "/etc/wpa_supplicant/wpa_supplicant.conf";
+
     try {
-      let wpaContent = '';
-      
+      let wpaContent = "";
+
       try {
-        wpaContent = await readFile(wpaPath, 'utf8');
+        wpaContent = await readFile(wpaPath, "utf8");
       } catch {
         // File doesn't exist, create minimal configuration
         wpaContent = `# Pi Camera Control wpa_supplicant configuration
@@ -452,20 +455,19 @@ country=${clientConfig.country}
 
 `;
       }
-      
+
       // Ensure country is set
-      if (!wpaContent.includes('country=')) {
+      if (!wpaContent.includes("country=")) {
         wpaContent = `country=${clientConfig.country}\n${wpaContent}`;
-        await writeFile(wpaPath, wpaContent, 'utf8');
-        logger.info('Updated wpa_supplicant with country setting');
+        await writeFile(wpaPath, wpaContent, "utf8");
+        logger.info("Updated wpa_supplicant with country setting");
       }
-      
     } catch (error) {
-      logger.error('Failed to ensure wpa_supplicant configuration:', error);
+      logger.error("Failed to ensure wpa_supplicant configuration:", error);
       // Don't throw - wpa_supplicant can work without this file
     }
   }
-  
+
   /**
    * Update access point configuration with new settings
    */
@@ -476,9 +478,9 @@ country=${clientConfig.country}
     // Apply updated configuration to hostapd.conf
     await this.ensureAccessPointConfig(this.defaults.accessPoint);
 
-    logger.info('Access Point configuration updated and saved to hostapd.conf');
+    logger.info("Access Point configuration updated and saved to hostapd.conf");
   }
-  
+
   /**
    * Get current configuration values
    */
@@ -486,18 +488,18 @@ country=${clientConfig.country}
     const config = this.configs[configName];
     return config ? config.current : null;
   }
-  
+
   /**
    * Get default configuration values
    */
   getDefaults() {
     return JSON.parse(JSON.stringify(this.defaults));
   }
-  
+
   /**
    * Cleanup resources
    */
   async cleanup() {
-    logger.info('NetworkConfigManager cleanup complete');
+    logger.info("NetworkConfigManager cleanup complete");
   }
 }
