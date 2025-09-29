@@ -722,7 +722,7 @@ export class NetworkServiceManager extends EventEmitter {
   /**
    * Connect to WiFi network
    */
-  async connectToWiFi(ssid, password, priority = 1) {
+  async connectToWiFi(ssid, password, _priority = 1) {
     try {
       logger.info(`Connecting to WiFi network: ${ssid} using NetworkManager`);
 
