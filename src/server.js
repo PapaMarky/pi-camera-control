@@ -8,11 +8,11 @@ import compression from 'compression';
 import { createServer } from 'http';
 import dotenv from 'dotenv';
 import { logger } from './utils/logger.js';
-import { CameraController } from './camera/controller.js';
+// import { CameraController } from './camera/controller.js'; // Unused import
 import { DiscoveryManager } from './discovery/manager.js';
 import { PowerManager } from './system/power.js';
 import { NetworkStateManager } from './network/state-manager.js';
-import { NetworkServiceManager } from './network/service-manager.js';
+// import { NetworkServiceManager } from './network/service-manager.js'; // Unused import
 import { IntervalometerStateManager } from './intervalometer/state-manager.js';
 import { createApiRouter } from './routes/api.js';
 import { createWebSocketHandler } from './websocket/handler.js';
@@ -61,7 +61,7 @@ class CameraControlServer {
       this.broadcastDiscoveryEvent('cameraDiscovered', deviceInfo);
     });
 
-    this.discoveryManager.on('cameraConnected', async ({ uuid, info, controller }) => {
+    this.discoveryManager.on('cameraConnected', async ({ uuid, info, controller: _controller }) => {
       logger.info(`Camera connected: ${info.modelName}`);
       this.broadcastDiscoveryEvent('cameraConnected', { uuid, info });
 
@@ -230,7 +230,7 @@ class CameraControlServer {
     logger.info('WebSocket server initialized');
   }
 
-  broadcastCameraStatusChange(status) {
+  broadcastCameraStatusChange(_status) {
     if (!this.wsHandler || !this.wsHandler.broadcastStatus) {
       logger.debug('No WebSocket handler available for broadcasting camera status');
       return;
@@ -247,7 +247,7 @@ class CameraControlServer {
     });
     
     // Global error handler
-    this.app.use((err, req, res, next) => {
+    this.app.use((err, req, res, _next) => {
       logger.error('Unhandled error:', err);
       res.status(500).json({ 
         error: 'Internal server error',

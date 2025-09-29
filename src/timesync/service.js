@@ -339,7 +339,7 @@ class TimeSyncService {
   async performScheduledCheck() {
     // Find an AP client to sync with
     const apClient = Array.from(this.connectedClients.entries())
-      .find(([ip, client]) => client.interface === 'ap0');
+      .find(([_ip, client]) => client.interface === 'ap0');
 
     if (apClient) {
       const [clientIP, { ws }] = apClient;
@@ -364,7 +364,7 @@ class TimeSyncService {
   startMinuteChecks() {
     this.minuteCheckTimer = setInterval(() => {
       const apClient = Array.from(this.connectedClients.entries())
-        .find(([ip, client]) => client.interface === 'ap0');
+        .find(([_ip, client]) => client.interface === 'ap0');
 
       if (apClient) {
         // Client found, stop minute checks

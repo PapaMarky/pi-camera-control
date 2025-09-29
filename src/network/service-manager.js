@@ -1,4 +1,5 @@
-import { exec, spawn } from 'child_process';
+import { exec } from 'child_process';
+// import { spawn } from 'child_process'; // Unused import
 import { promisify } from 'util';
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger.js';
