@@ -36,9 +36,12 @@ export class StartupChecks {
       }
     }
 
-    const failedChecks = results.filter(r => !r.success);
+    const failedChecks = results.filter((r) => !r.success);
     if (failedChecks.length > 0) {
-      logger.warn(`${failedChecks.length} startup checks had issues:`, failedChecks);
+      logger.warn(
+        `${failedChecks.length} startup checks had issues:`,
+        failedChecks,
+      );
     } else {
       logger.info("All startup checks passed successfully");
     }
@@ -46,7 +49,7 @@ export class StartupChecks {
     return {
       success: failedChecks.length === 0,
       results,
-      failedChecks: failedChecks.length
+      failedChecks: failedChecks.length,
     };
   }
 
@@ -58,14 +61,20 @@ export class StartupChecks {
 
     try {
       // Check if iptables is blocking multicast
-      const { stdout } = await execAsync("iptables -L INPUT -n | grep '239.255.255.250'");
+      const { stdout } = await execAsync(
+        "iptables -L INPUT -n | grep '239.255.255.250'",
+      );
 
       if (stdout.includes("DROP") || stdout.includes("REJECT")) {
         logger.info("Found firewall rules blocking UPnP multicast, fixing...");
 
         // Allow UPnP/SSDP multicast traffic
-        await execAsync("iptables -I INPUT -d 239.255.255.250 -p udp --dport 1900 -j ACCEPT");
-        await execAsync("iptables -I OUTPUT -d 239.255.255.250 -p udp --dport 1900 -j ACCEPT");
+        await execAsync(
+          "iptables -I INPUT -d 239.255.255.250 -p udp --dport 1900 -j ACCEPT",
+        );
+        await execAsync(
+          "iptables -I OUTPUT -d 239.255.255.250 -p udp --dport 1900 -j ACCEPT",
+        );
 
         // Save iptables rules
         try {
@@ -80,7 +89,10 @@ export class StartupChecks {
       return { success: true, action: "Firewall already configured correctly" };
     } catch (error) {
       // If no rules found, that's fine - firewall is likely open
-      if (error.message.includes("No such file") || error.stderr?.includes("No chain/target/match")) {
+      if (
+        error.message.includes("No such file") ||
+        error.stderr?.includes("No chain/target/match")
+      ) {
         return { success: true, action: "No firewall restrictions found" };
       }
       throw error;
@@ -95,7 +107,9 @@ export class StartupChecks {
 
     try {
       // Check if multicast route exists
-      const { stdout } = await execAsync("ip route show table all | grep 224.0.0.0");
+      const { stdout } = await execAsync(
+        "ip route show table all | grep 224.0.0.0",
+      );
 
       if (!stdout.includes("224.0.0.0/4")) {
         logger.info("Adding multicast routes...");
@@ -108,10 +122,15 @@ export class StartupChecks {
             await execAsync(`ip link show ${iface}`);
 
             // Add multicast route for this interface
-            await execAsync(`ip route add 224.0.0.0/4 dev ${iface} table local`);
+            await execAsync(
+              `ip route add 224.0.0.0/4 dev ${iface} table local`,
+            );
             logger.debug(`Added multicast route for ${iface}`);
           } catch (ifaceError) {
-            logger.debug(`Interface ${iface} not available:`, ifaceError.message);
+            logger.debug(
+              `Interface ${iface} not available:`,
+              ifaceError.message,
+            );
           }
         }
 
@@ -157,7 +176,10 @@ export class StartupChecks {
           try {
             await execAsync("echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf");
           } catch (persistError) {
-            logger.debug("Could not make IP forwarding persistent:", persistError.message);
+            logger.debug(
+              "Could not make IP forwarding persistent:",
+              persistError.message,
+            );
           }
 
           fixes.push("Enabled IP forwarding");
@@ -168,10 +190,16 @@ export class StartupChecks {
 
       return {
         success: true,
-        action: fixes.length > 0 ? fixes.join(", ") : "Network interfaces already configured correctly"
+        action:
+          fixes.length > 0
+            ? fixes.join(", ")
+            : "Network interfaces already configured correctly",
       };
     } catch (error) {
-      logger.warn("Network interface configuration check failed:", error.message);
+      logger.warn(
+        "Network interface configuration check failed:",
+        error.message,
+      );
       return { success: false, error: error.message };
     }
   }
@@ -200,7 +228,10 @@ export class StartupChecks {
 
     return {
       success: true,
-      action: fixes.length > 0 ? fixes.join(", ") : "System services already configured correctly"
+      action:
+        fixes.length > 0
+          ? fixes.join(", ")
+          : "System services already configured correctly",
     };
   }
 
@@ -216,13 +247,15 @@ export class StartupChecks {
       readinessChecks.push({
         check: "UPnP port availability",
         success: !stdout.includes("LISTEN"),
-        details: stdout.includes("LISTEN") ? "Port 1900 already in use" : "Port 1900 available"
+        details: stdout.includes("LISTEN")
+          ? "Port 1900 already in use"
+          : "Port 1900 available",
       });
     } catch (error) {
       readinessChecks.push({
         check: "UPnP port availability",
         success: true,
-        details: "Port 1900 available"
+        details: "Port 1900 available",
       });
     }
 
@@ -232,13 +265,13 @@ export class StartupChecks {
       readinessChecks.push({
         check: "Multicast capability",
         success: true,
-        details: "System can join multicast groups"
+        details: "System can join multicast groups",
       });
     } catch (error) {
       readinessChecks.push({
         check: "Multicast capability",
         success: true,
-        details: "Multicast capability available"
+        details: "Multicast capability available",
       });
     }
 

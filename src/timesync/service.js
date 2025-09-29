@@ -4,9 +4,9 @@
  * Manages automatic time synchronization between client, Pi, and camera
  */
 
-import { spawn } from 'child_process';
-import TimeSyncState from './state.js';
-import { logger } from '../utils/logger.js';
+import { spawn } from "child_process";
+import TimeSyncState from "./state.js";
+import { logger } from "../utils/logger.js";
 
 class TimeSyncService {
   constructor() {
@@ -29,25 +29,25 @@ class TimeSyncService {
 
     // Send initial status broadcast after a short delay
     setTimeout(() => {
-      logger.info('TimeSyncService: Sending initial status broadcast');
+      logger.info("TimeSyncService: Sending initial status broadcast");
       this.broadcastSyncStatus();
     }, 2000);
 
-    logger.info('TimeSync service initialized');
+    logger.info("TimeSync service initialized");
   }
 
   /**
    * Send activity log message to clients
    */
-  logActivity(message, type = 'info') {
+  logActivity(message, type = "info") {
     if (this.wsManager && this.wsManager.broadcast) {
       this.wsManager.broadcast({
-        type: 'activity_log',
+        type: "activity_log",
         data: {
           message,
           type,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
     }
     logger.info(`[TimeSync Activity] ${message}`);
@@ -57,23 +57,35 @@ class TimeSyncService {
    * Handle new client connection
    */
   async handleClientConnection(clientIP, clientInterface, ws) {
-    logger.info(`TimeSync: Handling client connection ${clientIP} on ${clientInterface}`);
+    logger.info(
+      `TimeSync: Handling client connection ${clientIP} on ${clientInterface}`,
+    );
 
     // Store client info
     this.connectedClients.set(clientIP, { interface: clientInterface, ws });
 
     // Check if auto-sync should be performed
     if (!this.state.shouldAutoSync(clientIP, clientInterface)) {
-      logger.debug(`TimeSync: Skipping auto-sync for ${clientIP} on ${clientInterface}`);
-      this.logActivity(`Device ${clientIP} connected (${clientInterface}) - auto-sync not needed`, 'info');
+      logger.debug(
+        `TimeSync: Skipping auto-sync for ${clientIP} on ${clientInterface}`,
+      );
+      this.logActivity(
+        `Device ${clientIP} connected (${clientInterface}) - auto-sync not needed`,
+        "info",
+      );
       return;
     }
 
-    logger.info(`TimeSync: Starting auto-sync for ${clientIP} on ${clientInterface}`);
-    this.logActivity(`Device ${clientIP} connected to access point - checking time sync`, 'info');
+    logger.info(
+      `TimeSync: Starting auto-sync for ${clientIP} on ${clientInterface}`,
+    );
+    this.logActivity(
+      `Device ${clientIP} connected to access point - checking time sync`,
+      "info",
+    );
 
     // Wait a moment for client to be ready
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // Request time from client
     this.requestClientTime(clientIP, ws);
@@ -86,8 +98,9 @@ class TimeSyncService {
     this.connectedClients.delete(clientIP);
 
     // Check if any AP clients remain
-    const hasApClient = Array.from(this.connectedClients.values())
-      .some(client => client.interface === 'ap0');
+    const hasApClient = Array.from(this.connectedClients.values()).some(
+      (client) => client.interface === "ap0",
+    );
 
     if (!hasApClient) {
       this.state.markNoClient();
@@ -101,10 +114,12 @@ class TimeSyncService {
     logger.debug(`Requesting time from client ${clientIP}`);
 
     // Send time sync request
-    ws.send(JSON.stringify({
-      type: 'time-sync-request',
-      requestId: Date.now()
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "time-sync-request",
+        requestId: Date.now(),
+      }),
+    );
 
     // Set timeout for response
     setTimeout(() => {
@@ -117,11 +132,16 @@ class TimeSyncService {
   /**
    * Handle time sync response from client
    */
-  async handleClientTimeResponse(clientIP, clientTime, clientTimezone, gps = null) {
+  async handleClientTimeResponse(
+    clientIP,
+    clientTime,
+    clientTimezone,
+    gps = null,
+  ) {
     try {
       const clientTimestamp = new Date(clientTime);
       if (isNaN(clientTimestamp.getTime())) {
-        logger.error('Invalid client timestamp received');
+        logger.error("Invalid client timestamp received");
         return;
       }
 
@@ -135,42 +155,62 @@ class TimeSyncService {
       if (Math.abs(driftMs) > this.state.config.DRIFT_THRESHOLD) {
         // Check for anomalous jump
         if (this.state.isAnomalousJump(driftMs)) {
-          logger.warn(`Anomalous time jump detected: ${driftMs}ms - triggering sync`);
+          logger.warn(
+            `Anomalous time jump detected: ${driftMs}ms - triggering sync`,
+          );
         }
 
-        const driftSeconds = (driftMs/1000).toFixed(1);
-        this.logActivity(`Pi time drift detected: ${driftSeconds}s - adjusting from device ${clientIP}`, 'warning');
+        const driftSeconds = (driftMs / 1000).toFixed(1);
+        this.logActivity(
+          `Pi time drift detected: ${driftSeconds}s - adjusting from device ${clientIP}`,
+          "warning",
+        );
 
         // Sync Pi time
-        const syncSuccess = await this.syncPiTime(clientTimestamp, clientTimezone);
+        const syncSuccess = await this.syncPiTime(
+          clientTimestamp,
+          clientTimezone,
+        );
 
         // Record sync event
         this.state.recordPiSync(clientTimestamp, clientIP, driftMs);
 
         // Log sync
-        logger.info(`Time synchronized from ${clientIP} (drift: ${driftSeconds}s)`);
+        logger.info(
+          `Time synchronized from ${clientIP} (drift: ${driftSeconds}s)`,
+        );
 
         if (syncSuccess) {
-          this.logActivity(`Pi time synchronized successfully (was ${driftSeconds}s off)`, 'success');
+          this.logActivity(
+            `Pi time synchronized successfully (was ${driftSeconds}s off)`,
+            "success",
+          );
         } else {
-          this.logActivity(`Pi time sync failed - system may not support time changes`, 'error');
+          this.logActivity(
+            `Pi time sync failed - system may not support time changes`,
+            "error",
+          );
         }
 
         // Broadcast sync status
         this.broadcastSyncStatus();
 
         // If camera is connected and Pi is now reliable, sync camera
-        const cameraController = typeof this.cameraController === 'function'
-          ? this.cameraController()
-          : this.cameraController;
+        const cameraController =
+          typeof this.cameraController === "function"
+            ? this.cameraController()
+            : this.cameraController;
 
         if (cameraController?.connected && this.state.isPiTimeReliable()) {
           await this.syncCameraTime();
         }
       } else {
         logger.debug(`Time drift within threshold: ${driftMs}ms`);
-        const driftSeconds = (driftMs/1000).toFixed(1);
-        this.logActivity(`Time sync check complete - Pi time accurate (${driftSeconds}s drift)`, 'success');
+        const driftSeconds = (driftMs / 1000).toFixed(1);
+        this.logActivity(
+          `Time sync check complete - Pi time accurate (${driftSeconds}s drift)`,
+          "success",
+        );
         // Still record that we checked
         this.state.recordPiSync(clientTimestamp, clientIP, driftMs);
       }
@@ -180,9 +220,8 @@ class TimeSyncService {
         this.lastGPS = gps;
         logger.info(`GPS location received: ${gps.latitude}, ${gps.longitude}`);
       }
-
     } catch (error) {
-      logger.error('Error handling client time response:', error);
+      logger.error("Error handling client time response:", error);
     }
   }
 
@@ -191,18 +230,23 @@ class TimeSyncService {
    */
   async syncPiTime(clientTime, timezone) {
     // Skip on non-Linux systems
-    if (process.platform !== 'linux') {
-      logger.warn('Time sync only supported on Linux');
+    if (process.platform !== "linux") {
+      logger.warn("Time sync only supported on Linux");
       return false;
     }
 
     return new Promise((resolve) => {
       // Format time for date command
-      const formattedTime = clientTime.toISOString().slice(0, 19).replace('T', ' ');
+      const formattedTime = clientTime
+        .toISOString()
+        .slice(0, 19)
+        .replace("T", " ");
 
-      const setTime = spawn('sudo', ['date', '-u', '-s', formattedTime], { stdio: 'pipe' });
+      const setTime = spawn("sudo", ["date", "-u", "-s", formattedTime], {
+        stdio: "pipe",
+      });
 
-      setTime.on('close', async (code) => {
+      setTime.on("close", async (code) => {
         if (code === 0) {
           logger.info(`System time synchronized to: ${formattedTime} UTC`);
 
@@ -222,8 +266,8 @@ class TimeSyncService {
         }
       });
 
-      setTime.on('error', (error) => {
-        logger.error('Error setting system time:', error);
+      setTime.on("error", (error) => {
+        logger.error("Error setting system time:", error);
         resolve(false);
       });
     });
@@ -234,9 +278,11 @@ class TimeSyncService {
    */
   async setSystemTimezone(timezone) {
     return new Promise((resolve, reject) => {
-      const setTz = spawn('sudo', ['timedatectl', 'set-timezone', timezone], { stdio: 'pipe' });
+      const setTz = spawn("sudo", ["timedatectl", "set-timezone", timezone], {
+        stdio: "pipe",
+      });
 
-      setTz.on('close', (code) => {
+      setTz.on("close", (code) => {
         if (code === 0) {
           logger.info(`System timezone set to: ${timezone}`);
           resolve();
@@ -245,7 +291,7 @@ class TimeSyncService {
         }
       });
 
-      setTz.on('error', reject);
+      setTz.on("error", reject);
     });
   }
 
@@ -254,17 +300,18 @@ class TimeSyncService {
    */
   async syncCameraTime() {
     // Get current camera controller instance
-    const cameraController = typeof this.cameraController === 'function'
-      ? this.cameraController()
-      : this.cameraController;
+    const cameraController =
+      typeof this.cameraController === "function"
+        ? this.cameraController()
+        : this.cameraController;
 
     if (!cameraController?.connected) {
-      logger.debug('Camera not connected, skipping sync');
+      logger.debug("Camera not connected, skipping sync");
       return false;
     }
 
     if (!this.state.isPiTimeReliable()) {
-      logger.warn('Pi time not reliable, skipping camera sync');
+      logger.warn("Pi time not reliable, skipping camera sync");
       return false;
     }
 
@@ -272,7 +319,7 @@ class TimeSyncService {
       // Get current camera time
       const cameraTime = await cameraController.getCameraDateTime();
       if (!cameraTime) {
-        logger.error('Could not get camera time');
+        logger.error("Could not get camera time");
         return false;
       }
 
@@ -288,19 +335,20 @@ class TimeSyncService {
 
         if (success) {
           this.state.recordCameraSync(driftMs);
-          logger.info(`Camera time synchronized (drift: ${(driftMs/1000).toFixed(1)}s)`);
+          logger.info(
+            `Camera time synchronized (drift: ${(driftMs / 1000).toFixed(1)}s)`,
+          );
           this.broadcastSyncStatus();
           return true;
         } else {
-          logger.error('Failed to set camera time');
+          logger.error("Failed to set camera time");
         }
       } else {
         logger.debug(`Camera time drift within threshold: ${driftMs}ms`);
         this.state.recordCameraSync(driftMs);
       }
-
     } catch (error) {
-      logger.error('Error syncing camera time:', error);
+      logger.error("Error syncing camera time:", error);
     }
 
     return false;
@@ -310,7 +358,7 @@ class TimeSyncService {
    * Handle camera connection
    */
   async handleCameraConnection() {
-    logger.info('Camera connected, checking time sync');
+    logger.info("Camera connected, checking time sync");
 
     // Always sync camera on connection for timezone changes
     await this.syncCameraTime();
@@ -330,7 +378,7 @@ class TimeSyncService {
       this.performScheduledCheck();
     }, this.state.config.SYNC_CHECK_INTERVAL);
 
-    logger.info('Scheduled sync checks started (15-minute interval)');
+    logger.info("Scheduled sync checks started (15-minute interval)");
   }
 
   /**
@@ -338,18 +386,25 @@ class TimeSyncService {
    */
   async performScheduledCheck() {
     // Find an AP client to sync with
-    const apClient = Array.from(this.connectedClients.entries())
-      .find(([_ip, client]) => client.interface === 'ap0');
+    const apClient = Array.from(this.connectedClients.entries()).find(
+      ([_ip, client]) => client.interface === "ap0",
+    );
 
     if (apClient) {
       const [clientIP, { ws }] = apClient;
       logger.debug(`Performing scheduled sync check with ${clientIP}`);
-      this.logActivity(`Scheduled time sync check with device ${clientIP}`, 'info');
+      this.logActivity(
+        `Scheduled time sync check with device ${clientIP}`,
+        "info",
+      );
       this.requestClientTime(clientIP, ws);
     } else {
       // No AP client available
       this.state.markNoClient();
-      this.logActivity('No devices connected for scheduled time sync - monitoring for connections', 'info');
+      this.logActivity(
+        "No devices connected for scheduled time sync - monitoring for connections",
+        "info",
+      );
 
       // Start minute checks if not already running
       if (!this.minuteCheckTimer) {
@@ -363,8 +418,9 @@ class TimeSyncService {
    */
   startMinuteChecks() {
     this.minuteCheckTimer = setInterval(() => {
-      const apClient = Array.from(this.connectedClients.entries())
-        .find(([_ip, client]) => client.interface === 'ap0');
+      const apClient = Array.from(this.connectedClients.entries()).find(
+        ([_ip, client]) => client.interface === "ap0",
+      );
 
       if (apClient) {
         // Client found, stop minute checks
@@ -376,13 +432,14 @@ class TimeSyncService {
         this.requestClientTime(clientIP, ws);
 
         // Log recovery
-        const withoutClientMs = Date.now() - this.state.noClientSince?.getTime();
+        const withoutClientMs =
+          Date.now() - this.state.noClientSince?.getTime();
         const minutes = Math.floor(withoutClientMs / 60000);
         logger.info(`Time sync resumed after ${minutes} minutes offline`);
       }
     }, this.state.config.MINUTE_CHECK_INTERVAL);
 
-    logger.debug('Started minute-interval sync checks');
+    logger.debug("Started minute-interval sync checks");
   }
 
   /**
@@ -390,7 +447,7 @@ class TimeSyncService {
    */
   broadcastSyncStatus() {
     if (!this.wsManager) {
-      logger.warn('TimeSyncService: Cannot broadcast - no wsManager');
+      logger.warn("TimeSyncService: Cannot broadcast - no wsManager");
       return;
     }
 
@@ -401,23 +458,23 @@ class TimeSyncService {
       pi: {
         isSynchronized: rawStatus.piReliable,
         reliability: this.getPiReliability(rawStatus),
-        lastSyncTime: rawStatus.lastPiSync
+        lastSyncTime: rawStatus.lastPiSync,
       },
       camera: {
         isSynchronized: this.isCameraSynchronized(rawStatus),
-        lastSyncTime: rawStatus.lastCameraSync
-      }
+        lastSyncTime: rawStatus.lastCameraSync,
+      },
     };
 
-    logger.info('TimeSyncService: Broadcasting sync status', {
+    logger.info("TimeSyncService: Broadcasting sync status", {
       piSynchronized: uiStatus.pi.isSynchronized,
       piReliability: uiStatus.pi.reliability,
-      cameraSynchronized: uiStatus.camera.isSynchronized
+      cameraSynchronized: uiStatus.camera.isSynchronized,
     });
 
     this.wsManager.broadcast({
-      type: 'time-sync-status',
-      data: uiStatus
+      type: "time-sync-status",
+      data: uiStatus,
     });
   }
 
@@ -425,15 +482,15 @@ class TimeSyncService {
    * Get Pi reliability level for UI
    */
   getPiReliability(status) {
-    if (!status.lastPiSync) return 'none';
+    if (!status.lastPiSync) return "none";
 
     const timeSinceSync = Date.now() - new Date(status.lastPiSync).getTime();
     const minutes = timeSinceSync / (60 * 1000);
 
-    if (minutes < 5) return 'high';
-    if (minutes < 60) return 'medium';
-    if (minutes < 24 * 60) return 'low';
-    return 'none';
+    if (minutes < 5) return "high";
+    if (minutes < 60) return "medium";
+    if (minutes < 24 * 60) return "low";
+    return "none";
   }
 
   /**
@@ -441,9 +498,10 @@ class TimeSyncService {
    */
   isCameraSynchronized(status) {
     // Check if camera is currently connected
-    const cameraController = typeof this.cameraController === 'function'
-      ? this.cameraController()
-      : this.cameraController;
+    const cameraController =
+      typeof this.cameraController === "function"
+        ? this.cameraController()
+        : this.cameraController;
 
     if (!cameraController?.connected) {
       return false;
@@ -455,7 +513,8 @@ class TimeSyncService {
     }
 
     // Consider camera synchronized if synced within last 30 minutes
-    const timeSinceSync = Date.now() - new Date(status.lastCameraSync).getTime();
+    const timeSinceSync =
+      Date.now() - new Date(status.lastCameraSync).getTime();
     const minutes = timeSinceSync / (60 * 1000);
 
     return minutes < 30;
@@ -497,7 +556,7 @@ class TimeSyncService {
     }
 
     this.state.cleanup();
-    logger.info('TimeSync service cleaned up');
+    logger.info("TimeSync service cleaned up");
   }
 }
 

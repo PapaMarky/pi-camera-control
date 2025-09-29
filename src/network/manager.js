@@ -345,7 +345,7 @@ export class DiscoveryManager extends EventEmitter {
       if (response.status === 200 && response.data) {
         logger.info(`Found potential Canon camera at ${ip}:${port}`, {
           responseData: response.data,
-          responseStatus: response.status
+          responseStatus: response.status,
         });
 
         // Create device info for discovered camera
@@ -369,7 +369,7 @@ export class DiscoveryManager extends EventEmitter {
       } else {
         logger.debug(`Non-camera response from ${ip}:${port}`, {
           status: response.status,
-          hasData: !!response.data
+          hasData: !!response.data,
         });
       }
     } catch (error) {
