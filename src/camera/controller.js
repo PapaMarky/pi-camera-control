@@ -83,7 +83,8 @@ export class CameraController {
       return true;
     } catch (error) {
       logger.error("Failed to initialize camera controller:", error);
-      return false;
+      // Throw the actual error so caller gets specific error message
+      throw error;
     }
   }
 

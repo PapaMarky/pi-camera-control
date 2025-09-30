@@ -575,26 +575,20 @@ export function createWebSocketHandler(
 
   const handleNetworkConnect = async (ws, data) => {
     if (!networkManager || !networkManager.serviceManager) {
-      return sendOperationResult(
-        ws,
-        "network_connect",
-        false,
-        {},
-        "Network management not available",
-      );
+      return sendError(ws, "Network management not available", {
+        code: ErrorCodes.SERVICE_UNAVAILABLE,
+        operation: "network_connect",
+      });
     }
 
     try {
       const { ssid, password, priority } = data;
 
       if (!ssid) {
-        return sendOperationResult(
-          ws,
-          "network_connect",
-          false,
-          {},
-          "SSID is required",
-        );
+        return sendError(ws, "SSID is required", {
+          code: ErrorCodes.INVALID_PARAMETER,
+          operation: "network_connect",
+        });
       }
 
       // Use ServiceManager directly for low-level WiFi operations
@@ -605,7 +599,8 @@ export function createWebSocketHandler(
       );
 
       // Send success result with network details
-      sendOperationResult(ws, "network_connect", true, {
+      sendResponse(ws, "network_connect_result", {
+        success: true,
         network: ssid,
         method: result.method || "NetworkManager",
       });
@@ -627,7 +622,10 @@ export function createWebSocketHandler(
       }, 8000);
     } catch (error) {
       logger.error("Network connection failed via WebSocket:", error);
-      sendOperationResult(ws, "network_connect", false, {}, error.message);
+      sendError(ws, error.message, {
+        code: ErrorCodes.NETWORK_ERROR,
+        operation: "network_connect",
+      });
     }
   };
 
@@ -1026,26 +1024,6 @@ export function createWebSocketHandler(
   };
 
   // Universal method to send operation results with consistent structure
-  const sendOperationResult = (
-    ws,
-    operation,
-    success,
-    data = {},
-    error = null,
-  ) => {
-    const result = {
-      success,
-      timestamp: new Date().toISOString(),
-      ...data,
-    };
-
-    if (!success && error) {
-      result.error = error;
-    }
-
-    sendResponse(ws, `${operation}_result`, result);
-  };
-
   const broadcastEvent = (type, data) => {
     const event = {
       type: "event",

@@ -971,18 +971,35 @@ class CameraManager {
   getSpecificErrorMessage(serverError, ip) {
     if (!serverError) return 'Unable to connect to camera';
 
-    const error = serverError.toLowerCase();
+    // Handle new standardized error format
+    let errorMessage = serverError;
+    if (typeof serverError === 'object') {
+      if (serverError.error && serverError.error.message) {
+        // New format: { error: { message, code, ... }, timestamp }
+        errorMessage = serverError.error.message;
+      } else if (serverError.message) {
+        // Alternative format: { message, ... }
+        errorMessage = serverError.message;
+      } else {
+        // Fallback: stringify the object
+        errorMessage = JSON.stringify(serverError);
+      }
+    }
 
-    if (error.includes('initialization failed') || error.includes('controller initialization')) {
-      return `Camera found at ${ip} but CCAPI service is not responding. Check that the camera is in shooting mode and CCAPI is enabled.`;
-    } else if (error.includes('timeout') || error.includes('timed out')) {
+    const error = String(errorMessage).toLowerCase();
+
+    if (error.includes('ehostunreach') || error.includes('host unreachable')) {
+      return `Cannot reach camera at ${ip}. The camera may be powered off or not connected to the network.`;
+    } else if (error.includes('econnrefused') || error.includes('refused') || error.includes('connection refused')) {
+      return `Camera at ${ip} refused the connection. Check that CCAPI is enabled on the camera.`;
+    } else if (error.includes('timeout') || error.includes('timed out') || error.includes('etimedout')) {
       return `Connection to ${ip} timed out. Check that the camera is connected to the network and the IP address is correct.`;
+    } else if (error.includes('initialization failed') || error.includes('controller initialization')) {
+      return `Camera found at ${ip} but CCAPI service is not responding. Check that the camera is in shooting mode and CCAPI is enabled.`;
     } else if (error.includes('network') || error.includes('unreachable')) {
       return `Cannot reach camera at ${ip}. Verify the IP address and network connection.`;
-    } else if (error.includes('refused') || error.includes('connection refused')) {
-      return `Camera at ${ip} refused the connection. Check that CCAPI is enabled on the camera.`;
     } else {
-      return `Connection failed: ${serverError}`;
+      return `Connection failed: ${errorMessage}`;
     }
   }
 

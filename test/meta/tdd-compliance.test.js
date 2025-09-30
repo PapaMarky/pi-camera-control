@@ -111,7 +111,8 @@ describe('TDD Compliance Validation', () => {
 
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
     expect(packageJson.scripts).toHaveProperty('test');
-    expect(packageJson.scripts.test).toBe('jest');
+    // Updated to match ESM configuration requirement
+    expect(packageJson.scripts.test).toContain('jest');
     expect(packageJson.devDependencies).toHaveProperty('jest');
   });
 

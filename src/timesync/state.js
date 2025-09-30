@@ -66,8 +66,8 @@ class TimeSyncState extends EventEmitter {
       this.syncHistory.pop();
     }
 
-    // Emit event for UI updates
-    this.emit("pi-sync", syncEvent);
+    // Emit event for UI updates (using snake_case for consistency)
+    this.emit("pi_sync", syncEvent);
 
     // Reset no-client timer
     this.noClientSince = null;
@@ -93,8 +93,8 @@ class TimeSyncState extends EventEmitter {
       this.syncHistory.pop();
     }
 
-    // Emit event for UI updates
-    this.emit("camera-sync", syncEvent);
+    // Emit event for UI updates (using snake_case for consistency)
+    this.emit("camera_sync", syncEvent);
 
     logger.info(`Camera time synchronized, drift: ${driftMs}ms`);
   }
@@ -119,7 +119,7 @@ class TimeSyncState extends EventEmitter {
     const withoutClientMs = Date.now() - this.noClientSince.getTime();
     if (withoutClientMs > this.config.RELIABILITY_WINDOW) {
       this.piReliable = false;
-      this.emit("reliability-lost");
+      this.emit("reliability_lost");
     }
   }
 
