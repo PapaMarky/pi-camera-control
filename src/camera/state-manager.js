@@ -266,11 +266,7 @@ export class CameraStateManager extends EventEmitter {
       this.primaryCameraUuid = uuid;
       this.primaryController = controller;
 
-      this.recordConnectionEvent(
-        uuid,
-        "connected",
-        cameraData.info.ipAddress,
-      );
+      this.recordConnectionEvent(uuid, "connected", cameraData.info.ipAddress);
 
       // Record successful connection in history for UI pre-population
       await this.cameraConnectionHistory.recordConnection(

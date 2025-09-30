@@ -93,18 +93,9 @@ const migrationStats = {
 };
 
 /**
- * Increments migration statistics
- * @param {string} oldName - Old event name
- */
-function trackMigration(oldName) {
-  migrationStats.totalDeprecatedEmissions++;
-  migrationStats.eventCounts[oldName] =
-    (migrationStats.eventCounts[oldName] || 0) + 1;
-}
-
-/**
  * Gets current migration statistics
  * @returns {Object} Statistics object
+ * @note Currently returns empty stats - tracking not yet implemented
  */
 export function getMigrationStats() {
   return { ...migrationStats };
