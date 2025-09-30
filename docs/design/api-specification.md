@@ -543,9 +543,34 @@ graph LR
 {
   "type": "welcome",
   "timestamp": "2024-01-01T12:00:00.000Z",
-  "camera": { "connected": true },
-  "power": { "isRaspberryPi": true },
-  "network": { "interfaces": {} },
+  "camera": {
+    "connected": true,
+    "ip": "192.168.4.2",
+    "port": "443",
+    "model": "EOS R50"
+  },
+  "power": {
+    "isRaspberryPi": true,
+    "battery": { "capacity": 85 },
+    "thermal": { "temperature": 45.2 }
+  },
+  "network": {
+    "interfaces": {
+      "wlan0": { "connected": true, "network": "HomeWiFi" }
+    }
+  },
+  "intervalometer": null,
+  "timesync": {
+    "pi": {
+      "isSynchronized": false,
+      "reliability": "none",
+      "lastSyncTime": null
+    },
+    "camera": {
+      "isSynchronized": false,
+      "lastSyncTime": null
+    }
+  },
   "clientId": "192.168.4.3:54321"
 }
 ```
@@ -557,15 +582,18 @@ graph LR
   "timestamp": "2024-01-01T12:00:00.000Z",
   "camera": {
     "connected": true,
-    "ip": "192.168.4.2"
+    "ip": "192.168.4.2",
+    "model": "EOS R50"
   },
   "discovery": {
     "isDiscovering": true,
     "cameras": 1
   },
   "power": {
+    "isRaspberryPi": true,
     "battery": { "capacity": 85 },
-    "thermal": { "temperature": 45.2 }
+    "thermal": { "temperature": 45.2 },
+    "uptime": 3600
   },
   "network": {
     "interfaces": {
