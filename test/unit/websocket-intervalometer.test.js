@@ -358,7 +358,8 @@ describe('WebSocket Intervalometer Handler Tests', () => {
       // Should be tomorrow at 1 AM
       expect(options.stopTime.getHours()).toBe(1);
       expect(options.stopTime.getMinutes()).toBe(0);
-      expect(options.stopTime.getDate()).toBeGreaterThan(new Date().getDate());
+      // Stop time should be in the future (comparison by timestamp is more reliable)
+      expect(options.stopTime.getTime()).toBeGreaterThan(new Date().getTime());
     });
 
     test('prevents starting when session already running', async () => {
@@ -483,13 +484,13 @@ describe('WebSocket Intervalometer Handler Tests', () => {
 
       await messageHandler(Buffer.from(legacyStartMessage));
 
-      // Should delegate to the title version with null title
+      // Should delegate to the title version
+      // Note: title is not included in options when it's null/empty
       expect(mockIntervalometerStateManager.createSession).toHaveBeenCalledWith(
         expect.any(Function),
         expect.objectContaining({
           interval: 30,
-          totalShots: 50,
-          title: null
+          totalShots: 50
         })
       );
     });
@@ -659,9 +660,12 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         'session-123',
         'Saved Session Report'
       );
-      expect(sentMessages).toHaveLength(1);
+      // Dual emission: direct response + timelapse_event broadcast
+      expect(sentMessages).toHaveLength(2);
       expect(sentMessages[0].type).toBe('session_saved');
       expect(sentMessages[0].data.sessionId).toBe('session-123');
+      expect(sentMessages[1].type).toBe('timelapse_event');
+      expect(sentMessages[1].eventType).toBe('report_saved');
     });
 
     test('discards session', async () => {
@@ -675,9 +679,12 @@ describe('WebSocket Intervalometer Handler Tests', () => {
       await messageHandler(Buffer.from(discardMessage));
 
       expect(mockIntervalometerStateManager.discardSession).toHaveBeenCalledWith('session-123');
-      expect(sentMessages).toHaveLength(1);
+      // Dual emission: direct response + timelapse_event broadcast
+      expect(sentMessages).toHaveLength(2);
       expect(sentMessages[0].type).toBe('session_discarded');
       expect(sentMessages[0].data.sessionId).toBe('session-123');
+      expect(sentMessages[1].type).toBe('timelapse_event');
+      expect(sentMessages[1].eventType).toBe('session_discarded');
     });
 
     test('deletes timelapse report', async () => {
@@ -691,9 +698,12 @@ describe('WebSocket Intervalometer Handler Tests', () => {
       await messageHandler(Buffer.from(deleteMessage));
 
       expect(mockIntervalometerStateManager.deleteReport).toHaveBeenCalledWith('report-1');
-      expect(sentMessages).toHaveLength(1);
+      // Dual emission: direct response + timelapse_event broadcast
+      expect(sentMessages).toHaveLength(2);
       expect(sentMessages[0].type).toBe('report_deleted');
       expect(sentMessages[0].data.reportId).toBe('report-1');
+      expect(sentMessages[1].type).toBe('timelapse_event');
+      expect(sentMessages[1].eventType).toBe('report_deleted');
     });
 
     test('gets unsaved session status', async () => {
@@ -754,6 +764,24 @@ describe('WebSocket Intervalometer Handler Tests', () => {
     });
 
     test('handles intervalometer state manager not available', async () => {
+      // Create a NEW WebSocket mock to avoid handler conflicts
+      const newMockWs = {
+        readyState: 1,
+        OPEN: 1,
+        send: jest.fn((message) => {
+          sentMessages.push(JSON.parse(message));
+        }),
+        on: jest.fn(),
+        close: jest.fn()
+      };
+
+      const newMockRequest = {
+        socket: {
+          remoteAddress: '192.168.4.102',
+          remotePort: 54323
+        }
+      };
+
       // Create handler without intervalometer state manager
       const handlerWithoutStateManager = createWebSocketHandler(
         mockCameraController,
@@ -765,10 +793,12 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         mockTimeSyncService
       );
 
-      await handlerWithoutStateManager(mockWebSocket, mockRequest);
-      sentMessages = [];
+      sentMessages = []; // Clear previous messages
+      await handlerWithoutStateManager(newMockWs, newMockRequest);
+      sentMessages = []; // Clear welcome message
 
-      const messageHandler = mockWebSocket.on.mock.calls.find(call => call[0] === 'message')[1];
+      // Get the NEW message handler from the NEW WebSocket
+      const messageHandler = newMockWs.on.mock.calls.find(call => call[0] === 'message')[1];
 
       const getReportsMessage = JSON.stringify({
         type: 'get_timelapse_reports',

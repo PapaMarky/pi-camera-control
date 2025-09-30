@@ -59,7 +59,8 @@ const MessageSchemas = {
       camera: {
         connected: 'boolean',
         ip: 'string?',
-        port: 'string?'
+        port: 'string?',
+        model: 'string?'
       },
       power: {
         isRaspberryPi: 'boolean',
@@ -69,6 +70,8 @@ const MessageSchemas = {
       network: {
         interfaces: 'object'
       },
+      intervalometer: 'object?',
+      timesync: 'object?',
       clientId: 'string'
     },
 
@@ -77,13 +80,15 @@ const MessageSchemas = {
       timestamp: 'string',
       camera: {
         connected: 'boolean',
-        ip: 'string?'
+        ip: 'string?',
+        model: 'string?'
       },
       discovery: {
         isDiscovering: 'boolean',
         cameras: 'number'
       },
       power: {
+        isRaspberryPi: 'boolean?',
         battery: {
           capacity: 'number?'
         },
