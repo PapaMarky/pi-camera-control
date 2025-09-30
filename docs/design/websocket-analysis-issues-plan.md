@@ -1,8 +1,8 @@
 # WebSocket Analysis Issues - Implementation Plan
 
-**Document Version:** 1.4
+**Document Version:** 1.5
 **Date:** 2025-09-30
-**Status:** Phases 1, 2 & 3 Complete - Phase 4 & 5 Pending
+**Status:** Phases 1, 2, 3 & 5 Complete - Phase 4 Deferred
 
 ## Executive Summary
 
@@ -20,15 +20,15 @@ This document provides a comprehensive plan for addressing the issues identified
 
 - **Phase 1 (High Priority)**: ✅ **COMPLETE** - Error standardization finished (commit 7d786ec)
 - **Phase 2 (Medium Priority)**: ✅ **COMPLETE** - Event naming migration with backward compatibility (commit 7d786ec)
-- **Phase 3 (Medium Priority)**: ✅ **COMPLETE** - 2-3 days - Documentation updates (commit 42ba492)
-- **Phase 4 (Lower Priority)**: 1-2 days - Minimal investigation (OPTIONAL - can defer)
-- **Phase 5 (Validation)**: 0.5-1 day - Basic stability check (RECOMMENDED before new features)
+- **Phase 3 (Medium Priority)**: ✅ **COMPLETE** - Documentation updates (commit 42ba492)
+- **Phase 4 (Lower Priority)**: ⏭️ **DEFERRED** - Minimal investigation (not needed for MVP)
+- **Phase 5 (Validation)**: ✅ **COMPLETE** - Test fixes and validation (commit b6f4d8e)
 
 **Total Estimated Effort:** 8.5-14 days (reduced from 13-18 due to scope clarification)
-**Completed:** 7-10 days (Phases 1, 2 & 3)
-**Remaining:** 1.5-4 days (Phases 4-5, both optional/simplified)
+**Completed:** 8-11 days (Phases 1, 2, 3 & 5)
+**Remaining:** 1-2 days (Phase 4 - optional, can be deferred indefinitely)
 
-**Decision Point:** Phase 4 is low priority and can be deferred. **Phase 5 minimal validation is recommended** before starting new features to ensure no regressions.
+**Status:** All critical phases complete. Phase 4 deferred as optional future work. System is stable and ready for production.
 
 ---
 
@@ -887,11 +887,17 @@ const sendOperationResult = (ws, operation, success, data, error) => {
    - ✅ Executed existing test suite
    - ✅ Fixed 19 test failures from Phase 1 error standardization
    - ✅ Updated API route tests to expect new error format
-   - ✅ Documented hanging test issue (TimeSyncService singleton)
-   - **Result:** 138 tests passing (schemas, errors, utils, meta, API routes, integration)
-   - **Known Issue:** websocket-handler and websocket-intervalometer tests require CI=true to run
-     - Root cause: TimeSyncService singleton creates real timers despite mocks
-     - Tests pass correctly with CI=true environment variable
+   - ✅ Fixed TimeSyncService singleton hanging issues (commit 45f5840)
+     - Implemented dependency injection pattern
+     - Removed jest.mock() singleton mocking
+     - Tests now run in CI without hanging
+   - ✅ Fixed 14 additional test failures (commit b6f4d8e)
+     - Updated message schemas (welcome, status_update) with missing fields
+     - Fixed test expectations for dual event emission (backward compatibility)
+     - Fixed WebSocket mock conflicts in "not available" tests
+     - Fixed date comparison logic in stop time tests
+   - **Result:** 245 tests passing (up from 233), 2 UI integration tests failing (HTML not implemented)
+   - **CI Status:** All unit tests passing in CI environment
 
 2. ✅ **Basic Hardware Verification** (Priority: High) - **COMPLETE** (2025-09-30)
    - ✅ Deployed to picontrol-002 successfully
@@ -919,12 +925,20 @@ const sendOperationResult = (ws, operation, success, data, error) => {
    - **Result:** Documentation reasonably matches implementation
 
 **Success Criteria (Minimal):**
-- ✅ Existing tests pass (138 tests passing)
+- ✅ Existing tests pass (245 tests passing, all unit tests green in CI)
 - ✅ Basic operations work on target hardware (service running, APIs responding)
 - ✅ No critical regressions (clean logs, all services initialized)
-- ✅ Documentation reasonably accurate (validated and updated)
+- ✅ Documentation reasonably accurate (validated and updated, schemas fixed)
 
 **Phase 5 Status:** ✅ **COMPLETE** (2025-09-30)
+
+**Final Test Results:**
+- Total: 245 passing, 2 failing (UI integration only), 9 skipped
+- websocket-handler.test.js: 43/43 passing ✅
+- websocket-intervalometer.test.js: 43/43 passing ✅
+- All schema validation tests: passing ✅
+- All error handling tests: passing ✅
+- CI Status: All required jobs passing ✅
 
 **Decision Point:** If the above succeeds, **WebSocket system is stable enough to move on to new features**. This is a hobbyist tool - perfect test coverage is not required.
 
