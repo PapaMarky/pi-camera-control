@@ -59,7 +59,8 @@ const MessageSchemas = {
       camera: {
         connected: 'boolean',
         ip: 'string?',
-        port: 'string?'
+        port: 'string?',
+        model: 'string?'
       },
       power: {
         isRaspberryPi: 'boolean',
@@ -69,6 +70,8 @@ const MessageSchemas = {
       network: {
         interfaces: 'object'
       },
+      intervalometer: 'object?',
+      timesync: 'object?',
       clientId: 'string'
     },
 
@@ -77,13 +80,15 @@ const MessageSchemas = {
       timestamp: 'string',
       camera: {
         connected: 'boolean',
-        ip: 'string?'
+        ip: 'string?',
+        model: 'string?'
       },
       discovery: {
         isDiscovering: 'boolean',
         cameras: 'number'
       },
       power: {
+        isRaspberryPi: 'boolean?',
         battery: {
           capacity: 'number?'
         },
@@ -158,6 +163,37 @@ const EventSchemas = {
     error: 'string?'
   },
 
+  // Discovery Events - NEW snake_case names (standardized)
+  camera_discovered: {
+    uuid: 'string',
+    modelName: 'string',
+    ipAddress: 'string',
+    port: 'string?'
+  },
+
+  camera_connected: {
+    uuid: 'string',
+    ipAddress: 'string',
+    port: 'string?'
+  },
+
+  camera_offline: {
+    uuid: 'string',
+    reason: 'string?'
+  },
+
+  primary_camera_changed: {
+    uuid: 'string',
+    info: 'object',
+    controller: 'object?'
+  },
+
+  primary_camera_disconnected: {
+    uuid: 'string?',
+    reason: 'string'
+  },
+
+  // Discovery Events - DEPRECATED (temporary backward compatibility)
   cameraDiscovered: {
     uuid: 'string',
     modelName: 'string',
@@ -165,6 +201,7 @@ const EventSchemas = {
     port: 'string?'
   },
 
+  // Internal event (not WebSocket broadcast)
   cameraIPChanged: {
     uuid: 'string',
     oldIP: 'string',
@@ -178,6 +215,26 @@ const EventSchemas = {
     totalShots: 'number?'
   },
 
+  // Time Sync Events - NEW snake_case names (standardized)
+  pi_sync: {
+    synchronized: 'boolean',
+    source: 'string',
+    offset: 'number',
+    reliability: 'string'
+  },
+
+  camera_sync: {
+    success: 'boolean',
+    previousTime: 'string',
+    newTime: 'string',
+    offset: 'number?'
+  },
+
+  reliability_lost: {
+    reason: 'string?'
+  },
+
+  // Time Sync Events - DEPRECATED (temporary backward compatibility)
   'pi-sync': {
     synchronized: 'boolean',
     source: 'string',

@@ -252,9 +252,11 @@ describe('API Routes Unit Tests', () => {
           .get('/api/camera/status')
           .expect(500);
 
-        expect(response.body).toEqual({
-          error: 'Failed to get camera status'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Failed to get camera status');
+        expect(response.body.error).toHaveProperty('code');
+        expect(response.body.error).toHaveProperty('component');
       });
     });
 
@@ -281,9 +283,11 @@ describe('API Routes Unit Tests', () => {
           .get('/api/camera/settings')
           .expect(503);
 
-        expect(response.body).toEqual({
-          error: 'No camera available'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'No camera available');
+        expect(response.body.error).toHaveProperty('code');
+        expect(response.body.error).toHaveProperty('component');
       });
 
       test('handles camera settings error', async () => {
@@ -295,9 +299,9 @@ describe('API Routes Unit Tests', () => {
           .get('/api/camera/settings')
           .expect(500);
 
-        expect(response.body).toEqual({
-          error: 'Camera communication failed'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Camera communication failed');
       });
     });
 
@@ -322,9 +326,9 @@ describe('API Routes Unit Tests', () => {
           .get('/api/camera/battery')
           .expect(503);
 
-        expect(response.body).toEqual({
-          error: 'No camera available'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'No camera available');
       });
     });
 
@@ -351,9 +355,9 @@ describe('API Routes Unit Tests', () => {
           .post('/api/camera/photo')
           .expect(500);
 
-        expect(response.body).toEqual({
-          error: 'Shutter stuck'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Shutter stuck');
       });
     });
 
@@ -382,10 +386,9 @@ describe('API Routes Unit Tests', () => {
           .send({ ip: 'invalid-ip' })
           .expect(400);
 
-        expect(response.body).toEqual({
-          success: false,
-          error: 'Invalid IP address format'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Invalid IP address format');
       });
 
       test('validates port range', async () => {
@@ -394,10 +397,9 @@ describe('API Routes Unit Tests', () => {
           .send({ ip: '192.168.1.200', port: '99999' })
           .expect(400);
 
-        expect(response.body).toEqual({
-          success: false,
-          error: 'Port must be between 1 and 65535'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Port must be between 1 and 65535');
       });
 
       test('requires IP address', async () => {
@@ -406,10 +408,9 @@ describe('API Routes Unit Tests', () => {
           .send({ port: '8080' })
           .expect(400);
 
-        expect(response.body).toEqual({
-          success: false,
-          error: 'IP address is required'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'IP address is required');
       });
     });
 
@@ -448,9 +449,9 @@ describe('API Routes Unit Tests', () => {
           .send({})
           .expect(400);
 
-        expect(response.body).toEqual({
-          error: 'Invalid interval value'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Invalid interval value');
       });
     });
   });
@@ -482,9 +483,9 @@ describe('API Routes Unit Tests', () => {
           .send({ interval: 30, shots: 100 })
           .expect(400);
 
-        expect(response.body).toEqual({
-          error: 'Intervalometer is already running'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Intervalometer is already running');
       });
 
       test('validates interval parameter', async () => {
@@ -493,9 +494,9 @@ describe('API Routes Unit Tests', () => {
           .send({ shots: 100 })
           .expect(400);
 
-        expect(response.body).toEqual({
-          error: 'Invalid interval value'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Invalid interval value');
       });
     });
 
@@ -580,9 +581,9 @@ describe('API Routes Unit Tests', () => {
           .get('/api/timelapse/reports')
           .expect(500);
 
-        expect(response.body).toEqual({
-          error: 'Database error'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Database error');
       });
     });
 
@@ -605,9 +606,9 @@ describe('API Routes Unit Tests', () => {
           .get('/api/timelapse/reports/nonexistent')
           .expect(404);
 
-        expect(response.body).toEqual({
-          error: 'Report not found'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Report not found');
       });
     });
 
@@ -635,9 +636,9 @@ describe('API Routes Unit Tests', () => {
           .send({})
           .expect(400);
 
-        expect(response.body).toEqual({
-          error: 'Title cannot be empty'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Title cannot be empty');
       });
     });
   });
@@ -671,9 +672,9 @@ describe('API Routes Unit Tests', () => {
           .get('/api/network/status')
           .expect(500);
 
-        expect(response.body).toEqual({
-          error: 'Network error'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Network error');
       });
     });
 
@@ -718,9 +719,9 @@ describe('API Routes Unit Tests', () => {
           .send({ password: 'password123' })
           .expect(400);
 
-        expect(response.body).toEqual({
-          error: 'SSID is required'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'SSID is required');
       });
     });
   });
@@ -750,9 +751,9 @@ describe('API Routes Unit Tests', () => {
           .get('/api/system/power')
           .expect(500);
 
-        expect(response.body).toEqual({
-          error: 'Failed to get power status'
-        });
+        expect(response.body).toHaveProperty('error');
+        expect(response.body).toHaveProperty('timestamp');
+        expect(response.body.error).toHaveProperty('message', 'Failed to get power status');
       });
     });
 

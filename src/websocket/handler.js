@@ -1,6 +1,5 @@
 import { logger } from "../utils/logger.js";
 // Removed unused import: IntervalometerSession
-import timeSyncService from "../timesync/service.js";
 import {
   createStandardError,
   ErrorCodes,
@@ -14,6 +13,7 @@ export function createWebSocketHandler(
   networkManager,
   discoveryManager,
   intervalometerStateManager,
+  timeSyncService = null,
 ) {
   const clients = new Set();
   const clientInfo = new Map(); // Track client info for time sync
@@ -210,11 +210,13 @@ export function createWebSocketHandler(
       `WebSocket: About to call TimeSync for ${clientIP} on ${clientInterface}`,
     );
     try {
-      await timeSyncService.handleClientConnection(
-        clientIP,
-        clientInterface,
-        ws,
-      );
+      if (timeSyncService) {
+        await timeSyncService.handleClientConnection(
+          clientIP,
+          clientInterface,
+          ws,
+        );
+      }
       logger.info(`WebSocket: TimeSync call completed for ${clientIP}`);
     } catch (error) {
       logger.error(`WebSocket: TimeSync call failed for ${clientIP}:`, error);
@@ -246,31 +248,35 @@ export function createWebSocketHandler(
         intervalometer: server.activeIntervalometerSession
           ? server.activeIntervalometerSession.getStatus()
           : null,
-        timesync: (() => {
-          const rawStatus = timeSyncService.getStatus();
-          return {
-            pi: {
-              isSynchronized: rawStatus.piReliable,
-              reliability: timeSyncService.getPiReliability
-                ? timeSyncService.getPiReliability(rawStatus)
-                : "none",
-              lastSyncTime: rawStatus.lastPiSync,
-            },
-            camera: {
-              isSynchronized: !!rawStatus.lastCameraSync,
-              lastSyncTime: rawStatus.lastCameraSync,
-            },
-          };
-        })(),
+        timesync: timeSyncService
+          ? (() => {
+              const rawStatus = timeSyncService.getStatus();
+              return {
+                pi: {
+                  isSynchronized: rawStatus.piReliable,
+                  reliability: timeSyncService.getPiReliability
+                    ? timeSyncService.getPiReliability(rawStatus)
+                    : "none",
+                  lastSyncTime: rawStatus.lastPiSync,
+                },
+                camera: {
+                  isSynchronized: !!rawStatus.lastCameraSync,
+                  lastSyncTime: rawStatus.lastCameraSync,
+                },
+              };
+            })()
+          : null,
         clientId,
       };
 
       ws.send(JSON.stringify(initialStatus));
 
       // Send current TimeSyncService status separately
-      setTimeout(() => {
-        timeSyncService.broadcastSyncStatus();
-      }, 100);
+      if (timeSyncService) {
+        setTimeout(() => {
+          timeSyncService.broadcastSyncStatus();
+        }, 100);
+      }
     } catch (error) {
       logger.error("Failed to send welcome message:", error);
     }
@@ -296,7 +302,9 @@ export function createWebSocketHandler(
       // Clean up time sync tracking
       const info = clientInfo.get(ws);
       if (info) {
-        timeSyncService.handleClientDisconnection(info.ip);
+        if (timeSyncService) {
+          timeSyncService.handleClientDisconnection(info.ip);
+        }
         clientInfo.delete(ws);
       }
     });
@@ -309,7 +317,9 @@ export function createWebSocketHandler(
       // Clean up time sync tracking
       const info = clientInfo.get(ws);
       if (info) {
-        timeSyncService.handleClientDisconnection(info.ip);
+        if (timeSyncService) {
+          timeSyncService.handleClientDisconnection(info.ip);
+        }
         clientInfo.delete(ws);
       }
     });
@@ -575,26 +585,20 @@ export function createWebSocketHandler(
 
   const handleNetworkConnect = async (ws, data) => {
     if (!networkManager || !networkManager.serviceManager) {
-      return sendOperationResult(
-        ws,
-        "network_connect",
-        false,
-        {},
-        "Network management not available",
-      );
+      return sendError(ws, "Network management not available", {
+        code: ErrorCodes.SERVICE_UNAVAILABLE,
+        operation: "network_connect",
+      });
     }
 
     try {
       const { ssid, password, priority } = data;
 
       if (!ssid) {
-        return sendOperationResult(
-          ws,
-          "network_connect",
-          false,
-          {},
-          "SSID is required",
-        );
+        return sendError(ws, "SSID is required", {
+          code: ErrorCodes.INVALID_PARAMETER,
+          operation: "network_connect",
+        });
       }
 
       // Use ServiceManager directly for low-level WiFi operations
@@ -605,7 +609,8 @@ export function createWebSocketHandler(
       );
 
       // Send success result with network details
-      sendOperationResult(ws, "network_connect", true, {
+      sendResponse(ws, "network_connect_result", {
+        success: true,
         network: ssid,
         method: result.method || "NetworkManager",
       });
@@ -627,7 +632,10 @@ export function createWebSocketHandler(
       }, 8000);
     } catch (error) {
       logger.error("Network connection failed via WebSocket:", error);
-      sendOperationResult(ws, "network_connect", false, {}, error.message);
+      sendError(ws, error.message, {
+        code: ErrorCodes.NETWORK_ERROR,
+        operation: "network_connect",
+      });
     }
   };
 
@@ -1026,26 +1034,6 @@ export function createWebSocketHandler(
   };
 
   // Universal method to send operation results with consistent structure
-  const sendOperationResult = (
-    ws,
-    operation,
-    success,
-    data = {},
-    error = null,
-  ) => {
-    const result = {
-      success,
-      timestamp: new Date().toISOString(),
-      ...data,
-    };
-
-    if (!success && error) {
-      result.error = error;
-    }
-
-    sendResponse(ws, `${operation}_result`, result);
-  };
-
   const broadcastEvent = (type, data) => {
     const event = {
       type: "event",
@@ -1176,12 +1164,14 @@ export function createWebSocketHandler(
       }
 
       const { clientTime, timezone, gps } = data;
-      await timeSyncService.handleClientTimeResponse(
-        info.ip,
-        clientTime,
-        timezone,
-        gps,
-      );
+      if (timeSyncService) {
+        await timeSyncService.handleClientTimeResponse(
+          info.ip,
+          clientTime,
+          timezone,
+          gps,
+        );
+      }
     } catch (error) {
       logger.error("Failed to handle time sync response:", error);
     }
@@ -1196,7 +1186,7 @@ export function createWebSocketHandler(
       }
 
       // Store GPS data if valid
-      if (data.latitude && data.longitude) {
+      if (timeSyncService && data.latitude && data.longitude) {
         timeSyncService.lastGPS = {
           latitude: data.latitude,
           longitude: data.longitude,
@@ -1237,6 +1227,11 @@ export function createWebSocketHandler(
 
   const handleGetTimeSyncStatus = async (ws) => {
     try {
+      if (!timeSyncService) {
+        sendError(ws, "Time sync service not available");
+        return;
+      }
+
       const status = timeSyncService.getStatus();
       const statistics = timeSyncService.getStatistics();
 

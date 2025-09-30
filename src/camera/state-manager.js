@@ -253,43 +253,34 @@ export class CameraStateManager extends EventEmitter {
         (status) => this.handleControllerStatusChange(uuid, status),
       );
 
-      // Initialize connection
-      const success = await controller.initialize();
+      // Initialize connection (throws on failure, so no need to check return value)
+      await controller.initialize();
 
-      if (success) {
-        cameraData.controller = controller;
-        cameraData.status = "connected";
-        cameraData.lastError = null;
-        cameraData.connectionAttempts = 0;
+      // Connection successful
+      cameraData.controller = controller;
+      cameraData.status = "connected";
+      cameraData.lastError = null;
+      cameraData.connectionAttempts = 0;
 
-        // Set as primary
-        this.primaryCameraUuid = uuid;
-        this.primaryController = controller;
+      // Set as primary
+      this.primaryCameraUuid = uuid;
+      this.primaryController = controller;
 
-        this.recordConnectionEvent(
-          uuid,
-          "connected",
-          cameraData.info.ipAddress,
-        );
+      this.recordConnectionEvent(uuid, "connected", cameraData.info.ipAddress);
 
-        // Record successful connection in history for UI pre-population
-        await this.cameraConnectionHistory.recordConnection(
-          cameraData.info.ipAddress,
-        );
+      // Record successful connection in history for UI pre-population
+      await this.cameraConnectionHistory.recordConnection(
+        cameraData.info.ipAddress,
+      );
 
-        logger.info(`Camera ${uuid} connected successfully and set as primary`);
-        this.emit("primaryCameraChanged", {
-          uuid,
-          info: cameraData.info,
-          controller,
-        });
+      logger.info(`Camera ${uuid} connected successfully and set as primary`);
+      this.emit("primaryCameraChanged", {
+        uuid,
+        info: cameraData.info,
+        controller,
+      });
 
-        return controller;
-      } else {
-        cameraData.status = "failed";
-        cameraData.lastError = "Connection initialization failed";
-        throw new Error("Camera controller initialization failed");
-      }
+      return controller;
     } catch (error) {
       logger.error(`Failed to connect to camera ${uuid}:`, error);
       cameraData.status = "failed";

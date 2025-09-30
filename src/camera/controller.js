@@ -83,10 +83,20 @@ export class CameraController {
       return true;
     } catch (error) {
       logger.error("Failed to initialize camera controller:", error);
-      return false;
+      // Throw the actual error so caller gets specific error message
+      throw error;
     }
   }
 
+  /**
+   * Connect to camera and discover available CCAPI endpoints
+   *
+   * CCAPI Reference: Root endpoint for capability discovery
+   * Endpoint: GET /ccapi/
+   * Response: Object with API versions as keys, each containing array of available endpoints
+   *
+   * Also verifies shooting settings endpoint availability (CCAPI 4.9.1)
+   */
   async connect() {
     try {
       logger.info("Discovering CCAPI endpoints...");
@@ -99,7 +109,7 @@ export class CameraController {
         throw new Error("No shutter control endpoint found");
       }
 
-      // Test camera settings endpoint (bypass connection check during connection)
+      // CCAPI 4.9.1: Test camera settings endpoint (bypass connection check during connection)
       try {
         await this.client.get(`${this.baseUrl}/ccapi/ver100/shooting/settings`);
         logger.debug("Camera settings endpoint verified");
@@ -126,6 +136,18 @@ export class CameraController {
     }
   }
 
+  /**
+   * Find best available shutter control endpoint from camera capabilities
+   *
+   * CCAPI Reference:
+   * - 4.8.1: Still image shooting (regular) - /ccapi/ver100/shooting/control/shutterbutton
+   * - 4.8.2: Still image shutter button control (manual) - /ccapi/ver100/shooting/control/shutterbutton/manual
+   *
+   * @param {Object} capabilities - Camera capabilities from /ccapi/ endpoint
+   * @returns {string|null} Best available shutter endpoint path, or null if none found
+   *
+   * Priority: Regular endpoint (simpler, no release needed) > Manual endpoint
+   */
   findShutterEndpoint(capabilities) {
     const endpoints = [];
 
@@ -154,6 +176,15 @@ export class CameraController {
     return regularEndpoint || manualEndpoint;
   }
 
+  /**
+   * Get all camera shooting parameters
+   *
+   * CCAPI Reference: 4.9.1 - Get all shooting parameters
+   * Endpoint: GET /ccapi/ver100/shooting/settings
+   * Response: Object containing all supported shooting parameters (av, tv, iso, wb, etc.)
+   *
+   * @returns {Promise<Object>} Camera shooting settings
+   */
   async getCameraSettings() {
     if (!this.connected) {
       throw new Error("Camera not connected");
@@ -187,6 +218,15 @@ export class CameraController {
     }
   }
 
+  /**
+   * Get camera fixed information (model, firmware, serial number, etc.)
+   *
+   * CCAPI Reference: 4.3.1 - Camera fixed information
+   * Endpoint: GET /ccapi/ver100/deviceinformation
+   * Response: { productname, firmwareversion, serialnumber, ... }
+   *
+   * @returns {Promise<Object>} Camera device information
+   */
   async getDeviceInformation() {
     if (!this.connected) {
       throw new Error("Camera not connected");
@@ -224,20 +264,34 @@ export class CameraController {
     }
   }
 
+  /**
+   * Get camera battery information
+   *
+   * CCAPI Reference:
+   * - 4.4.5: Battery information list (ver110) - Supports battery grip
+   *   Endpoint: GET /ccapi/ver110/devicestatus/batterylist
+   *   Response: { batterylist: [{ name, kind, level, quality }, ...] }
+   * - 4.4.4: Battery information (ver100) - Single battery (fallback)
+   *   Endpoint: GET /ccapi/ver100/devicestatus/battery
+   *   Response: { name, kind, level, quality }
+   *   Note: Cannot get detailed info when battery grip attached
+   *
+   * @returns {Promise<Object>} Battery info with batterylist array
+   */
   async getCameraBattery() {
     if (!this.connected) {
       throw new Error("Camera not connected");
     }
 
     try {
-      // Try the more detailed battery list first
+      // CCAPI 4.4.5: Try the more detailed battery list first (supports battery grip)
       const response = await this.client.get(
         `${this.baseUrl}/ccapi/ver110/devicestatus/batterylist`,
       );
       return response.data;
     } catch (error) {
       try {
-        // Fallback to basic battery info
+        // CCAPI 4.4.4: Fallback to basic battery info (single battery)
         const response = await this.client.get(
           `${this.baseUrl}/ccapi/ver100/devicestatus/battery`,
         );
@@ -282,6 +336,16 @@ export class CameraController {
     }
   }
 
+  /**
+   * Take a photo using the camera's shutter control
+   *
+   * Uses discovered shutter endpoint (either regular or manual).
+   * Automatically releases shutter first (manual endpoint only), then presses and releases.
+   *
+   * CCAPI Reference: 4.8.1 (regular) or 4.8.2 (manual) - See pressShutter() and releaseShutter()
+   *
+   * @returns {Promise<boolean>} True if photo taken successfully
+   */
   async takePhoto() {
     if (!this.connected || !this.shutterEndpoint) {
       throw new Error("Camera not connected or no shutter endpoint available");
@@ -292,7 +356,7 @@ export class CameraController {
 
       // Note: Connection monitoring should be paused by intervalometer session
 
-      // Release any stuck shutter first
+      // Release any stuck shutter first (manual endpoint only)
       await this.releaseShutter();
 
       // Press shutter with manual focus only (no AF for timelapses)
@@ -322,6 +386,27 @@ export class CameraController {
     }
   }
 
+  /**
+   * Press camera shutter button
+   *
+   * CCAPI Reference:
+   * - 4.8.1: Still image shooting (regular endpoint)
+   *   Endpoint: POST /ccapi/ver100/shooting/control/shutterbutton
+   *   Request: { "af": boolean }
+   *   Response 200: {} (empty object)
+   *   Note: Automatically releases shutter, no explicit release needed
+   *
+   * - 4.8.2: Still image shutter button control (manual endpoint)
+   *   Endpoint: POST /ccapi/ver100/shooting/control/shutterbutton/manual
+   *   Request: { "action": "full_press", "af": boolean }
+   *   Response 200: {} (empty object)
+   *   Note: Requires explicit release() call
+   *
+   * Error responses (both): 400 (invalid parameter), 503 (device busy, out of focus, etc.)
+   *
+   * @param {boolean} useAutofocus - Enable autofocus (false for manual focus timelapses)
+   * @returns {Promise<boolean>} True if press successful
+   */
   async pressShutter(useAutofocus = false) {
     // Determine payload based on endpoint type
     let payload;
@@ -329,13 +414,13 @@ export class CameraController {
       this.shutterEndpoint && this.shutterEndpoint.includes("manual");
 
     if (isManualEndpoint) {
-      // Manual endpoint requires action parameter
+      // CCAPI 4.8.2: Manual endpoint requires action parameter
       payload = {
         af: useAutofocus,
         action: "full_press",
       };
     } else {
-      // Regular shooting endpoint
+      // CCAPI 4.8.1: Regular shooting endpoint
       payload = {
         af: useAutofocus,
       };
@@ -375,6 +460,18 @@ export class CameraController {
     }
   }
 
+  /**
+   * Release camera shutter button (manual endpoint only)
+   *
+   * CCAPI Reference: 4.8.2 - Still image shutter button control (manual)
+   * Endpoint: POST /ccapi/ver100/shooting/control/shutterbutton/manual
+   * Request: { "action": "release", "af": false }
+   * Response 200: {} (empty object)
+   *
+   * Note: Regular endpoint (4.8.1) does not support release action - it releases automatically
+   *
+   * @returns {Promise<boolean>} True if release successful (or not needed for regular endpoint)
+   */
   async releaseShutter() {
     const isManualEndpoint =
       this.shutterEndpoint && this.shutterEndpoint.includes("manual");
@@ -385,6 +482,7 @@ export class CameraController {
       return true; // Regular endpoint doesn't need explicit release
     }
 
+    // CCAPI 4.8.2: Release shutter button
     const payload = {
       af: false,
       action: "release",
@@ -579,6 +677,13 @@ export class CameraController {
 
   /**
    * Get camera datetime
+   *
+   * CCAPI Reference: 4.5.5 - Date and time (GET)
+   * Endpoint: GET /ccapi/ver100/functions/datetime
+   * Response: { "datetime": string (RFC1123), "dst": boolean }
+   * Example: { "datetime": "Tue, 01 Jan 2019 01:23:45 +0900", "dst": false }
+   *
+   * @returns {Promise<string>} Camera datetime in ISO format
    */
   async getCameraDateTime() {
     if (!this.connected) {
@@ -608,7 +713,13 @@ export class CameraController {
   }
 
   /**
-   * Get camera datetime with full details including DST
+   * Get camera datetime with full details including DST flag
+   *
+   * CCAPI Reference: 4.5.5 - Date and time (GET)
+   * Endpoint: GET /ccapi/ver100/functions/datetime
+   * Response: { "datetime": string (RFC1123), "dst": boolean }
+   *
+   * @returns {Promise<Object>} Raw camera datetime response with DST flag
    */
   async getCameraDateTimeDetails() {
     if (!this.connected) {
@@ -633,6 +744,23 @@ export class CameraController {
 
   /**
    * Set camera datetime
+   *
+   * CCAPI Reference: 4.5.5 - Date and time (PUT)
+   * Endpoint: PUT /ccapi/ver100/functions/datetime
+   * Request: { "datetime": string (RFC1123), "dst": boolean }
+   * Response 200: {} (empty object)
+   *
+   * Important: Per Canon spec, "datetime" should include DST offset if DST is active,
+   * and "dst" flag should be set to true when DST is in effect.
+   *
+   * Example: For PST (UTC-8), send:
+   *   { "datetime": "Tue, 01 Jan 2019 01:23:45 -0800", "dst": false }
+   * For PDT (UTC-7 with DST), send:
+   *   { "datetime": "Tue, 01 Jul 2019 01:23:45 -0800", "dst": true }
+   *   (Note: offset stays -0800 for standard timezone, dst flag indicates DST active)
+   *
+   * @param {Date|string} datetime - Date to set on camera
+   * @returns {Promise<boolean>} True if datetime set successfully
    */
   async setCameraDateTime(datetime) {
     if (!this.connected) {

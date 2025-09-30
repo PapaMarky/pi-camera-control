@@ -369,9 +369,11 @@ describe('API Routes Specification Compliance Tests', () => {
         .get('/api/network/status')
         .expect(500);
 
-      // Error responses should be consistent
+      // Error responses should use standardized format
       expect(response.body).toHaveProperty('error');
-      expect(typeof response.body.error).toBe('string');
+      expect(response.body).toHaveProperty('timestamp');
+      expect(typeof response.body.error).toBe('object');
+      expect(response.body.error).toHaveProperty('message');
     });
   });
 });

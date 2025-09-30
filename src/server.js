@@ -17,6 +17,7 @@ import { IntervalometerStateManager } from "./intervalometer/state-manager.js";
 import { createApiRouter } from "./routes/api.js";
 import { createWebSocketHandler } from "./websocket/handler.js";
 import timeSyncService from "./timesync/service.js";
+import { emitDiscoveryEvent } from "./utils/event-migration.js";
 
 // Load environment variables
 dotenv.config();
@@ -142,7 +143,12 @@ class CameraControlServer {
       return;
     }
 
-    this.wsHandler.broadcastDiscoveryEvent(eventType, data);
+    // Use dual emission wrapper for migration (emits both old and new event names)
+    emitDiscoveryEvent(
+      this.wsHandler.broadcastDiscoveryEvent.bind(this.wsHandler),
+      eventType,
+      data,
+    );
   }
 
   broadcastTimelapseEvent(eventType, data) {
@@ -240,6 +246,7 @@ class CameraControlServer {
       this.networkManager,
       this.discoveryManager,
       this.intervalometerStateManager,
+      timeSyncService,
     );
     this.wss.on("connection", this.wsHandler);
 

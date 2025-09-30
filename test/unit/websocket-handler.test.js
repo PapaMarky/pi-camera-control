@@ -11,32 +11,27 @@ import { validateSchema } from '../schemas/websocket-messages.test.js';
 import { StandardErrorFormat } from '../errors/error-standardization.test.js';
 import { MessageSchemas } from '../schemas/websocket-message-schemas.js';
 
-// Mock timesync service to prevent real timers
-jest.mock('../../src/timesync/service.js', () => ({
-  default: {
-    handleClientConnection: jest.fn(async () => {
-      // Return immediately without starting any timers
-      return Promise.resolve();
-    }),
-    handleClientDisconnection: jest.fn(() => {}),
-    handleClientTimeResponse: jest.fn(async () => {}),
-    getStatus: jest.fn(() => ({
-      synced: false,
-      reliability: 'unknown',
-      lastSync: null,
-      drift: 0
-    })),
-    getStatistics: jest.fn(() => ({ count: 0 })),
-    startScheduledChecks: jest.fn(() => {}),
-    stopScheduledChecks: jest.fn(() => {}),
-    cleanup: jest.fn(() => {})
-  }
-}));
+// Mock timesync service - no longer using singleton import, passed as parameter
+const mockTimeSyncService = {
+  handleClientConnection: jest.fn(async () => {
+    // Return immediately without starting any timers
+    return Promise.resolve();
+  }),
+  handleClientDisconnection: jest.fn(() => {}),
+  handleClientTimeResponse: jest.fn(async () => {}),
+  getStatus: jest.fn(() => ({
+    synced: false,
+    reliability: 'unknown',
+    lastSync: null,
+    drift: 0
+  })),
+  getStatistics: jest.fn(() => ({ count: 0 })),
+  startScheduledChecks: jest.fn(() => {}),
+  stopScheduledChecks: jest.fn(() => {}),
+  cleanup: jest.fn(() => {})
+};
 
-// Skip these tests in CI environment due to timesync service initialization causing timeouts
-const describeOrSkip = process.env.CI ? describe.skip : describe;
-
-describeOrSkip('WebSocket Handler Unit Tests', () => {
+describe('WebSocket Handler Unit Tests', () => {
   let wsHandler;
   let mockCameraController;
   let mockPowerManager;
@@ -167,7 +162,8 @@ describeOrSkip('WebSocket Handler Unit Tests', () => {
       mockServer,
       mockNetworkManager,
       mockDiscoveryManager,
-      mockIntervalometerStateManager
+      mockIntervalometerStateManager,
+      mockTimeSyncService
     );
 
     // Clear any timers set during initialization
@@ -233,7 +229,8 @@ describeOrSkip('WebSocket Handler Unit Tests', () => {
         mockServer,
         null, // No network manager
         mockDiscoveryManager,
-        mockIntervalometerStateManager
+        mockIntervalometerStateManager,
+        mockTimeSyncService
       );
 
       await wsHandler(mockWebSocket, mockRequest);
@@ -262,8 +259,11 @@ describeOrSkip('WebSocket Handler Unit Tests', () => {
       await messageHandler(Buffer.from(takePhotoMessage));
 
       expect(mockCameraController.instance.takePhoto).toHaveBeenCalled();
-      expect(sentMessages).toHaveLength(1);
+      // Dual emission: direct response + broadcast event for backward compatibility
+      expect(sentMessages).toHaveLength(2);
       expect(sentMessages[0].type).toBe('photo_taken');
+      expect(sentMessages[1].type).toBe('event');
+      expect(sentMessages[1].eventType).toBe('photo_taken');
     });
 
     test('routes get_camera_settings message correctly', async () => {
@@ -424,6 +424,24 @@ describeOrSkip('WebSocket Handler Unit Tests', () => {
     });
 
     test('handles network management not available', async () => {
+      // Create a NEW WebSocket mock to avoid handler conflicts
+      const newMockWs = {
+        readyState: 1,
+        OPEN: 1,
+        send: jest.fn((message) => {
+          sentMessages.push(JSON.parse(message));
+        }),
+        on: jest.fn(),
+        close: jest.fn()
+      };
+
+      const newMockRequest = {
+        socket: {
+          remoteAddress: '192.168.4.101',
+          remotePort: 54322
+        }
+      };
+
       // Create handler without network manager
       const handlerWithoutNetwork = createWebSocketHandler(
         mockCameraController,
@@ -431,13 +449,16 @@ describeOrSkip('WebSocket Handler Unit Tests', () => {
         mockServer,
         null, // No network manager
         mockDiscoveryManager,
-        mockIntervalometerStateManager
+        mockIntervalometerStateManager,
+        mockTimeSyncService
       );
 
-      await handlerWithoutNetwork(mockWebSocket, mockRequest);
+      sentMessages = []; // Clear previous messages
+      await handlerWithoutNetwork(newMockWs, newMockRequest);
       sentMessages = []; // Clear welcome message
 
-      const messageHandler = mockWebSocket.on.mock.calls.find(call => call[0] === 'message')[1];
+      // Get the NEW message handler from the NEW WebSocket
+      const messageHandler = newMockWs.on.mock.calls.find(call => call[0] === 'message')[1];
 
       const networkScanMessage = JSON.stringify({
         type: 'network_scan',
@@ -535,6 +556,7 @@ describeOrSkip('WebSocket Handler Unit Tests', () => {
       await wsHandler(mockDeadClient, mockRequest);
 
       client1Messages.length = 0; // Clear welcome messages
+      mockDeadClient.send.mockClear(); // Clear welcome message call
 
       // Trigger broadcast
       await wsHandler.broadcastStatus();
@@ -587,9 +609,12 @@ describeOrSkip('WebSocket Handler Unit Tests', () => {
       await messageHandler(Buffer.from(updateTitleMessage));
 
       expect(mockIntervalometerStateManager.updateReportTitle).toHaveBeenCalledWith('test-id', 'Updated Title');
-      expect(sentMessages).toHaveLength(1);
+      // Dual emission: direct response + timelapse_event broadcast
+      expect(sentMessages).toHaveLength(2);
       expect(sentMessages[0].type).toBe('report_title_updated');
       expect(sentMessages[0].data.report).toEqual(updatedReport);
+      expect(sentMessages[1].type).toBe('timelapse_event');
+      expect(sentMessages[1].eventType).toBe('report_updated');
     });
 
     test('validates required fields for report operations', async () => {

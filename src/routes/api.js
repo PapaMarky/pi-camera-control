@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { logger } from "../utils/logger.js";
 import { IntervalometerSession } from "../intervalometer/session.js";
+import {
+  createApiError,
+  ErrorCodes,
+  Components,
+} from "../utils/error-handlers.js";
 
 export function createApiRouter(
   getCameraController,
@@ -31,7 +36,13 @@ export function createApiRouter(
       res.json(status);
     } catch (error) {
       logger.error("Failed to get camera status:", error);
-      res.status(500).json({ error: "Failed to get camera status" });
+      res.status(500).json(
+        createApiError("Failed to get camera status", {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "getCameraStatus",
+        }),
+      );
     }
   });
 
@@ -40,13 +51,25 @@ export function createApiRouter(
     try {
       const currentController = getCameraController();
       if (!currentController) {
-        return res.status(503).json({ error: "No camera available" });
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "getCameraSettings",
+          }),
+        );
       }
       const settings = await currentController.getCameraSettings();
       res.json(settings);
     } catch (error) {
       logger.error("Failed to get camera settings:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "getCameraSettings",
+        }),
+      );
     }
   });
 
@@ -55,13 +78,25 @@ export function createApiRouter(
     try {
       const currentController = getCameraController();
       if (!currentController) {
-        return res.status(503).json({ error: "No camera available" });
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "getCameraBattery",
+          }),
+        );
       }
       const battery = await currentController.getCameraBattery();
       res.json(battery);
     } catch (error) {
       logger.error("Failed to get camera battery:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "getCameraBattery",
+        }),
+      );
     }
   });
 
@@ -70,14 +105,26 @@ export function createApiRouter(
     try {
       const currentController = getCameraController();
       if (!currentController) {
-        return res.status(503).json({ error: "No camera available" });
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "getCameraDateTime",
+          }),
+        );
       }
       const datetimeDetails =
         await currentController.getCameraDateTimeDetails();
       res.json(datetimeDetails);
     } catch (error) {
       logger.error("Failed to get camera datetime:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "getCameraDateTime",
+        }),
+      );
     }
   });
 
@@ -86,7 +133,13 @@ export function createApiRouter(
     try {
       const currentController = getCameraController();
       if (!currentController) {
-        return res.status(503).json({ error: "No camera available" });
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "getCameraDebugEndpoints",
+          }),
+        );
       }
       const status = currentController.getConnectionStatus();
       res.json({
@@ -97,7 +150,13 @@ export function createApiRouter(
       });
     } catch (error) {
       logger.error("Failed to get camera debug info:", error);
-      res.status(500).json({ error: "Failed to get camera debug info" });
+      res.status(500).json(
+        createApiError("Failed to get camera debug info", {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "getCameraDebugEndpoints",
+        }),
+      );
     }
   });
 
@@ -106,13 +165,25 @@ export function createApiRouter(
     try {
       const currentController = getCameraController();
       if (!currentController) {
-        return res.status(503).json({ error: "No camera available" });
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "takePhoto",
+          }),
+        );
       }
       await currentController.takePhoto();
       res.json({ success: true, timestamp: new Date().toISOString() });
     } catch (error) {
       logger.error("Failed to take photo:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.PHOTO_FAILED,
+          component: Components.API_ROUTER,
+          operation: "takePhoto",
+        }),
+      );
     }
   });
 
@@ -122,7 +193,13 @@ export function createApiRouter(
       logger.info("Manual reconnect requested");
       const currentController = getCameraController();
       if (!currentController) {
-        return res.status(503).json({ error: "No camera available" });
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "manualReconnect",
+          }),
+        );
       }
       const result = await currentController.manualReconnect();
 
@@ -133,7 +210,13 @@ export function createApiRouter(
       }
     } catch (error) {
       logger.error("Failed to reconnect to camera:", error);
-      res.status(500).json({ success: false, error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.CONNECTION_FAILED,
+          component: Components.API_ROUTER,
+          operation: "manualReconnect",
+        }),
+      );
     }
   });
 
@@ -144,32 +227,53 @@ export function createApiRouter(
 
       // Validate IP address format
       if (!ip || typeof ip !== "string") {
-        return res
-          .status(400)
-          .json({ success: false, error: "IP address is required" });
+        return res.status(400).json(
+          createApiError("IP address is required", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "configureCam",
+            details: { success: false },
+          }),
+        );
       }
 
       // Basic IP address validation
       const ipRegex =
         /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
       if (!ipRegex.test(ip)) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Invalid IP address format" });
+        return res.status(400).json(
+          createApiError("Invalid IP address format", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "configureCamera",
+            details: { success: false },
+          }),
+        );
       }
 
       // Validate port
       const portNum = parseInt(port);
       if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Port must be between 1 and 65535" });
+        return res.status(400).json(
+          createApiError("Port must be between 1 and 65535", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "configureCamera",
+            details: { success: false },
+          }),
+        );
       }
 
       logger.info(`Camera configuration update requested: ${ip}:${port}`);
       const currentController = getCameraController();
       if (!currentController) {
-        return res.status(503).json({ error: "No camera available" });
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "configureCamera",
+          }),
+        );
       }
       const result = await currentController.updateConfiguration(
         ip,
@@ -190,7 +294,14 @@ export function createApiRouter(
       }
     } catch (error) {
       logger.error("Failed to update camera configuration:", error);
-      res.status(500).json({ success: false, error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "configureCamera",
+          details: { success: false },
+        }),
+      );
     }
   });
 
@@ -200,18 +311,36 @@ export function createApiRouter(
       const { interval } = req.body;
 
       if (!interval || interval <= 0) {
-        return res.status(400).json({ error: "Invalid interval value" });
+        return res.status(400).json(
+          createApiError("Invalid interval value", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "validateInterval",
+          }),
+        );
       }
 
       const currentController = getCameraController();
       if (!currentController) {
-        return res.status(503).json({ error: "No camera available" });
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "validateInterval",
+          }),
+        );
       }
       const validation = await currentController.validateInterval(interval);
       res.json(validation);
     } catch (error) {
       logger.error("Failed to validate interval:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "validateInterval",
+        }),
+      );
     }
   });
 
@@ -222,7 +351,13 @@ export function createApiRouter(
 
       // Validation
       if (!interval || interval <= 0) {
-        return res.status(400).json({ error: "Invalid interval value" });
+        return res.status(400).json(
+          createApiError("Invalid interval value", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "startIntervalometer",
+          }),
+        );
       }
 
       // Check if session is already running
@@ -230,21 +365,37 @@ export function createApiRouter(
         server.activeIntervalometerSession &&
         server.activeIntervalometerSession.state === "running"
       ) {
-        return res
-          .status(400)
-          .json({ error: "Intervalometer is already running" });
+        return res.status(400).json(
+          createApiError("Intervalometer is already running", {
+            code: ErrorCodes.OPERATION_FAILED,
+            component: Components.API_ROUTER,
+            operation: "startIntervalometer",
+          }),
+        );
       }
 
       // Get current camera controller
       const currentController = getCameraController();
       if (!currentController) {
-        return res.status(503).json({ error: "No camera available" });
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "startIntervalometer",
+          }),
+        );
       }
 
       // Validate against camera settings
       const validation = await currentController.validateInterval(interval);
       if (!validation.valid) {
-        return res.status(400).json({ error: validation.error });
+        return res.status(400).json(
+          createApiError(validation.error, {
+            code: ErrorCodes.VALIDATION_FAILED,
+            component: Components.API_ROUTER,
+            operation: "startIntervalometer",
+          }),
+        );
       }
 
       // Clean up any existing session
@@ -288,16 +439,25 @@ export function createApiRouter(
       });
     } catch (error) {
       logger.error("Failed to start intervalometer:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
   router.post("/intervalometer/stop", async (req, res) => {
     try {
       if (!server.activeIntervalometerSession) {
-        return res
-          .status(400)
-          .json({ error: "No intervalometer session is running" });
+        return res.status(400).json(
+          createApiError("No intervalometer session is running", {
+            code: ErrorCodes.OPERATION_FAILED,
+            component: Components.API_ROUTER,
+            operation: "stopIntervalometer",
+          }),
+        );
       }
 
       await server.activeIntervalometerSession.stop();
@@ -312,7 +472,12 @@ export function createApiRouter(
       });
     } catch (error) {
       logger.error("Failed to stop intervalometer:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -351,7 +516,12 @@ export function createApiRouter(
       });
     } catch (error) {
       logger.error("Failed to get intervalometer status:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -362,7 +532,13 @@ export function createApiRouter(
 
       // Validation
       if (!interval || interval <= 0) {
-        return res.status(400).json({ error: "Invalid interval value" });
+        return res.status(400).json(
+          createApiError("Invalid interval value", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "startIntervalometer",
+          }),
+        );
       }
 
       // Check if session is already running
@@ -370,21 +546,37 @@ export function createApiRouter(
         server.activeIntervalometerSession &&
         server.activeIntervalometerSession.state === "running"
       ) {
-        return res
-          .status(400)
-          .json({ error: "Intervalometer is already running" });
+        return res.status(400).json(
+          createApiError("Intervalometer is already running", {
+            code: ErrorCodes.OPERATION_FAILED,
+            component: Components.API_ROUTER,
+            operation: "startIntervalometer",
+          }),
+        );
       }
 
       // Get current camera controller
       const currentController = getCameraController();
       if (!currentController) {
-        return res.status(503).json({ error: "No camera available" });
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "startIntervalometer",
+          }),
+        );
       }
 
       // Validate against camera settings
       const validation = await currentController.validateInterval(interval);
       if (!validation.valid) {
-        return res.status(400).json({ error: validation.error });
+        return res.status(400).json(
+          createApiError(validation.error, {
+            code: ErrorCodes.VALIDATION_FAILED,
+            component: Components.API_ROUTER,
+            operation: "startIntervalometer",
+          }),
+        );
       }
 
       // Clean up any existing session
@@ -431,7 +623,12 @@ export function createApiRouter(
       });
     } catch (error) {
       logger.error("Failed to start intervalometer with title:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -439,16 +636,24 @@ export function createApiRouter(
   router.get("/timelapse/reports", async (req, res) => {
     try {
       if (!intervalometerStateManager) {
-        return res
-          .status(503)
-          .json({ error: "Timelapse reporting not available" });
+        return res.status(503).json(
+          createApiError("Timelapse reporting not available", {
+            code: ErrorCodes.SERVICE_UNAVAILABLE,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
 
       const reports = await intervalometerStateManager.getReports();
       res.json({ reports });
     } catch (error) {
       logger.error("Failed to get timelapse reports:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -456,20 +661,33 @@ export function createApiRouter(
     try {
       const { id } = req.params;
       if (!intervalometerStateManager) {
-        return res
-          .status(503)
-          .json({ error: "Timelapse reporting not available" });
+        return res.status(503).json(
+          createApiError("Timelapse reporting not available", {
+            code: ErrorCodes.SERVICE_UNAVAILABLE,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
 
       const report = await intervalometerStateManager.getReport(id);
       if (!report) {
-        return res.status(404).json({ error: "Report not found" });
+        return res.status(404).json(
+          createApiError("Report not found", {
+            code: ErrorCodes.SESSION_NOT_FOUND,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
 
       res.json(report);
     } catch (error) {
       logger.error("Failed to get timelapse report:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -479,13 +697,22 @@ export function createApiRouter(
       const { title } = req.body;
 
       if (!title || title.trim() === "") {
-        return res.status(400).json({ error: "Title cannot be empty" });
+        return res.status(400).json(
+          createApiError("Title cannot be empty", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "updateReportTitle",
+          }),
+        );
       }
 
       if (!intervalometerStateManager) {
-        return res
-          .status(503)
-          .json({ error: "Timelapse reporting not available" });
+        return res.status(503).json(
+          createApiError("Timelapse reporting not available", {
+            code: ErrorCodes.SERVICE_UNAVAILABLE,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
 
       const updatedReport = await intervalometerStateManager.updateReportTitle(
@@ -495,10 +722,20 @@ export function createApiRouter(
       res.json(updatedReport);
     } catch (error) {
       if (error.message.includes("not found")) {
-        return res.status(404).json({ error: "Report not found" });
+        return res.status(404).json(
+          createApiError("Report not found", {
+            code: ErrorCodes.SESSION_NOT_FOUND,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
       logger.error("Failed to update report title:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -506,16 +743,24 @@ export function createApiRouter(
     try {
       const { id } = req.params;
       if (!intervalometerStateManager) {
-        return res
-          .status(503)
-          .json({ error: "Timelapse reporting not available" });
+        return res.status(503).json(
+          createApiError("Timelapse reporting not available", {
+            code: ErrorCodes.SERVICE_UNAVAILABLE,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
 
       await intervalometerStateManager.deleteReport(id);
       res.json({ success: true, message: "Report deleted successfully" });
     } catch (error) {
       logger.error("Failed to delete report:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -525,9 +770,12 @@ export function createApiRouter(
       const { title } = req.body;
 
       if (!intervalometerStateManager) {
-        return res
-          .status(503)
-          .json({ error: "Timelapse reporting not available" });
+        return res.status(503).json(
+          createApiError("Timelapse reporting not available", {
+            code: ErrorCodes.SERVICE_UNAVAILABLE,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
 
       const savedReport = await intervalometerStateManager.saveSessionReport(
@@ -541,10 +789,20 @@ export function createApiRouter(
       });
     } catch (error) {
       if (error.message.includes("not found")) {
-        return res.status(404).json({ error: "Session not found" });
+        return res.status(404).json(
+          createApiError("Session not found", {
+            code: ErrorCodes.SESSION_NOT_FOUND,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
       logger.error("Failed to save session as report:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -553,25 +811,36 @@ export function createApiRouter(
       const { id } = req.params;
 
       if (!intervalometerStateManager) {
-        return res
-          .status(503)
-          .json({ error: "Timelapse reporting not available" });
+        return res.status(503).json(
+          createApiError("Timelapse reporting not available", {
+            code: ErrorCodes.SERVICE_UNAVAILABLE,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
 
       await intervalometerStateManager.discardSession(id);
       res.json({ success: true, message: "Session discarded successfully" });
     } catch (error) {
       logger.error("Failed to discard session:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
   router.get("/timelapse/unsaved-session", async (req, res) => {
     try {
       if (!intervalometerStateManager) {
-        return res
-          .status(503)
-          .json({ error: "Timelapse reporting not available" });
+        return res.status(503).json(
+          createApiError("Timelapse reporting not available", {
+            code: ErrorCodes.SERVICE_UNAVAILABLE,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
 
       const state = intervalometerStateManager.getState();
@@ -585,7 +854,12 @@ export function createApiRouter(
       });
     } catch (error) {
       logger.error("Failed to get unsaved session:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -595,12 +869,24 @@ export function createApiRouter(
       const { timestamp, timezone } = req.body;
 
       if (!timestamp) {
-        return res.status(400).json({ error: "Timestamp is required" });
+        return res.status(400).json(
+          createApiError("Timestamp is required", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "setSystemTime",
+          }),
+        );
       }
 
       const clientTime = new Date(timestamp);
       if (isNaN(clientTime.getTime())) {
-        return res.status(400).json({ error: "Invalid timestamp format" });
+        return res.status(400).json(
+          createApiError("Invalid timestamp format", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "setSystemTime",
+          }),
+        );
       }
 
       // Check if we're running on Linux (Pi) before attempting to set system time
@@ -711,7 +997,12 @@ export function createApiRouter(
       });
     } catch (error) {
       logger.error("Failed to sync time:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -725,7 +1016,12 @@ export function createApiRouter(
       });
     } catch (error) {
       logger.error("Failed to get system time:", error);
-      res.status(500).json({ error: "Failed to get system time" });
+      res.status(500).json(
+        createApiError("Failed to get system time", {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -736,7 +1032,12 @@ export function createApiRouter(
       res.json(status);
     } catch (error) {
       logger.error("Failed to get power status:", error);
-      res.status(500).json({ error: "Failed to get power status" });
+      res.status(500).json(
+        createApiError("Failed to get power status", {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -753,7 +1054,12 @@ export function createApiRouter(
       });
     } catch (error) {
       logger.error("Failed to get system status:", error);
-      res.status(500).json({ error: "Failed to get system status" });
+      res.status(500).json(
+        createApiError("Failed to get system status", {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+        }),
+      );
     }
   });
 
@@ -768,7 +1074,12 @@ export function createApiRouter(
         res.json(status);
       } catch (error) {
         logger.error("Failed to get network status:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -781,7 +1092,12 @@ export function createApiRouter(
         res.json({ networks });
       } catch (error) {
         logger.error("WiFi scan failed:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -792,7 +1108,12 @@ export function createApiRouter(
         res.json({ networks });
       } catch (error) {
         logger.error("Failed to get saved networks:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -802,7 +1123,13 @@ export function createApiRouter(
         const { ssid, password, priority } = req.body;
 
         if (!ssid) {
-          return res.status(400).json({ error: "SSID is required" });
+          return res.status(400).json(
+            createApiError("SSID is required", {
+              code: ErrorCodes.INVALID_PARAMETER,
+              component: Components.API_ROUTER,
+              operation: "connectToWiFi",
+            }),
+          );
         }
 
         const result = await networkServiceManager.connectToWiFi(
@@ -813,7 +1140,12 @@ export function createApiRouter(
         res.json(result);
       } catch (error) {
         logger.error("WiFi connection failed:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -824,7 +1156,12 @@ export function createApiRouter(
         res.json(result);
       } catch (error) {
         logger.error("WiFi disconnection failed:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -834,15 +1171,23 @@ export function createApiRouter(
         const { ssid, passphrase, channel, hidden } = req.body;
 
         if (!ssid || !passphrase) {
-          return res
-            .status(400)
-            .json({ error: "SSID and passphrase are required" });
+          return res.status(400).json(
+            createApiError("SSID and passphrase are required", {
+              code: ErrorCodes.INVALID_PARAMETER,
+              component: Components.API_ROUTER,
+              operation: "configureAccessPoint",
+            }),
+          );
         }
 
         if (passphrase.length < 8) {
-          return res
-            .status(400)
-            .json({ error: "Passphrase must be at least 8 characters" });
+          return res.status(400).json(
+            createApiError("Passphrase must be at least 8 characters", {
+              code: ErrorCodes.INVALID_PARAMETER,
+              component: Components.API_ROUTER,
+              operation: "configureAccessPoint",
+            }),
+          );
         }
 
         const result = await networkStateManager.configureAccessPoint({
@@ -854,7 +1199,12 @@ export function createApiRouter(
         res.json(result);
       } catch (error) {
         logger.error("Access point configuration failed:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -898,7 +1248,12 @@ export function createApiRouter(
         res.json(result);
       } catch (error) {
         logger.error("WiFi country setting failed:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -909,7 +1264,12 @@ export function createApiRouter(
         res.json(result);
       } catch (error) {
         logger.error("Failed to get WiFi country:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -920,7 +1280,12 @@ export function createApiRouter(
         res.json({ countries });
       } catch (error) {
         logger.error("Failed to get country codes:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -931,7 +1296,12 @@ export function createApiRouter(
         res.json(result);
       } catch (error) {
         logger.error("Failed to enable WiFi:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -942,7 +1312,12 @@ export function createApiRouter(
         res.json(result);
       } catch (error) {
         logger.error("Failed to disable WiFi:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -953,7 +1328,12 @@ export function createApiRouter(
         res.json(status);
       } catch (error) {
         logger.error("Failed to check WiFi status:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
   }
@@ -967,7 +1347,12 @@ export function createApiRouter(
         res.json(status);
       } catch (error) {
         logger.error("Failed to get discovery status:", error);
-        res.status(500).json({ error: "Failed to get discovery status" });
+        res.status(500).json(
+          createApiError("Failed to get discovery status", {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -978,7 +1363,12 @@ export function createApiRouter(
         res.json(cameras);
       } catch (error) {
         logger.error("Failed to get discovered cameras:", error);
-        res.status(500).json({ error: "Failed to get discovered cameras" });
+        res.status(500).json(
+          createApiError("Failed to get discovered cameras", {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -989,7 +1379,12 @@ export function createApiRouter(
         res.json({ success: true, message: "Camera scan initiated" });
       } catch (error) {
         logger.error("Failed to trigger camera scan:", error);
-        res.status(500).json({ error: "Failed to trigger camera scan" });
+        res.status(500).json(
+          createApiError("Failed to trigger camera scan", {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -1001,7 +1396,12 @@ export function createApiRouter(
         res.json({ success: true, message: "Primary camera set", uuid });
       } catch (error) {
         logger.error("Failed to set primary camera:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -1010,14 +1410,25 @@ export function createApiRouter(
       try {
         const { ip, port = "443" } = req.body;
         if (!ip) {
-          return res.status(400).json({ error: "IP address is required" });
+          return res.status(400).json(
+            createApiError("IP address is required", {
+              code: ErrorCodes.INVALID_PARAMETER,
+              component: Components.API_ROUTER,
+              operation: "connectToCamera",
+            }),
+          );
         }
 
         await discoveryManager.connectToIp(ip, port);
         res.json({ success: true, message: "Connected to camera", ip, port });
       } catch (error) {
         logger.error("Failed to connect to camera:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json(
+          createApiError(error.message, {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -1027,12 +1438,22 @@ export function createApiRouter(
         const { uuid } = req.params;
         const camera = discoveryManager.getCamera(uuid);
         if (!camera) {
-          return res.status(404).json({ error: "Camera not found" });
+          return res.status(404).json(
+            createApiError("Camera not found", {
+              code: ErrorCodes.CAMERA_OFFLINE,
+              component: Components.API_ROUTER,
+            }),
+          );
         }
         res.json(camera);
       } catch (error) {
         logger.error("Failed to get camera:", error);
-        res.status(500).json({ error: "Failed to get camera" });
+        res.status(500).json(
+          createApiError("Failed to get camera", {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -1043,7 +1464,12 @@ export function createApiRouter(
         res.json({ lastIP });
       } catch (error) {
         logger.error("Failed to get last camera IP:", error);
-        res.status(500).json({ error: "Failed to get last camera IP" });
+        res.status(500).json(
+          createApiError("Failed to get last camera IP", {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
 
@@ -1054,7 +1480,12 @@ export function createApiRouter(
         res.json({ success: true, message: "Connection history cleared" });
       } catch (error) {
         logger.error("Failed to clear connection history:", error);
-        res.status(500).json({ error: "Failed to clear connection history" });
+        res.status(500).json(
+          createApiError("Failed to clear connection history", {
+            code: ErrorCodes.SYSTEM_ERROR,
+            component: Components.API_ROUTER,
+          }),
+        );
       }
     });
   }
@@ -1160,7 +1591,12 @@ export function createApiRouter(
   // Error handling middleware for API routes
   router.use((err, req, res, _next) => {
     logger.error("API route error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json(
+      createApiError("Internal server error", {
+        code: ErrorCodes.SYSTEM_ERROR,
+        component: Components.API_ROUTER,
+      }),
+    );
   });
 
   return router;
