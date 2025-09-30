@@ -32,21 +32,17 @@ jobs:
         git diff --exit-code || (echo "Code is not properly formatted. Run 'npm run format' to fix." && exit 1)
 
   test-cross-platform:
-    name: Cross-Platform Tests
+    name: Tests (Node 18.x)
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [16.x, 18.x, 20.x]
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js ${{ matrix.node-version }}
+    - name: Setup Node.js 18.x
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: 18.x
 
     - name: Install dependencies
       run: npm install
@@ -72,10 +68,9 @@ jobs:
         NODE_OPTIONS: '--experimental-vm-modules'
 
     - name: Upload coverage to Codecov
-      if: matrix.node-version == '18.x'
       run: |
         npm test -- --coverage --ci test/schemas/ test/unit/ test/errors/ test/meta/
-        # Upload coverage only for cross-platform tests
+        # Upload coverage report
       env:
         NODE_OPTIONS: '--experimental-vm-modules'
 

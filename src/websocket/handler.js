@@ -1,6 +1,5 @@
 import { logger } from "../utils/logger.js";
 // Removed unused import: IntervalometerSession
-import timeSyncService from "../timesync/service.js";
 import {
   createStandardError,
   ErrorCodes,
@@ -14,6 +13,7 @@ export function createWebSocketHandler(
   networkManager,
   discoveryManager,
   intervalometerStateManager,
+  timeSyncService = null,
 ) {
   const clients = new Set();
   const clientInfo = new Map(); // Track client info for time sync
@@ -210,11 +210,13 @@ export function createWebSocketHandler(
       `WebSocket: About to call TimeSync for ${clientIP} on ${clientInterface}`,
     );
     try {
-      await timeSyncService.handleClientConnection(
-        clientIP,
-        clientInterface,
-        ws,
-      );
+      if (timeSyncService) {
+        await timeSyncService.handleClientConnection(
+          clientIP,
+          clientInterface,
+          ws,
+        );
+      }
       logger.info(`WebSocket: TimeSync call completed for ${clientIP}`);
     } catch (error) {
       logger.error(`WebSocket: TimeSync call failed for ${clientIP}:`, error);
@@ -246,7 +248,7 @@ export function createWebSocketHandler(
         intervalometer: server.activeIntervalometerSession
           ? server.activeIntervalometerSession.getStatus()
           : null,
-        timesync: (() => {
+        timesync: timeSyncService ? (() => {
           const rawStatus = timeSyncService.getStatus();
           return {
             pi: {
@@ -261,16 +263,18 @@ export function createWebSocketHandler(
               lastSyncTime: rawStatus.lastCameraSync,
             },
           };
-        })(),
+        })() : null,
         clientId,
       };
 
       ws.send(JSON.stringify(initialStatus));
 
       // Send current TimeSyncService status separately
-      setTimeout(() => {
-        timeSyncService.broadcastSyncStatus();
-      }, 100);
+      if (timeSyncService) {
+        setTimeout(() => {
+          timeSyncService.broadcastSyncStatus();
+        }, 100);
+      }
     } catch (error) {
       logger.error("Failed to send welcome message:", error);
     }
@@ -296,7 +300,9 @@ export function createWebSocketHandler(
       // Clean up time sync tracking
       const info = clientInfo.get(ws);
       if (info) {
-        timeSyncService.handleClientDisconnection(info.ip);
+        if (timeSyncService) {
+          timeSyncService.handleClientDisconnection(info.ip);
+        }
         clientInfo.delete(ws);
       }
     });
@@ -309,7 +315,9 @@ export function createWebSocketHandler(
       // Clean up time sync tracking
       const info = clientInfo.get(ws);
       if (info) {
-        timeSyncService.handleClientDisconnection(info.ip);
+        if (timeSyncService) {
+          timeSyncService.handleClientDisconnection(info.ip);
+        }
         clientInfo.delete(ws);
       }
     });
@@ -1154,12 +1162,14 @@ export function createWebSocketHandler(
       }
 
       const { clientTime, timezone, gps } = data;
-      await timeSyncService.handleClientTimeResponse(
-        info.ip,
-        clientTime,
-        timezone,
-        gps,
-      );
+      if (timeSyncService) {
+        await timeSyncService.handleClientTimeResponse(
+          info.ip,
+          clientTime,
+          timezone,
+          gps,
+        );
+      }
     } catch (error) {
       logger.error("Failed to handle time sync response:", error);
     }
@@ -1174,7 +1184,7 @@ export function createWebSocketHandler(
       }
 
       // Store GPS data if valid
-      if (data.latitude && data.longitude) {
+      if (timeSyncService && data.latitude && data.longitude) {
         timeSyncService.lastGPS = {
           latitude: data.latitude,
           longitude: data.longitude,
@@ -1215,6 +1225,11 @@ export function createWebSocketHandler(
 
   const handleGetTimeSyncStatus = async (ws) => {
     try {
+      if (!timeSyncService) {
+        sendError(ws, "Time sync service not available");
+        return;
+      }
+
       const status = timeSyncService.getStatus();
       const statistics = timeSyncService.getStatistics();
 

@@ -246,6 +246,7 @@ class CameraControlServer {
       this.networkManager,
       this.discoveryManager,
       this.intervalometerStateManager,
+      timeSyncService,
     );
     this.wss.on("connection", this.wsHandler);
 

@@ -10,36 +10,27 @@ import { createWebSocketHandler } from '../../src/websocket/handler.js';
 import { validateSchema } from '../schemas/websocket-messages.test.js';
 import { StandardErrorFormat } from '../errors/error-standardization.test.js';
 
-// Mock timesync service to prevent real timers
-jest.mock('../../src/timesync/service.js', () => ({
-  default: {
-    handleClientConnection: jest.fn(async () => {
-      // Return immediately without starting any timers
-      return Promise.resolve();
-    }),
-    handleClientDisconnection: jest.fn(() => {}),
-    handleClientTimeResponse: jest.fn(async () => {}),
-    getStatus: jest.fn(() => ({
-      synced: false,
-      reliability: 'unknown',
-      lastSync: null,
-      drift: 0
-    })),
-    getStatistics: jest.fn(() => ({ count: 0 })),
-    startScheduledChecks: jest.fn(() => {}),
-    stopScheduledChecks: jest.fn(() => {}),
-    cleanup: jest.fn(() => {})
-  }
-}));
+// Mock timesync service - no longer using singleton import, passed as parameter
+const mockTimeSyncService = {
+  handleClientConnection: jest.fn(async () => {
+    // Return immediately without starting any timers
+    return Promise.resolve();
+  }),
+  handleClientDisconnection: jest.fn(() => {}),
+  handleClientTimeResponse: jest.fn(async () => {}),
+  getStatus: jest.fn(() => ({
+    synced: false,
+    reliability: 'unknown',
+    lastSync: null,
+    drift: 0
+  })),
+  getStatistics: jest.fn(() => ({ count: 0 })),
+  startScheduledChecks: jest.fn(() => {}),
+  stopScheduledChecks: jest.fn(() => {}),
+  cleanup: jest.fn(() => {})
+};
 
-// SKIP these tests in CI due to TimeSyncService singleton hanging issue
-// The issue is that handler.js imports timeSyncService singleton at module level,
-// and even with jest.mock() and jest.useFakeTimers(), the tests hang after 10s timeout.
-// These tests need to be refactored to properly isolate the TimeSyncService dependency.
-// TODO: Fix TimeSyncService singleton issue to allow these tests to run in CI
-const describeOrSkip = process.env.CI ? describe.skip : describe;
-
-describeOrSkip('WebSocket Intervalometer Handler Tests', () => {
+describe('WebSocket Intervalometer Handler Tests', () => {
   let wsHandler;
   let mockCameraController;
   let mockPowerManager;
@@ -198,7 +189,8 @@ describeOrSkip('WebSocket Intervalometer Handler Tests', () => {
       mockServer,
       mockNetworkManager,
       mockDiscoveryManager,
-      mockIntervalometerStateManager
+      mockIntervalometerStateManager,
+      mockTimeSyncService
     );
 
     jest.clearAllTimers();
@@ -769,7 +761,8 @@ describeOrSkip('WebSocket Intervalometer Handler Tests', () => {
         mockServer,
         mockNetworkManager,
         mockDiscoveryManager,
-        null // No state manager
+        null, // No state manager
+        mockTimeSyncService
       );
 
       await handlerWithoutStateManager(mockWebSocket, mockRequest);
