@@ -306,20 +306,24 @@ Synchronizes camera time with system time.
 
 ### Error Handling
 
+**Philosophy:** This is a hobbyist tool, not mission-critical. **Report failures to user clearly** rather than hiding them with complex retry logic. Hidden problems don't get fixed.
+
 1. **Network Failures**
-   - Retry sync operations with exponential backoff
    - Log failures to activity log
-   - Degrade reliability status on repeated failures
+   - Display error to user in web UI
+   - Degrade reliability status
+   - Note: No automatic retry - user can manually retry if needed
 
 2. **Camera Sync Failures**
    - Log camera sync errors with details
-   - Continue operation with warning to user
-   - Retry on next camera connection
+   - Display error to user in web UI
+   - Continue operation with warning
+   - User can manually retry camera sync if needed
 
 3. **System Time Failures**
-   - Fall back to current system time
    - Log permission errors for timedatectl
    - Notify user of sync limitations
+   - No automatic fallbacks - clear error notification is priority
 
 ## Activity Logging
 

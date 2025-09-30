@@ -6,7 +6,23 @@
 
 ## Overview
 
-This document describes how the pi-camera-control system handles network transitions, including camera IP address changes, network switches, and connection recovery during network reconfigurations.
+This document describes how the pi-camera-control system handles network transitions, including camera IP address changes and automatic reconnection.
+
+**Important Limitations:**
+- **User-initiated network switching during operations is NOT RECOMMENDED**
+- Network transitions may cause 1-2 photo loss during intervalometer sessions
+- This is a hobbyist tool - network changes are handled gracefully but not seamlessly
+- Emphasis on detecting and reporting issues, not hiding them with complex recovery
+
+**What IS Supported:**
+- Automatic camera IP change detection via mDNS
+- Automatic reconnection to primary camera on IP change
+- Session continuity with minimal disruption (1-2 photo loss typical)
+
+**What is NOT Supported:**
+- Seamless network switching during active shooting
+- Zero photo loss during network transitions
+- User deliberately switching networks mid-operation (not recommended)
 
 ---
 
@@ -710,18 +726,21 @@ The system **requires user action** for:
 | Decision | Rationale |
 |----------|-----------|
 | **30s mDNS interval** | Balance between responsiveness and network overhead |
-| **Automatic primary reconnection** | User expects camera to "just work" |
+| **Automatic primary reconnection** | User expects camera to "just work" for unintentional IP changes |
 | **No automatic Pi network handling** | Pi IP change affects WebSocket, requires client-side handling |
 | **No retry loops** | Intervalometer provides natural retry cadence |
 | **Single reconnection attempt** | Avoid cascading failures during network issues |
+| **User-initiated switches discouraged** | Deliberate network changes during operations not supported |
 
 ### Key Characteristics
 
-- **Resilient:** Handles common network transitions automatically
+- **Resilient:** Handles unintentional network transitions (DHCP changes, etc.)
 - **Predictable:** IP changes detected within ~30-60 seconds
-- **Continuous:** Sessions survive network transitions
-- **User-friendly:** Minimal manual intervention required
+- **Best-effort:** Sessions survive transitions with typical 1-2 photo loss
+- **Clear reporting:** Failures are reported, not hidden
 - **Transparent:** Events keep clients informed of network state
+
+**Philosophy:** For a hobbyist tool, **detecting and reporting network issues is more important than seamless recovery**. Users should avoid network switching during active operations.
 
 ---
 

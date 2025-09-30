@@ -11,22 +11,24 @@ This document provides a comprehensive plan for addressing the issues identified
 ### Quick Status Overview
 
 - ✅ **RESOLVED** (10 issues): Error standardization complete, message handlers implemented, schema validation tests added, event naming migration with backward compatibility, comprehensive documentation for error recovery/connection lifecycle/session persistence/network transitions, CCAPI usage audit complete
-- ⚠️ **DEFERRED** (1 issue): Broadcast efficiency (acceptable for target use case)
-- ⏭️ **NEXT UP** (Phase 4): Advanced features investigation (time sync edge cases, camera compatibility testing)
-- ⚠️ **REMAINING** (2 issues): Message ordering guarantees, time sync edge cases (Phase 4)
+- ⚠️ **DEFERRED/OUT OF SCOPE** (4 issues): Broadcast efficiency, multi-camera compatibility, comprehensive crash recovery testing, network switching during operations
+- ⏭️ **OPTIONAL** (Phase 4): Message ordering investigation, basic time sync error handling (can be deferred)
 - ✅ **FIXED** (3 new issues): Test suite ESM config, REST API standardization, sendOperationResult removal
+- 🎯 **RECOMMENDATION**: Run Phase 5 minimal validation (0.5-1 day) to verify stability, then proceed to new features
 
 ### Estimated Timeline
 
 - **Phase 1 (High Priority)**: ✅ **COMPLETE** - Error standardization finished (commit 7d786ec)
 - **Phase 2 (Medium Priority)**: ✅ **COMPLETE** - Event naming migration with backward compatibility (commit 7d786ec)
 - **Phase 3 (Medium Priority)**: ✅ **COMPLETE** - 2-3 days - Documentation updates (commit 42ba492)
-- **Phase 4 (Lower Priority)**: 4-5 days - Advanced features investigation
-- **Phase 5 (Validation)**: 2-3 days - Testing and validation
+- **Phase 4 (Lower Priority)**: 1-2 days - Minimal investigation (OPTIONAL - can defer)
+- **Phase 5 (Validation)**: 0.5-1 day - Basic stability check (RECOMMENDED before new features)
 
-**Total Estimated Effort:** 13-18 days
+**Total Estimated Effort:** 8.5-14 days (reduced from 13-18 due to scope clarification)
 **Completed:** 7-10 days (Phases 1, 2 & 3)
-**Remaining:** 6-8 days (Phases 4-5)
+**Remaining:** 1.5-4 days (Phases 4-5, both optional/simplified)
+
+**Decision Point:** Phase 4 is low priority and can be deferred. **Phase 5 minimal validation is recommended** before starting new features to ensure no regressions.
 
 ---
 
@@ -463,43 +465,29 @@ broadcastNetworkEvent("wifi_connection_verified", {ssid, ip});
 **Current Implementation:**
 - TimeSyncService exists (`src/timesync/service.js`)
 - Client time sync protocol implemented
-- GPS integration supported
 - Camera time sync implemented
 
+**Note:** This is a hobbyist tool, not mission-critical. Time sync failures should be **reported to the user via web UI** rather than hidden with fallbacks. Clear notification is more important than complex retry logic.
+
 **Untested Edge Cases:**
-1. **Wildly Incorrect Client Time:**
-   - What if client is years off?
-   - Should system reject or accept?
-   - Validation thresholds?
-
-2. **Timezone Changes:**
-   - Daylight saving time transitions
-   - Travel across timezones
-   - Timezone data update handling
-
-3. **Repeated Failures:**
-   - What if camera rejects time changes?
-   - Retry logic and limits?
+1. **Client Time Sync Failures:**
+   - What if client time sync fails?
    - Error handling and user notification?
 
-4. **GPS Time Accuracy:**
-   - What accuracy is acceptable?
-   - How to validate GPS time quality?
-   - Fallback when GPS unavailable?
+2. **Camera Time Sync Failures:**
+   - What if camera rejects time changes?
+   - Error handling and user notification?
 
 **Required Work:**
-- Add edge case unit tests
-- Document acceptable time ranges
-- Define validation thresholds
-- Test DST transitions
-- Test timezone changes
-- Document GPS accuracy requirements
+- Add basic error notification tests
+- Ensure failures are clearly reported to user
+- Document that complex edge case handling is out of scope for this hobbyist tool
 
 ---
 
-### Issue #11: Camera Time Sync Compatibility - UNTESTED ⚠️
+### Issue #11: Camera Time Sync Compatibility - OUT OF SCOPE ⚠️
 
-**Problem:** Only tested with Canon EOS R50, may not work with other cameras.
+**Status:** Deferred - Only Canon EOS R50 is the target hardware
 
 **Current Implementation:**
 ```javascript
@@ -507,18 +495,12 @@ broadcastNetworkEvent("wifi_connection_verified", {ssid, ip});
 POST /ccapi/ver100/functions/datetime
 ```
 
-**Compatibility Concerns:**
-1. Older Canon cameras may use different CCAPI versions
-2. Different camera models may have different datetime formats
-3. Timezone handling may vary by model
-4. Some cameras may not support time setting via API
+**Project Scope:**
+- **Target Hardware:** Canon EOS R50 and Raspberry Pi Zero 2 W ONLY
+- **Multi-camera support:** Out of scope
+- **Other camera models:** Not tested, not supported
 
-**Testing Needed:**
-- Test with Canon EOS R5, R6, R7, R10
-- Test with older Canon DSLRs
-- Document which models are supported
-- Implement camera model detection
-- Add compatibility checks before sync attempts
+**Note:** This is a hobbyist tool focused on a single hardware configuration. Testing and supporting multiple camera models is explicitly out of scope.
 
 ---
 
@@ -850,112 +832,83 @@ const sendOperationResult = (ws, operation, success, data, error) => {
 
 ---
 
-### Phase 4: Advanced Issues Investigation (LOWER PRIORITY)
+### Phase 4: Advanced Issues Investigation (LOWER PRIORITY) - SIMPLIFIED
 
-**Goal:** Investigate and address remaining unknown issues
+**Goal:** Address remaining issues within project scope
 
-**Duration:** 4-5 days
+**Duration:** 1-2 days (simplified from 4-5)
 
-**Tasks:**
-1. **Network Transition Race Condition Testing** (Priority: Low-Medium)
-   - Set up test environment with camera and Pi
-   - Test WiFi network switching during operations
-   - Monitor camera connection during transitions
-   - Test intervalometer session continuity
-   - Document findings
-   - Fix any issues found
+**Out of Scope (Explicitly NOT doing these):**
+- ❌ Network switching during operations (not supported)
+- ❌ System crash/power loss recovery testing (not supported)
+- ❌ GPS features (GPS not supported at all)
+- ❌ Multi-camera compatibility testing (Canon EOS R50 only)
+- ❌ Broadcast efficiency optimization (over-engineering for 1-2 clients)
+- ❌ Complex timezone/DST testing (over-engineering for hobby tool)
 
-2. **Session Persistence Verification** (Priority: Low-Medium)
-   - Test system crash during session
-   - Test power loss during photo capture
-   - Verify session recovery behavior
-   - Test cross-reboot session recovery
-   - Document actual behavior vs expected
-   - Implement improvements if needed
+**Tasks (Minimal Scope):**
 
-3. **Message Ordering Investigation** (Priority: Low)
+1. **Message Ordering Investigation** (Priority: Low)
    - Trace critical event emission sequences
    - Identify order-dependent operations
-   - Test for race conditions
    - Document ordering guarantees
-   - Add sequence numbers if needed
+   - Add sequence numbers only if proven necessary
 
-4. **Time Sync Edge Cases** (Priority: Low-Medium)
-   - Write edge case unit tests
-   - Test wildly incorrect times
-   - Test timezone changes
-   - Test DST transitions
-   - Test GPS accuracy validation
-   - Document acceptable ranges
-   - Implement validation logic
-
-5. **Camera Compatibility Testing** (Priority: Low)
-   - Test with multiple Canon camera models
-   - Document which models support time sync
-   - Implement model detection
-   - Add compatibility checks
-   - Update documentation with supported models
-
-6. **Broadcast Efficiency Analysis** (Priority: Low)
-   - Add performance metrics
-   - Measure bandwidth usage with multiple clients
-   - Evaluate if optimization needed
-   - Implement subscription model if justified
-   - Otherwise document that current approach is acceptable
+2. **Time Sync Basic Error Handling** (Priority: Low)
+   - Verify errors are reported to user clearly
+   - No complex fallbacks (failures should be visible, not hidden)
+   - Document that user notification is the primary recovery mechanism
 
 **Success Criteria:**
-- ✅ All unknowns investigated and documented
-- ✅ Race conditions identified and fixed (if any)
-- ✅ Edge cases tested and handled
-- ✅ Camera compatibility matrix created
-- ✅ Performance characteristics documented
+- ✅ Message ordering documented
+- ✅ Time sync error reporting verified
+- ✅ No over-engineered fallback mechanisms
 
-**Files Modified:**
-- Multiple test files for edge cases
-- `src/timesync/service.js` - Add validation logic
-- `src/discovery/manager.js` - Add camera model detection
-- Documentation updates based on findings
+**Philosophy:** This is a hobbyist tool, not mission-critical. **Report failures clearly rather than hiding them with complex fallbacks.** Hidden problems don't get fixed.
 
 ---
 
-### Phase 5: Testing and Validation (VALIDATION PHASE)
+### Phase 5: Testing and Validation (VALIDATION PHASE) - SIMPLIFIED
 
-**Goal:** Comprehensive test coverage for all WebSocket functionality
+**Goal:** Verify WebSocket system is stable enough for new feature work
 
-**Duration:** 2-3 days
+**Duration:** 0.5-1 day (simplified from 2-3)
 
-**Tasks:**
-1. **Expand Test Coverage** (Priority: Medium)
-   - Add tests for all error recovery scenarios
-   - Add tests for network transition handling
-   - Add tests for session persistence
-   - Add tests for edge cases
-   - Achieve >80% code coverage
+**Out of Scope (Explicitly NOT doing these):**
+- ❌ Network transition testing (not supported during operations)
+- ❌ Session recovery testing (basic persistence only, not extensively tested)
+- ❌ Performance/load testing (over-engineering for 1-2 clients)
+- ❌ Comprehensive edge case testing (hobbyist tool, report failures clearly)
+- ❌ Achieving arbitrary coverage metrics (quality > quantity)
 
-2. **Integration Testing** (Priority: Medium)
-   - Test complete workflows end-to-end
-   - Test error scenarios across component boundaries
-   - Test network transitions with camera
-   - Test session recovery scenarios
+**Tasks (Minimal Validation):**
 
-3. **Performance Testing** (Priority: Low)
-   - Test with multiple simultaneous clients
-   - Measure broadcast overhead
-   - Test under load
-   - Document performance characteristics
+1. **Run Existing Tests** (Priority: High)
+   - Execute existing test suite: `npm test`
+   - Verify all existing tests pass
+   - Fix any broken tests
+   - Document any known test failures
 
-4. **Documentation Validation** (Priority: Medium)
-   - Verify all documentation matches implementation
-   - Check all sequence diagrams are accurate
-   - Verify API specification is complete
-   - Review all issue resolutions
+2. **Basic Hardware Verification** (Priority: High)
+   - Deploy to picontrol-002 and test basic operations:
+     - Camera connection via WebSocket
+     - Photo capture
+     - Basic intervalometer session
+     - Error reporting in web UI
+   - Verify no obvious regressions
 
-**Success Criteria:**
-- ✅ Test coverage >80%
-- ✅ All integration tests pass
-- ✅ Performance acceptable for target hardware
-- ✅ Documentation accurate and complete
-- ✅ All issues resolved or documented
+3. **Documentation Validation** (Priority: Medium)
+   - Quick review: Do docs match current implementation?
+   - Verify planning document reflects actual completion status
+   - Update any obvious mismatches
+
+**Success Criteria (Minimal):**
+- ✅ Existing tests pass
+- ✅ Basic operations work on target hardware
+- ✅ No critical regressions
+- ✅ Documentation reasonably accurate
+
+**Decision Point:** If the above succeeds, **WebSocket system is stable enough to move on to new features**. This is a hobbyist tool - perfect test coverage is not required.
 
 ---
 
@@ -1005,11 +958,11 @@ const sendOperationResult = (ws, operation, success, data, error) => {
 - Camera compatibility documented
 - Performance characteristics known
 
-**Phase 5 Success:**
-- Comprehensive test coverage
-- Integration tests pass
-- Performance acceptable
-- Documentation validated
+**Phase 5 Success (Simplified):**
+- Existing tests pass
+- Basic operations work on hardware
+- Documentation reasonably accurate
+- Ready for new feature work
 
 ---
 

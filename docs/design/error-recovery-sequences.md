@@ -218,9 +218,15 @@ this.unsavedSession = {
 
 ## 4. Session Interruption Recovery (System Crash/Reboot)
 
+**Note:** While session data IS persisted to disk, **catastrophic failure recovery is not a primary feature** of this hobbyist tool. The persistence mechanism exists to avoid data loss, but:
+- No automatic session resume
+- Requires user decision (save or discard)
+- Not extensively tested for all failure modes
+- Emphasis on preventing data loss, not seamless recovery
+
 ### Persistence Mechanism
 
-The system provides cross-reboot recovery for interrupted sessions:
+The system provides basic cross-reboot session data persistence:
 
 ```mermaid
 sequenceDiagram
@@ -283,6 +289,8 @@ data/timelapse-reports/unsaved-session.json
 - If system crashes during photo capture, that photo may be incomplete
 - Photo count reflects completed photos only
 - Camera SD card has actual photos (may be more than logged count)
+
+**Important:** This is a **data preservation** feature, not a **full recovery system**. For a hobbyist tool, preventing data loss is sufficient. Seamless recovery from crashes/power loss is explicitly out of scope.
 
 ---
 
