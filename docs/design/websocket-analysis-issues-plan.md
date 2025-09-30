@@ -883,13 +883,17 @@ const sendOperationResult = (ws, operation, success, data, error) => {
 
 **Tasks (Minimal Validation):**
 
-1. **Run Existing Tests** (Priority: High)
-   - Execute existing test suite: `npm test`
-   - Verify all existing tests pass
-   - Fix any broken tests
-   - Document any known test failures
+1. ✅ **Run Existing Tests** (Priority: High) - **COMPLETE** (2025-09-30)
+   - ✅ Executed existing test suite
+   - ✅ Fixed 19 test failures from Phase 1 error standardization
+   - ✅ Updated API route tests to expect new error format
+   - ✅ Documented hanging test issue (TimeSyncService singleton)
+   - **Result:** 138 tests passing (schemas, errors, utils, meta, API routes, integration)
+   - **Known Issue:** websocket-handler and websocket-intervalometer tests require CI=true to run
+     - Root cause: TimeSyncService singleton creates real timers despite mocks
+     - Tests pass correctly with CI=true environment variable
 
-2. **Basic Hardware Verification** (Priority: High)
+2. **Basic Hardware Verification** (Priority: High) - PENDING
    - Deploy to picontrol-002 and test basic operations:
      - Camera connection via WebSocket
      - Photo capture
@@ -897,7 +901,7 @@ const sendOperationResult = (ws, operation, success, data, error) => {
      - Error reporting in web UI
    - Verify no obvious regressions
 
-3. **Documentation Validation** (Priority: Medium)
+3. **Documentation Validation** (Priority: Medium) - PENDING
    - Quick review: Do docs match current implementation?
    - Verify planning document reflects actual completion status
    - Update any obvious mismatches

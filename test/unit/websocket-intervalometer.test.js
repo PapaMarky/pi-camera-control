@@ -32,8 +32,11 @@ jest.mock('../../src/timesync/service.js', () => ({
   }
 }));
 
-// Skip these tests in CI environment due to timesync service initialization causing timeouts
-const describeOrSkip = process.env.CI ? describe.skip : describe;
+// Tests require CI=true to run due to TimeSyncService singleton initialization issues
+// The handler.js imports timeSyncService at module level, and despite jest.mock() and
+// jest.useFakeTimers(), the real service keeps the process alive outside CI mode.
+// Running with CI=true works correctly - all tests pass with proper mocking.
+const describeOrSkip = process.env.CI ? describe : describe.skip;
 
 describeOrSkip('WebSocket Intervalometer Handler Tests', () => {
   let wsHandler;
