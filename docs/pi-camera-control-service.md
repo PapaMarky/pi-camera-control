@@ -105,7 +105,7 @@ This stops the service, disables auto-start, and removes the service file.
 
 3. Verify Node.js installation:
    ```bash
-   node --version  # Should be ≥16.0.0
+   node --version  # Should be ≥20.0.0
    ```
 
 #### Service Crashes Immediately

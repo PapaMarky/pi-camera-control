@@ -4,7 +4,7 @@ This guide explains how to set up the Pi Camera Control application as a systemd
 
 ## Prerequisites
 
-- Node.js ≥16.0.0 installed on the Raspberry Pi
+- Node.js ≥20.0.0 installed on the Raspberry Pi
 - Project deployed to `/home/pi/pi-camera-control/`
 - Root access (sudo privileges)
 

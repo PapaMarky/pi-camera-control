@@ -96,7 +96,7 @@ graph TB
 ## Technology Stack
 
 ### Backend (Phase 2)
-- **Runtime**: Node.js ≥16.0.0
+- **Runtime**: Node.js ≥20.0.0
 - **Framework**: Express.js with middleware (helmet, cors, compression)
 - **WebSocket**: ws library for real-time communication
 - **HTTP Client**: axios for Canon CCAPI communication

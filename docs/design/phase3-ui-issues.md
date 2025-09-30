@@ -206,6 +206,10 @@ Change test to look for `#sync-time-btn` instead
   - Removed CI skip logic to enable tests in GitHub Actions
   - Changed from conditional jsdom import to direct import
 - No production code changes required (UI implementation was already correct)
+- **Node.js version upgrade**: Upgraded from Node 16 to Node 20 (required by jsdom@27.0.0)
+  - Updated `.github/workflows/pr-tests.yml` to use Node 20.x
+  - Updated `package.json` engines field to require Node ≥20.0.0
+  - Updated all documentation to reflect Node 20 requirement
 
 ---
 
