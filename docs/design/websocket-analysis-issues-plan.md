@@ -1,8 +1,8 @@
 # WebSocket Analysis Issues - Implementation Plan
 
-**Document Version:** 1.2
+**Document Version:** 1.3
 **Date:** 2025-09-29
-**Status:** Phases 1 & 2 Complete - Phase 3 Paused for CCAPI Audit
+**Status:** Phases 1, 2 & 3 Complete - Phase 4 & 5 Pending
 
 ## Executive Summary
 
@@ -10,10 +10,10 @@ This document provides a comprehensive plan for addressing the issues identified
 
 ### Quick Status Overview
 
-- ✅ **RESOLVED** (5 issues): Error standardization complete, message handlers implemented, schema validation tests added, event naming migration underway with backward compatibility
+- ✅ **RESOLVED** (9 issues): Error standardization complete, message handlers implemented, schema validation tests added, event naming migration with backward compatibility, comprehensive documentation for error recovery/connection lifecycle/session persistence/network transitions, CCAPI usage audit complete
 - 🔄 **IN PROGRESS** (1 issue): Event naming migration (dual emission active, awaiting frontend updates)
-- ⏭️ **NEXT UP** (Phase 3): Documentation updates for error recovery, connection lifecycle, and session persistence
-- ⚠️ **UNRESOLVED** (7 issues): Network transitions, documentation gaps, testing needs
+- ⏭️ **NEXT UP** (Phase 4): Advanced features investigation (network transitions testing, time sync edge cases)
+- ⚠️ **UNRESOLVED** (3 issues): Advanced testing needs
 - ✅ **FIXED** (3 new issues): Test suite ESM config, REST API standardization, sendOperationResult removal
 
 ### Estimated Timeline
@@ -814,44 +814,53 @@ const sendOperationResult = (ws, operation, success, data, error) => {
 
 ---
 
-### Phase 3: Documentation Updates ⏸️ **PAUSED**
+### Phase 3: Documentation Updates ✅ **COMPLETE**
 
 **Goal:** Complete all missing design documentation
 
 **Duration:** 2-3 days
-**Status:** Paused - CCAPI audit took priority (now complete)
-**Note:** Paused to complete CCAPI usage audit against official Canon documentation. See ccapi-audit-report.md.
+**Status:** Complete (2025-09-29 - commit 42ba492)
+**Note:** Initially paused for CCAPI audit, then completed with comprehensive system behavior documentation.
 
-**Tasks:**
-1. **Create Error Recovery Documentation** (Priority: Medium)
-   - Document shutter stuck recovery sequence
-   - Document connection loss recovery
-   - Document network failure recovery
-   - Document session interruption recovery
-   - Add sequence diagrams for each scenario
-   - Create `docs/design/error-recovery-sequences.md`
+**Completed Tasks:**
 
-2. **Document WebSocket Connection Lifecycle** (Priority: Medium)
-   - Connection establishment process
-   - Authentication (if any)
-   - Keepalive mechanism
-   - Reconnection strategy
-   - Connection limits
-   - Add to `docs/design/websocket-connection-lifecycle.md`
+1. **✅ Error Recovery Documentation** - `docs/design/error-recovery-sequences.md` (commit 42ba492)
+   - Camera connection loss detection (ETIMEDOUT, EHOSTUNREACH, ECONNREFUSED)
+   - WebSocket client disconnection cleanup
+   - Intervalometer session error handling and statistics
+   - Cross-reboot recovery with unsaved sessions (data/timelapse-reports/unsaved-session.json)
+   - Network failure during photo operations
+   - Canon CCAPI error response handling (400, 503)
+   - Documented what does NOT exist (no stuck shutter recovery, no auto-reconnect)
+   - 6 sequence diagrams for error flows
 
-3. **Document Session Persistence Guarantees** (Priority: Medium)
-   - Session state persistence mechanism
-   - Crash recovery behavior
-   - Cross-reboot recovery
-   - Data consistency guarantees
-   - Add to `docs/design/intervalometer-system.md`
+2. **✅ WebSocket Connection Lifecycle** - `docs/design/websocket-connection-lifecycle.md` (commit 42ba492)
+   - Connection establishment with welcome message
+   - No authentication (trust local network design)
+   - No heartbeat/ping-pong (relies on TCP keep-alive)
+   - Message handling and routing (JSON type/data structure)
+   - Broadcasting to all connected clients
+   - Disconnection and cleanup (close/error handlers)
+   - Security considerations and future enhancements
+   - Connection limits (none currently implemented)
 
-4. **Document Network Transition Handling** (Priority: Medium)
-   - Camera IP change detection
-   - Reconnection during network switch
-   - Session continuity during transitions
-   - Timeout and retry logic
-   - Add to `docs/design/network-management.md`
+3. **✅ Session Persistence Documentation** - Covered in error-recovery-sequences.md Section 4 (commit 42ba492)
+   - Unsaved session persistence to disk
+   - Crash recovery detection on startup (checkForUnsavedSession)
+   - User decision required (save with title or discard)
+   - Data consistency guarantees and limitations
+   - Sessions marked as unsaved when: stopped, completed, or error
+   - Cross-reboot recovery flow with sequence diagram
+
+4. **✅ Network Transition Handling** - `docs/design/network-transition-handling.md` (commit 42ba492)
+   - mDNS camera discovery (30-second interval)
+   - IP address tracking and change detection
+   - Automatic primary camera reconnection on IP change
+   - Session continuity during transitions (1-2 photo loss typical)
+   - Pi network switch handling
+   - Timeout values (10s default, 30s photo, 15s release)
+   - No automatic retry strategy (intervalometer provides natural retry)
+   - 5 edge case scenarios documented
 
 **Success Criteria:**
 - ✅ All error recovery scenarios documented
