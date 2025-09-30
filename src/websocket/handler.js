@@ -248,22 +248,24 @@ export function createWebSocketHandler(
         intervalometer: server.activeIntervalometerSession
           ? server.activeIntervalometerSession.getStatus()
           : null,
-        timesync: timeSyncService ? (() => {
-          const rawStatus = timeSyncService.getStatus();
-          return {
-            pi: {
-              isSynchronized: rawStatus.piReliable,
-              reliability: timeSyncService.getPiReliability
-                ? timeSyncService.getPiReliability(rawStatus)
-                : "none",
-              lastSyncTime: rawStatus.lastPiSync,
-            },
-            camera: {
-              isSynchronized: !!rawStatus.lastCameraSync,
-              lastSyncTime: rawStatus.lastCameraSync,
-            },
-          };
-        })() : null,
+        timesync: timeSyncService
+          ? (() => {
+              const rawStatus = timeSyncService.getStatus();
+              return {
+                pi: {
+                  isSynchronized: rawStatus.piReliable,
+                  reliability: timeSyncService.getPiReliability
+                    ? timeSyncService.getPiReliability(rawStatus)
+                    : "none",
+                  lastSyncTime: rawStatus.lastPiSync,
+                },
+                camera: {
+                  isSynchronized: !!rawStatus.lastCameraSync,
+                  lastSyncTime: rawStatus.lastCameraSync,
+                },
+              };
+            })()
+          : null,
         clientId,
       };
 
