@@ -112,22 +112,53 @@ POST /api/intervalometer/start
 Content-Type: application/json
 
 {
-  "interval": 30,
-  "shots": 100,
-  "stopTime": "23:30"
+  "interval": 30,              // Required: seconds between photos (must be ≥ 5)
+  "stopCondition": "stop-after", // Required: "unlimited", "stop-after", or "stop-at"
+  "shots": 100,                // Required if stopCondition="stop-after"
+  "stopTime": "23:30",         // Required if stopCondition="stop-at" (HH:MM format, 00:00-23:59)
+  "title": "Night Sky Timelapse" // Optional: session title
 }
 ```
 
-#### Start with Title (Enhanced)
-```http
-POST /api/intervalometer/start-with-title
-Content-Type: application/json
+**Parameters:**
+- `interval` (number, required): Seconds between shots, must be ≥ 5
+- `stopCondition` (string, required): Determines when the session stops
+  - `"unlimited"`: Run until manually stopped
+  - `"stop-after"`: Stop after `shots` photos taken (requires `shots` parameter)
+  - `"stop-at"`: Stop at specific time (requires `stopTime` parameter)
+- `shots` (number, conditional): Number of photos to take. Required if `stopCondition="stop-after"`, must be > 0
+- `stopTime` (string, conditional): Time to stop shooting in HH:MM format (00:00 to 23:59). Required if `stopCondition="stop-at"`. If time is in the past, assumes next day.
+- `title` (string, optional): Custom session title. Auto-generated if omitted.
 
+**Response (Success):**
+```json
 {
-  "interval": 30,
-  "shots": 100,
-  "stopTime": "23:30",
+  "success": true,
+  "message": "Intervalometer started successfully",
+  "status": {
+    "running": true,
+    "state": "running",
+    "stats": { ... },
+    "options": { ... }
+  },
+  "sessionId": "uuid-here",
   "title": "Night Sky Timelapse"
+}
+```
+
+**Response (Error):**
+```json
+{
+  "error": {
+    "message": "stopCondition is required",
+    "code": "INVALID_PARAMETER",
+    "component": "API_ROUTER",
+    "operation": "startIntervalometer",
+    "details": {
+      "validValues": ["unlimited", "stop-after", "stop-at"]
+    }
+  },
+  "timestamp": "2025-10-01T21:30:00.000Z"
 }
 ```
 

@@ -752,15 +752,32 @@ class TimelapseUI {
    */
   formatStopCriteria(options) {
     if (!options) {
-      return 'Unknown';
+      return 'ERROR: No options data';
     }
 
-    if (options.totalShots) {
-      return `${options.totalShots} shots`;
-    } else if (options.stopTime) {
-      return `Until ${new Date(options.stopTime).toLocaleTimeString()}`;
-    } else {
-      return 'Manual stop';
+    if (!options.stopCondition) {
+      return 'ERROR: Missing stopCondition (legacy session)';
+    }
+
+    // Use the stored stopCondition to determine what to display
+    switch (options.stopCondition) {
+      case 'stop-at':
+        if (options.stopTime) {
+          return `Stop at ${new Date(options.stopTime).toLocaleTimeString()}`;
+        }
+        return 'ERROR: stop-at selected but no stopTime';
+
+      case 'stop-after':
+        if (options.totalShots) {
+          return `${options.totalShots} shots`;
+        }
+        return 'ERROR: stop-after selected but no totalShots';
+
+      case 'unlimited':
+        return 'Unlimited (manual stop)';
+
+      default:
+        return `ERROR: Unknown stopCondition: ${options.stopCondition}`;
     }
   }
 

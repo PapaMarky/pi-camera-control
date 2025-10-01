@@ -463,7 +463,7 @@ describe('API Routes Unit Tests', () => {
         // So we need to set up the server's activeIntervalometerSession after creation
         const response = await request(app)
           .post('/api/intervalometer/start')
-          .send({ interval: 30, shots: 100 })
+          .send({ interval: 30, shots: 100, stopCondition: 'stop-after' })
           .expect(200);
 
         expect(response.body).toMatchObject({
@@ -475,12 +475,24 @@ describe('API Routes Unit Tests', () => {
         expect(mockServer.activeIntervalometerSession).toBeDefined();
       });
 
+      test('supports title parameter', async () => {
+        const response = await request(app)
+          .post('/api/intervalometer/start')
+          .send({ interval: 30, shots: 100, stopCondition: 'stop-after', title: 'Test Session' })
+          .expect(200);
+
+        expect(response.body).toMatchObject({
+          success: true,
+          message: 'Intervalometer started successfully'
+        });
+      });
+
       test('prevents starting when session already running', async () => {
         mockServer.activeIntervalometerSession = { state: 'running' };
 
         const response = await request(app)
           .post('/api/intervalometer/start')
-          .send({ interval: 30, shots: 100 })
+          .send({ interval: 30, shots: 100, stopCondition: 'stop-after' })
           .expect(400);
 
         expect(response.body).toHaveProperty('error');

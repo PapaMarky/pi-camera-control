@@ -727,22 +727,23 @@ class CameraManager {
     const interval = parseFloat(document.getElementById('interval-input').value);
     const stopCondition = document.querySelector('input[name="stop-condition"]:checked').value;
     const title = document.getElementById('session-title-input').value.trim();
-    
+
     const options = { interval };
-    
+
     // Add title if provided
     if (title) {
       options.title = title;
     }
     let logMessage = `Starting intervalometer: ${interval}s intervals`;
-    
-    // Handle stop condition based on radio selection
+
+    // Map UI stopCondition values to backend values and add to options
     if (stopCondition === 'shots') {
       const shots = document.getElementById('shots-input').value;
       if (!shots || shots <= 0) {
         this.handleError('Please enter a valid number of shots');
         return;
       }
+      options.stopCondition = 'stop-after';
       options.shots = parseInt(shots);
       logMessage += ` for ${shots} shots`;
     } else if (stopCondition === 'time') {
@@ -751,17 +752,19 @@ class CameraManager {
         this.handleError('Please enter a stop time');
         return;
       }
+      options.stopCondition = 'stop-at';
       options.stopTime = stopTime;
-      
+
       // Determine if it's today or tomorrow for display
       const [hours, minutes] = stopTime.split(':').map(Number);
       const now = new Date();
       const stopDate = new Date();
       stopDate.setHours(hours, minutes, 0, 0);
       const isNextDay = stopDate <= now;
-      
+
       logMessage += ` until ${stopTime}${isNextDay ? ' tomorrow' : ''}`;
     } else {
+      options.stopCondition = 'unlimited';
       logMessage += ' (unlimited)';
     }
 
@@ -1611,6 +1614,18 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
       const startTime = stats.startTime ? new Date(stats.startTime) : new Date();
       const duration = Math.max(0, Date.now() - startTime.getTime());
 
+      // Update interval
+      const intervalEl = document.getElementById('session-interval');
+      if (intervalEl) {
+        intervalEl.textContent = options.interval ? `${options.interval}s` : '-';
+      }
+
+      // Update stop criteria
+      const stopCriteriaEl = document.getElementById('session-stop-criteria');
+      if (stopCriteriaEl) {
+        stopCriteriaEl.textContent = this.formatStopCriteria(options);
+      }
+
       // Update shots taken
       const shotsTakenEl = document.getElementById('shots-taken');
       if (totalShots) {
@@ -1663,11 +1678,45 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hours > 0) {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     } else {
       return `${minutes}:${secs.toString().padStart(2, '0')}`;
+    }
+  }
+
+  /**
+   * Format stop criteria from options
+   */
+  formatStopCriteria(options) {
+    if (!options) {
+      return 'ERROR: No options data';
+    }
+
+    if (!options.stopCondition) {
+      return 'ERROR: Missing stopCondition (legacy session)';
+    }
+
+    // Use the stored stopCondition to determine what to display
+    switch (options.stopCondition) {
+      case 'stop-at':
+        if (options.stopTime) {
+          return `Stop at ${new Date(options.stopTime).toLocaleTimeString()}`;
+        }
+        return 'ERROR: stop-at selected but no stopTime';
+
+      case 'stop-after':
+        if (options.totalShots) {
+          return `${options.totalShots} shots`;
+        }
+        return 'ERROR: stop-after selected but no totalShots';
+
+      case 'unlimited':
+        return 'Unlimited';
+
+      default:
+        return `ERROR: Unknown stopCondition: ${options.stopCondition}`;
     }
   }
 
