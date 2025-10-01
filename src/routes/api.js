@@ -367,8 +367,8 @@ export function createApiRouter(
             component: Components.API_ROUTER,
             operation: "startIntervalometer",
             details: {
-              validValues: ["unlimited", "stop-after", "stop-at"]
-            }
+              validValues: ["unlimited", "stop-after", "stop-at"],
+            },
           }),
         );
       }
@@ -381,30 +381,36 @@ export function createApiRouter(
             component: Components.API_ROUTER,
             operation: "startIntervalometer",
             details: {
-              validValues: validStopConditions
-            }
+              validValues: validStopConditions,
+            },
           }),
         );
       }
 
       // Validate stopCondition-specific parameters
-      if (stopCondition === 'stop-after' && (!shots || shots <= 0)) {
+      if (stopCondition === "stop-after" && (!shots || shots <= 0)) {
         return res.status(400).json(
-          createApiError("shots parameter required for stop-after stopCondition", {
-            code: ErrorCodes.INVALID_PARAMETER,
-            component: Components.API_ROUTER,
-            operation: "startIntervalometer",
-          }),
+          createApiError(
+            "shots parameter required for stop-after stopCondition",
+            {
+              code: ErrorCodes.INVALID_PARAMETER,
+              component: Components.API_ROUTER,
+              operation: "startIntervalometer",
+            },
+          ),
         );
       }
 
-      if (stopCondition === 'stop-at' && !stopTime) {
+      if (stopCondition === "stop-at" && !stopTime) {
         return res.status(400).json(
-          createApiError("stopTime parameter required for stop-at stopCondition", {
-            code: ErrorCodes.INVALID_PARAMETER,
-            component: Components.API_ROUTER,
-            operation: "startIntervalometer",
-          }),
+          createApiError(
+            "stopTime parameter required for stop-at stopCondition",
+            {
+              code: ErrorCodes.INVALID_PARAMETER,
+              component: Components.API_ROUTER,
+              operation: "startIntervalometer",
+            },
+          ),
         );
       }
 
@@ -589,7 +595,6 @@ export function createApiRouter(
       );
     }
   });
-
 
   // Timelapse Reports Management API
   router.get("/timelapse/reports", async (req, res) => {
