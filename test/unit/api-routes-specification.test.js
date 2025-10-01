@@ -251,9 +251,9 @@ describe('API Routes Specification Compliance Tests', () => {
             shotsTaken: 25,
             shotsSuccessful: 24,
             shotsFailed: 1,
-            currentShot: 26,
-            nextShotTime: '2024-01-01T20:12:30.000Z'
+            currentShot: 26
           },
+          nextShotTime: '2024-01-01T20:12:30.000Z', // Moved to top level
           options: {
             interval: 30,
             totalShots: 100

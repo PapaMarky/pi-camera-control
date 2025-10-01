@@ -915,6 +915,43 @@ const clients = new Set();
 }
 ```
 
+#### Session Saved Event
+Broadcast when a timelapse session is saved as a report:
+
+```json
+{
+  "type": "timelapse_event",
+  "eventType": "session_saved",
+  "timestamp": "2024-01-01T12:00:00.000Z",
+  "data": {
+    "sessionId": "session-uuid",
+    "report": {
+      "id": "report-uuid",
+      "title": "Night Sky Timelapse",
+      "createdAt": "2024-01-01T12:00:00.000Z",
+      "shotCount": 100,
+      "successRate": 98
+    },
+    "message": "Session saved as report successfully"
+  }
+}
+```
+
+#### Session Discarded Event
+Broadcast when a timelapse session is discarded:
+
+```json
+{
+  "type": "timelapse_event",
+  "eventType": "session_discarded",
+  "timestamp": "2024-01-01T12:00:00.000Z",
+  "data": {
+    "sessionId": "session-uuid",
+    "message": "Session discarded successfully"
+  }
+}
+```
+
 ### Activity Log Messages
 ```json
 {
