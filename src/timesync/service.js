@@ -376,7 +376,7 @@ class TimeSyncService {
     // Schedule periodic checks every 15 minutes
     this.syncCheckTimer = setInterval(() => {
       this.performScheduledCheck();
-    }, this.state.config.SYNC_CHECK_INTERVAL);
+    }, this.state.config.SYNC_CHECK_INTERVAL).unref();
 
     logger.info("Scheduled sync checks started (15-minute interval)");
   }

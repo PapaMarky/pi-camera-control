@@ -194,6 +194,52 @@ describe('WebSocket Message Schema Validation', () => {
       const errors = validateSchema(event, EventSchemas.cameraIPChanged);
       expect(errors).toEqual([]);
     });
+
+    test('session_saved event has consistent fields', () => {
+      const event = {
+        sessionId: 'session-123',
+        report: {
+          id: 'report-456',
+          title: 'Night Sky',
+          createdAt: '2024-01-01T20:00:00.000Z'
+        },
+        message: 'Session saved as report successfully'
+      };
+
+      const errors = validateSchema(event, EventSchemas.session_saved);
+      expect(errors).toEqual([]);
+    });
+
+    test('session_saved event allows optional message', () => {
+      const event = {
+        sessionId: 'session-123',
+        report: {
+          id: 'report-456'
+        }
+      };
+
+      const errors = validateSchema(event, EventSchemas.session_saved);
+      expect(errors).toEqual([]);
+    });
+
+    test('session_discarded event has consistent fields', () => {
+      const event = {
+        sessionId: 'session-123',
+        message: 'Session discarded successfully'
+      };
+
+      const errors = validateSchema(event, EventSchemas.session_discarded);
+      expect(errors).toEqual([]);
+    });
+
+    test('session_discarded event allows optional message', () => {
+      const event = {
+        sessionId: 'session-123'
+      };
+
+      const errors = validateSchema(event, EventSchemas.session_discarded);
+      expect(errors).toEqual([]);
+    });
   });
 
   describe('Error Response Consistency', () => {

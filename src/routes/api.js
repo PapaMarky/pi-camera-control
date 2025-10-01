@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { logger } from "../utils/logger.js";
-import { IntervalometerSession } from "../intervalometer/session.js";
 import {
   createApiError,
   ErrorCodes,
@@ -347,7 +346,7 @@ export function createApiRouter(
   // Intervalometer control
   router.post("/intervalometer/start", async (req, res) => {
     try {
-      const { interval, shots, stopTime } = req.body;
+      const { interval, shots, stopTime, stopCondition, title } = req.body;
 
       // Validation
       if (!interval || interval <= 0) {
@@ -357,6 +356,61 @@ export function createApiRouter(
             component: Components.API_ROUTER,
             operation: "startIntervalometer",
           }),
+        );
+      }
+
+      // Validate stopCondition (required)
+      if (!stopCondition) {
+        return res.status(400).json(
+          createApiError("stopCondition is required", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "startIntervalometer",
+            details: {
+              validValues: ["unlimited", "stop-after", "stop-at"],
+            },
+          }),
+        );
+      }
+
+      const validStopConditions = ["unlimited", "stop-after", "stop-at"];
+      if (!validStopConditions.includes(stopCondition)) {
+        return res.status(400).json(
+          createApiError(`Invalid stopCondition: ${stopCondition}`, {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "startIntervalometer",
+            details: {
+              validValues: validStopConditions,
+            },
+          }),
+        );
+      }
+
+      // Validate stopCondition-specific parameters
+      if (stopCondition === "stop-after" && (!shots || shots <= 0)) {
+        return res.status(400).json(
+          createApiError(
+            "shots parameter required for stop-after stopCondition",
+            {
+              code: ErrorCodes.INVALID_PARAMETER,
+              component: Components.API_ROUTER,
+              operation: "startIntervalometer",
+            },
+          ),
+        );
+      }
+
+      if (stopCondition === "stop-at" && !stopTime) {
+        return res.status(400).json(
+          createApiError(
+            "stopTime parameter required for stop-at stopCondition",
+            {
+              code: ErrorCodes.INVALID_PARAMETER,
+              component: Components.API_ROUTER,
+              operation: "startIntervalometer",
+            },
+          ),
         );
       }
 
@@ -404,8 +458,10 @@ export function createApiRouter(
         server.activeIntervalometerSession = null;
       }
 
-      // Create and configure new session
+      // Create and configure new session with optional title
       const options = { interval };
+      if (title && title.trim()) options.title = title.trim();
+      if (stopCondition) options.stopCondition = stopCondition;
       if (shots && shots > 0) options.totalShots = parseInt(shots);
       if (stopTime) {
         // Parse time as HH:MM and create a future date
@@ -422,10 +478,22 @@ export function createApiRouter(
         options.stopTime = stopDate;
       }
 
-      server.activeIntervalometerSession = new IntervalometerSession(
-        () => getCameraController(),
-        options,
-      );
+      // Use state manager to create session (supports stopCondition and reporting)
+      if (!intervalometerStateManager) {
+        return res.status(503).json(
+          createApiError("Intervalometer state manager not available", {
+            code: ErrorCodes.SERVICE_UNAVAILABLE,
+            component: Components.API_ROUTER,
+            operation: "startIntervalometer",
+          }),
+        );
+      }
+
+      server.activeIntervalometerSession =
+        await intervalometerStateManager.createSession(
+          () => getCameraController(),
+          options,
+        );
 
       // Start the session
       await server.activeIntervalometerSession.start();
@@ -436,6 +504,8 @@ export function createApiRouter(
         success: true,
         message: "Intervalometer started successfully",
         status: server.activeIntervalometerSession.getStatus(),
+        sessionId: server.activeIntervalometerSession.id,
+        title: server.activeIntervalometerSession.title,
       });
     } catch (error) {
       logger.error("Failed to start intervalometer:", error);
@@ -483,15 +553,15 @@ export function createApiRouter(
 
   router.get("/intervalometer/status", (req, res) => {
     try {
-      if (!server.activeIntervalometerSession) {
-        // Return specification-compliant response (no 'message' field)
+      const status = server.intervalometerStateManager.getSessionStatus();
+
+      // If no active session, return minimal response
+      if (status.state === "stopped" && !status.stats) {
         return res.json({
           running: false,
           state: "stopped",
         });
       }
-
-      const status = server.activeIntervalometerSession.getStatus();
 
       // Return specification-compliant response with required fields
       res.json({
@@ -505,124 +575,18 @@ export function createApiRouter(
           shotsFailed: status.stats?.shotsFailed || status.stats?.failed || 0,
           currentShot:
             (status.stats?.shotsTaken || status.progress?.shots || 0) + 1,
-          nextShotTime: status.stats?.nextShotTime || null,
+          nextShotTime: status.nextShotTime || null,
         },
         options: {
           interval: status.options?.interval || 30,
           totalShots:
             status.options?.totalShots || status.progress?.total || null,
           stopTime: status.options?.stopTime || null,
+          stopCondition: status.options?.stopCondition,
         },
       });
     } catch (error) {
       logger.error("Failed to get intervalometer status:", error);
-      res.status(500).json(
-        createApiError(error.message, {
-          code: ErrorCodes.SYSTEM_ERROR,
-          component: Components.API_ROUTER,
-        }),
-      );
-    }
-  });
-
-  // Enhanced intervalometer with title support
-  router.post("/intervalometer/start-with-title", async (req, res) => {
-    try {
-      const { interval, shots, stopTime, title } = req.body;
-
-      // Validation
-      if (!interval || interval <= 0) {
-        return res.status(400).json(
-          createApiError("Invalid interval value", {
-            code: ErrorCodes.INVALID_PARAMETER,
-            component: Components.API_ROUTER,
-            operation: "startIntervalometer",
-          }),
-        );
-      }
-
-      // Check if session is already running
-      if (
-        server.activeIntervalometerSession &&
-        server.activeIntervalometerSession.state === "running"
-      ) {
-        return res.status(400).json(
-          createApiError("Intervalometer is already running", {
-            code: ErrorCodes.OPERATION_FAILED,
-            component: Components.API_ROUTER,
-            operation: "startIntervalometer",
-          }),
-        );
-      }
-
-      // Get current camera controller
-      const currentController = getCameraController();
-      if (!currentController) {
-        return res.status(503).json(
-          createApiError("No camera available", {
-            code: ErrorCodes.CAMERA_OFFLINE,
-            component: Components.API_ROUTER,
-            operation: "startIntervalometer",
-          }),
-        );
-      }
-
-      // Validate against camera settings
-      const validation = await currentController.validateInterval(interval);
-      if (!validation.valid) {
-        return res.status(400).json(
-          createApiError(validation.error, {
-            code: ErrorCodes.VALIDATION_FAILED,
-            component: Components.API_ROUTER,
-            operation: "startIntervalometer",
-          }),
-        );
-      }
-
-      // Clean up any existing session
-      if (server.activeIntervalometerSession) {
-        server.activeIntervalometerSession.cleanup();
-        server.activeIntervalometerSession = null;
-      }
-
-      // Create and configure new session with title
-      const options = { interval };
-      if (title && title.trim()) options.title = title.trim();
-      if (shots && shots > 0) options.totalShots = parseInt(shots);
-      if (stopTime) {
-        // Parse time as HH:MM and create a future date
-        const [hours, minutes] = stopTime.split(":").map(Number);
-        const now = new Date();
-        const stopDate = new Date();
-        stopDate.setHours(hours, minutes, 0, 0);
-
-        // If the time is in the past, assume it's for tomorrow
-        if (stopDate <= now) {
-          stopDate.setDate(stopDate.getDate() + 1);
-        }
-
-        options.stopTime = stopDate;
-      }
-
-      server.activeIntervalometerSession = new IntervalometerSession(
-        () => getCameraController(),
-        options,
-      );
-
-      // Start the session
-      await server.activeIntervalometerSession.start();
-
-      logger.info("Intervalometer started with title support", options);
-
-      res.json({
-        success: true,
-        message: "Intervalometer started successfully",
-        status: server.activeIntervalometerSession.getStatus(),
-        sessionId: server.activeIntervalometerSession.getSessionId(),
-        title: server.activeIntervalometerSession.getTitle(),
-      });
-    } catch (error) {
-      logger.error("Failed to start intervalometer with title:", error);
       res.status(500).json(
         createApiError(error.message, {
           code: ErrorCodes.SYSTEM_ERROR,

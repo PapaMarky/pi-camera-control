@@ -706,6 +706,37 @@ export function createWebSocketHandler(
         return sendError(ws, "Invalid interval value");
       }
 
+      // Validate stopCondition (required)
+      if (!stopCondition) {
+        return sendError(
+          ws,
+          "stopCondition is required (valid values: unlimited, stop-after, stop-at)",
+        );
+      }
+
+      const validStopConditions = ["unlimited", "stop-after", "stop-at"];
+      if (!validStopConditions.includes(stopCondition)) {
+        return sendError(
+          ws,
+          `Invalid stopCondition: ${stopCondition}. Valid values: ${validStopConditions.join(", ")}`,
+        );
+      }
+
+      // Validate stopCondition-specific parameters
+      if (stopCondition === "stop-after" && (!shots || shots <= 0)) {
+        return sendError(
+          ws,
+          "shots parameter required for stop-after stopCondition",
+        );
+      }
+
+      if (stopCondition === "stop-at" && !stopTime) {
+        return sendError(
+          ws,
+          "stopTime parameter required for stop-at stopCondition",
+        );
+      }
+
       // Check if session is already running
       if (
         server.activeIntervalometerSession &&
@@ -812,6 +843,18 @@ export function createWebSocketHandler(
           completionData: errorData,
         });
       });
+
+      // Request time sync from client before starting session
+      if (timeSyncService && ws) {
+        logger.info(
+          "Requesting time sync from client before starting timelapse",
+        );
+        const clientIP =
+          ws._socket?.remoteAddress?.replace("::ffff:", "") || "unknown";
+        timeSyncService.requestClientTime(clientIP, ws);
+        // Wait briefly for sync to complete
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
 
       // Start the session
       await server.activeIntervalometerSession.start();

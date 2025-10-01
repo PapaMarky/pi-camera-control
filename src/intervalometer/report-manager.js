@@ -11,6 +11,7 @@ import { join } from "path";
 // import { dirname } from 'path'; // Unused import - TODO: remove if not needed
 import { randomUUID } from "crypto";
 import { logger } from "../utils/logger.js";
+import { toReportFormat } from "../utils/datetime.js";
 
 /**
  * Timelapse Report Manager
@@ -190,7 +191,7 @@ export class TimelapseReportManager {
       // Add/update metadata
       report.metadata = {
         ...report.metadata,
-        savedAt: new Date().toISOString(),
+        savedAt: toReportFormat(new Date()),
         version: report.metadata?.version || "1.0.0",
       };
 
@@ -309,7 +310,7 @@ export class TimelapseReportManager {
 
       // Update title
       report.title = newTitle.trim();
-      report.metadata.savedAt = new Date().toISOString();
+      report.metadata.savedAt = toReportFormat(new Date());
 
       // Save updated report
       const updatedReport = await this.saveReport(report);
@@ -369,7 +370,7 @@ export class TimelapseReportManager {
     try {
       const data = {
         ...unsavedSessionData,
-        savedAt: new Date().toISOString(),
+        savedAt: toReportFormat(new Date()),
       };
 
       await writeFile(

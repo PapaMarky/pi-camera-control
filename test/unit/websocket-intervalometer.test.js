@@ -18,6 +18,8 @@ const mockTimeSyncService = {
   }),
   handleClientDisconnection: jest.fn(() => {}),
   handleClientTimeResponse: jest.fn(async () => {}),
+  requestClientTime: jest.fn(() => {}), // Added for time sync before intervalometer start
+  broadcastSyncStatus: jest.fn(() => {}), // Added for broadcast after connection
   getStatus: jest.fn(() => ({
     synced: false,
     reliability: 'unknown',
@@ -289,11 +291,19 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 30,
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'Night Sky Test'
         }
       });
 
-      await messageHandler(Buffer.from(startMessage));
+      // Start the async handler (don't await yet)
+      const handlerPromise = messageHandler(Buffer.from(startMessage));
+
+      // Advance timers to handle the 500ms delay for time sync
+      await jest.advanceTimersByTimeAsync(600);
+
+      // Wait for handler to complete
+      await handlerPromise;
 
       expect(mockIntervalometerStateManager.createSession).toHaveBeenCalledWith(
         expect.any(Function),
@@ -304,6 +314,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         })
       );
 
+      expect(mockTimeSyncService.requestClientTime).toHaveBeenCalled();
       expect(mockSession.start).toHaveBeenCalled();
       expect(sentMessages).toHaveLength(1);
       expect(sentMessages[0].type).toBe('intervalometer_start');
@@ -320,11 +331,14 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 15,
           stopTime: '23:30',
+          stopCondition: 'stop-at',
           title: 'Sunset Session'
         }
       });
 
-      await messageHandler(Buffer.from(startMessage));
+      const handlerPromise = messageHandler(Buffer.from(startMessage));
+      await jest.advanceTimersByTimeAsync(600);
+      await handlerPromise;
 
       const createSessionCall = mockIntervalometerStateManager.createSession.mock.calls[0];
       const options = createSessionCall[1];
@@ -345,11 +359,14 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 15,
           stopTime: '01:00', // 1 AM (assuming test runs during day)
+          stopCondition: 'stop-at',
           title: 'Early Morning Session'
         }
       });
 
-      await messageHandler(Buffer.from(startMessage));
+      const handlerPromise = messageHandler(Buffer.from(startMessage));
+      await jest.advanceTimersByTimeAsync(600);
+      await handlerPromise;
 
       const createSessionCall = mockIntervalometerStateManager.createSession.mock.calls[0];
       const options = createSessionCall[1];
@@ -373,6 +390,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 30,
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'Should Fail'
         }
       });
@@ -399,11 +417,14 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 30,
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'New Session'
         }
       });
 
-      await messageHandler(Buffer.from(startMessage));
+      const handlerPromise = messageHandler(Buffer.from(startMessage));
+      await jest.advanceTimersByTimeAsync(600);
+      await handlerPromise;
 
       expect(oldSession.cleanup).toHaveBeenCalled();
       expect(mockIntervalometerStateManager.createSession).toHaveBeenCalled();
@@ -423,6 +444,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 1, // Too short
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'Should Fail'
         }
       });
@@ -478,11 +500,14 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         type: 'start_intervalometer',
         data: {
           interval: 30,
-          shots: 50
+          shots: 50,
+          stopCondition: 'stop-after'
         }
       });
 
-      await messageHandler(Buffer.from(legacyStartMessage));
+      const handlerPromise = messageHandler(Buffer.from(legacyStartMessage));
+      await jest.advanceTimersByTimeAsync(600);
+      await handlerPromise;
 
       // Should delegate to the title version
       // Note: title is not included in options when it's null/empty
@@ -510,11 +535,14 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 30,
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'Event Test'
         }
       });
 
-      await messageHandler(Buffer.from(startMessage));
+      const handlerPromise = messageHandler(Buffer.from(startMessage));
+      await jest.advanceTimersByTimeAsync(600);
+      await handlerPromise;
 
       // Verify event handlers were registered
       expect(mockSession.on).toHaveBeenCalledWith('started', expect.any(Function));
@@ -533,11 +561,14 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 30,
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'Event Test'
         }
       });
 
-      await messageHandler(Buffer.from(startMessage));
+      const handlerPromise = messageHandler(Buffer.from(startMessage));
+      await jest.advanceTimersByTimeAsync(600);
+      await handlerPromise;
 
       // Get the started event handler
       const startedHandler = mockSession.on.mock.calls.find(call => call[0] === 'started')[1];
@@ -563,11 +594,14 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 30,
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'Completion Test'
         }
       });
 
-      await messageHandler(Buffer.from(startMessage));
+      const handlerPromise = messageHandler(Buffer.from(startMessage));
+      await jest.advanceTimersByTimeAsync(600);
+      await handlerPromise;
 
       // Get the completed event handler
       const completedHandler = mockSession.on.mock.calls.find(call => call[0] === 'completed')[1];

@@ -1,6 +1,7 @@
 import { EventEmitter } from "events";
 import { logger } from "../utils/logger.js";
 import { TimelapseReportManager } from "./report-manager.js";
+import { toFilenameFormat, toReportFormat } from "../utils/datetime.js";
 
 /**
  * Centralized Intervalometer State Management
@@ -177,15 +178,7 @@ export class IntervalometerStateManager extends EventEmitter {
    * Generate default title based on current timestamp
    */
   generateDefaultTitle() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
-    const hours = String(now.getHours()).padStart(2, "0");
-    const minutes = String(now.getMinutes()).padStart(2, "0");
-    const seconds = String(now.getSeconds()).padStart(2, "0");
-
-    return `${year}${month}${day}-${hours}${minutes}${seconds}`;
+    return toFilenameFormat(new Date());
   }
 
   /**
@@ -447,8 +440,8 @@ export class IntervalometerStateManager extends EventEmitter {
       id: `report-${session.id}`,
       sessionId: session.id,
       title: session.title,
-      startTime: status.stats.startTime,
-      endTime: status.stats.endTime || now,
+      startTime: toReportFormat(status.stats.startTime),
+      endTime: toReportFormat(status.stats.endTime || now),
       duration: status.duration,
       status: completionData
         ? completionData.reason.includes("error")
@@ -461,7 +454,9 @@ export class IntervalometerStateManager extends EventEmitter {
         interval: status.options.interval,
         stopCondition: status.options.stopCondition || "unlimited",
         numberOfShots: status.options.totalShots,
-        stopAt: status.options.stopTime,
+        stopAt: status.options.stopTime
+          ? toReportFormat(status.options.stopTime)
+          : null,
       },
       cameraInfo: metadata.cameraInfo || null,
       cameraSettings: metadata.cameraSettings || null,
@@ -473,7 +468,7 @@ export class IntervalometerStateManager extends EventEmitter {
       },
       metadata: {
         completionReason: completionData?.reason || "Unknown",
-        savedAt: now,
+        savedAt: toReportFormat(now),
         version: "2.0.0",
         cameraModel: metadata.cameraInfo?.productname || "Unknown",
       },

@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { randomUUID } from "crypto";
 // import cron from 'node-cron'; // Unused import - TODO: implement scheduling features
 import { logger } from "../utils/logger.js";
+import { toFilenameFormat } from "../utils/datetime.js";
 
 /**
  * Enhanced Timelapse Session Class
@@ -71,17 +72,10 @@ export class TimelapseSession extends EventEmitter {
 
   /**
    * Generate default title based on creation timestamp
+   * Uses local time for user-friendly naming
    */
   generateDefaultTitle() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
-    const hours = String(now.getHours()).padStart(2, "0");
-    const minutes = String(now.getMinutes()).padStart(2, "0");
-    const seconds = String(now.getSeconds()).padStart(2, "0");
-
-    return `${year}${month}${day}-${hours}${minutes}${seconds}`;
+    return toFilenameFormat(new Date());
   }
 
   /**
@@ -315,7 +309,9 @@ export class TimelapseSession extends EventEmitter {
     this.emit("stopped", {
       sessionId: this.id,
       title: this.title,
+      reason: "Manually stopped by user",
       stats: { ...this.stats },
+      options: { ...this.options },
     });
 
     return true;
@@ -549,6 +545,7 @@ export class TimelapseSession extends EventEmitter {
       title: this.title,
       reason,
       stats: { ...this.stats },
+      options: { ...this.options },
     });
   }
 
@@ -575,6 +572,7 @@ export class TimelapseSession extends EventEmitter {
       title: this.title,
       reason,
       stats: { ...this.stats },
+      options: { ...this.options },
     });
   }
 

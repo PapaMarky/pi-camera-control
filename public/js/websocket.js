@@ -261,6 +261,14 @@ class WebSocketManager {
         this.emit('unsaved_session', data);
         break;
 
+      case 'session_saved':
+        this.emit('session_saved', data);
+        break;
+
+      case 'session_discarded':
+        this.emit('session_discarded', data);
+        break;
+
       case 'activity_log':
         // Handle activity log messages from TimeSync service
         this.handleActivityLog(data);

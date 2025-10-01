@@ -96,6 +96,10 @@ class TimelapseUI {
         this.loadReports(); // Refresh the list after saving
       });
 
+      this.wsManager.on('session_saved', (data) => {
+        this.handleSessionSaved(); // Hide completion page and show success
+      });
+
       this.wsManager.on('report_deleted', (data) => {
         this.loadReports(); // Refresh the list after deleting
       });
@@ -497,7 +501,7 @@ class TimelapseUI {
       <div class="completion-stats">
         <div class="completion-stat">
           <span class="stat-label">Duration:</span>
-          <span class="stat-value">${this.formatDuration(sessionData.stats?.endTime - sessionData.stats?.startTime || 0)}</span>
+          <span class="stat-value">${this.formatDuration(this.calculateDuration(sessionData.stats))}</span>
         </div>
         <div class="completion-stat">
           <span class="stat-label">Images Captured:</span>
@@ -508,7 +512,18 @@ class TimelapseUI {
           <span class="stat-value">${sessionData.stats?.shotsTaken ? Math.round((sessionData.stats.shotsSuccessful / sessionData.stats.shotsTaken) * 100) : 0}%</span>
         </div>
       </div>
-      
+
+      <div class="completion-stats">
+        <div class="completion-stat">
+          <span class="stat-label">Interval:</span>
+          <span class="stat-value">${sessionData.options?.interval || 0}s</span>
+        </div>
+        <div class="completion-stat">
+          <span class="stat-label">Stop Criteria:</span>
+          <span class="stat-value">${this.formatStopCriteria(sessionData.options)}</span>
+        </div>
+      </div>
+
       <div class="completion-reason">
         <strong>Reason:</strong> ${sessionData.reason || 'Unknown'}
       </div>
@@ -601,7 +616,19 @@ class TimelapseUI {
     this.unsavedSession = null;
     this.hideSessionCompletion();
     this.loadReports(); // Refresh reports list
-    this.switchToCard('timelapse-reports');
+    // Return to intervalometer page after saving
+    if (window.CameraUI && window.CameraUI.switchToCard) {
+      window.CameraUI.switchToCard('intervalometer');
+    } else {
+      // Fallback to showing the intervalometer card directly
+      document.querySelectorAll('.function-card').forEach(card => {
+        card.style.display = 'none';
+      });
+      const intervalometerCard = document.getElementById('intervalometer-card');
+      if (intervalometerCard) {
+        intervalometerCard.style.display = 'block';
+      }
+    }
     this.showSuccess('Session saved successfully');
   }
 
@@ -706,6 +733,52 @@ class TimelapseUI {
 
   formatTime(dateString) {
     return new Date(dateString).toLocaleTimeString();
+  }
+
+  /**
+   * Calculate duration in milliseconds from stats
+   */
+  calculateDuration(stats) {
+    if (!stats?.startTime || !stats?.endTime) {
+      return 0;
+    }
+    const start = new Date(stats.startTime).getTime();
+    const end = new Date(stats.endTime).getTime();
+    return Math.max(0, end - start);
+  }
+
+  /**
+   * Format stop criteria from options
+   */
+  formatStopCriteria(options) {
+    if (!options) {
+      return 'ERROR: No options data';
+    }
+
+    if (!options.stopCondition) {
+      return 'ERROR: Missing stopCondition (legacy session)';
+    }
+
+    // Use the stored stopCondition to determine what to display
+    switch (options.stopCondition) {
+      case 'stop-at':
+        if (options.stopTime) {
+          return `Stop at ${new Date(options.stopTime).toLocaleTimeString()}`;
+        }
+        return 'ERROR: stop-at selected but no stopTime';
+
+      case 'stop-after':
+        if (options.totalShots) {
+          return `${options.totalShots} shots`;
+        }
+        return 'ERROR: stop-after selected but no totalShots';
+
+      case 'unlimited':
+        return 'Unlimited (manual stop)';
+
+      default:
+        return `ERROR: Unknown stopCondition: ${options.stopCondition}`;
+    }
   }
 
   formatDuration(ms) {

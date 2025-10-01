@@ -247,6 +247,18 @@ const EventSchemas = {
     previousTime: 'string',
     newTime: 'string',
     offset: 'number?'
+  },
+
+  // Timelapse Session Events
+  session_saved: {
+    sessionId: 'string',
+    report: 'object',
+    message: 'string?'
+  },
+
+  session_discarded: {
+    sessionId: 'string',
+    message: 'string?'
   }
 };
 

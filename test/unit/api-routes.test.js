@@ -99,9 +99,56 @@ describe('API Routes Unit Tests', () => {
       }))
     };
 
+    // Mock intervalometer state manager (defined before mockServer)
+    mockIntervalometerStateManager = {
+      createSession: jest.fn(async () => ({
+        id: 'session-123',
+        start: jest.fn(async () => {}),
+        getStatus: jest.fn(() => ({
+          state: 'running',
+          progress: { shots: 10, total: 100 }
+        }))
+      })),
+      getSessionStatus: jest.fn(function() {
+        // Check mockServer for active session
+        if (mockServer && mockServer.activeIntervalometerSession) {
+          return mockServer.activeIntervalometerSession.getStatus();
+        }
+        return {
+          state: 'stopped',
+          message: 'No active intervalometer session'
+        };
+      }),
+      getReports: jest.fn(async () => [
+        { id: 'report-1', title: 'Test Report 1' },
+        { id: 'report-2', title: 'Test Report 2' }
+      ]),
+      getReport: jest.fn(async (id) =>
+        id === 'report-1' ? { id: 'report-1', title: 'Test Report 1' } : null
+      ),
+      updateReportTitle: jest.fn(async (id, title) => ({
+        id,
+        title,
+        updated: new Date().toISOString()
+      })),
+      deleteReport: jest.fn(async () => true),
+      getUnsavedSession: jest.fn(async () => null),
+      saveSessionAsReport: jest.fn(async () => true),
+      saveSessionReport: jest.fn(async () => ({
+        id: 'new-report',
+        title: 'Saved Session'
+      })),
+      discardSession: jest.fn(async () => true),
+      getState: jest.fn(() => ({
+        hasUnsavedSession: false,
+        currentSessionId: null
+      }))
+    };
+
     // Mock server
     mockServer = {
-      activeIntervalometerSession: null
+      activeIntervalometerSession: null,
+      intervalometerStateManager: mockIntervalometerStateManager
     };
 
     // Mock network state manager with serviceManager
@@ -157,39 +204,6 @@ describe('API Routes Unit Tests', () => {
       clearConnectionHistory: jest.fn(async () => ({ success: true }))
     };
 
-    // Mock intervalometer state manager
-    mockIntervalometerStateManager = {
-      createSession: jest.fn(async () => ({
-        id: 'session-123',
-        start: jest.fn(async () => {}),
-        getStatus: jest.fn(() => ({
-          state: 'running',
-          progress: { shots: 10, total: 100 }
-        }))
-      })),
-      getReports: jest.fn(async () => [
-        { id: 'report-1', title: 'Test Report 1' },
-        { id: 'report-2', title: 'Test Report 2' }
-      ]),
-      getReport: jest.fn(async (id) =>
-        id === 'report-1' ? { id: 'report-1', title: 'Test Report 1' } : null
-      ),
-      updateReportTitle: jest.fn(async (id, title) => ({
-        id,
-        title,
-        updated: new Date().toISOString()
-      })),
-      deleteReport: jest.fn(async () => true),
-      saveSessionReport: jest.fn(async () => ({
-        id: 'new-report',
-        title: 'Saved Session'
-      })),
-      discardSession: jest.fn(async () => true),
-      getState: jest.fn(() => ({
-        hasUnsavedSession: false,
-        currentSessionId: null
-      }))
-    };
 
     // Create router and mount it
     const apiRouter = createApiRouter(
@@ -463,7 +477,7 @@ describe('API Routes Unit Tests', () => {
         // So we need to set up the server's activeIntervalometerSession after creation
         const response = await request(app)
           .post('/api/intervalometer/start')
-          .send({ interval: 30, shots: 100 })
+          .send({ interval: 30, shots: 100, stopCondition: 'stop-after' })
           .expect(200);
 
         expect(response.body).toMatchObject({
@@ -475,12 +489,24 @@ describe('API Routes Unit Tests', () => {
         expect(mockServer.activeIntervalometerSession).toBeDefined();
       });
 
+      test('supports title parameter', async () => {
+        const response = await request(app)
+          .post('/api/intervalometer/start')
+          .send({ interval: 30, shots: 100, stopCondition: 'stop-after', title: 'Test Session' })
+          .expect(200);
+
+        expect(response.body).toMatchObject({
+          success: true,
+          message: 'Intervalometer started successfully'
+        });
+      });
+
       test('prevents starting when session already running', async () => {
         mockServer.activeIntervalometerSession = { state: 'running' };
 
         const response = await request(app)
           .post('/api/intervalometer/start')
-          .send({ interval: 30, shots: 100 })
+          .send({ interval: 30, shots: 100, stopCondition: 'stop-after' })
           .expect(400);
 
         expect(response.body).toHaveProperty('error');
