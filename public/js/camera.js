@@ -1597,16 +1597,19 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
 
   updateProgressDisplay(status) {
     try {
-      console.log('updateProgressDisplay called with:', status);
-      console.log('nextShotTime in status:', status.nextShotTime);
 
       // Safely get values with fallbacks
       const stats = status.stats || {};
       const options = status.options || {};
       const shotsTaken = stats.shotsTaken || 0;
       const totalShots = options.totalShots;
-      const successRate = status.successRate || 1;
-      const duration = status.duration || 0;
+
+      // Calculate success rate from stats
+      const successRate = shotsTaken > 0 ? (stats.shotsSuccessful || 0) / shotsTaken : 1;
+
+      // Calculate duration from start time
+      const startTime = stats.startTime ? new Date(stats.startTime) : new Date();
+      const duration = Math.max(0, Date.now() - startTime.getTime());
 
       // Update shots taken
       const shotsTakenEl = document.getElementById('shots-taken');
@@ -1636,12 +1639,12 @@ WebSocket: ${wsManager.connected ? 'Connected' : 'Disconnected'}
         progressFill.style.animation = 'pulse 2s infinite';
       }
 
-      // Calculate next shot countdown using exact timestamp
-      if (status.state === 'running' && status.nextShotTime) {
-        const nextShotTime = new Date(status.nextShotTime).getTime();
+      // Calculate next shot countdown using exact timestamp from stats
+      if (status.state === 'running' && stats.nextShotTime) {
+        const nextShotTime = new Date(stats.nextShotTime).getTime();
         const now = Date.now();
         const nextShotIn = Math.max(0, nextShotTime - now);
-        
+
         if (nextShotIn <= 1000) {
           document.getElementById('next-shot-countdown').textContent = 'Now';
         } else {

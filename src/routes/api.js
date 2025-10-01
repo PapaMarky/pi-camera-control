@@ -505,7 +505,7 @@ export function createApiRouter(
           shotsFailed: status.stats?.shotsFailed || status.stats?.failed || 0,
           currentShot:
             (status.stats?.shotsTaken || status.progress?.shots || 0) + 1,
-          nextShotTime: status.stats?.nextShotTime || null,
+          nextShotTime: status.nextShotTime || null,
         },
         options: {
           interval: status.options?.interval || 30,

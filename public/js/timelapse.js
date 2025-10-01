@@ -501,7 +501,7 @@ class TimelapseUI {
       <div class="completion-stats">
         <div class="completion-stat">
           <span class="stat-label">Duration:</span>
-          <span class="stat-value">${this.formatDuration(sessionData.stats?.endTime - sessionData.stats?.startTime || 0)}</span>
+          <span class="stat-value">${this.formatDuration(this.calculateDuration(sessionData.stats))}</span>
         </div>
         <div class="completion-stat">
           <span class="stat-label">Images Captured:</span>
@@ -512,7 +512,18 @@ class TimelapseUI {
           <span class="stat-value">${sessionData.stats?.shotsTaken ? Math.round((sessionData.stats.shotsSuccessful / sessionData.stats.shotsTaken) * 100) : 0}%</span>
         </div>
       </div>
-      
+
+      <div class="completion-stats">
+        <div class="completion-stat">
+          <span class="stat-label">Interval:</span>
+          <span class="stat-value">${sessionData.options?.interval || 0}s</span>
+        </div>
+        <div class="completion-stat">
+          <span class="stat-label">Stop Criteria:</span>
+          <span class="stat-value">${this.formatStopCriteria(sessionData.options)}</span>
+        </div>
+      </div>
+
       <div class="completion-reason">
         <strong>Reason:</strong> ${sessionData.reason || 'Unknown'}
       </div>
@@ -722,6 +733,35 @@ class TimelapseUI {
 
   formatTime(dateString) {
     return new Date(dateString).toLocaleTimeString();
+  }
+
+  /**
+   * Calculate duration in milliseconds from stats
+   */
+  calculateDuration(stats) {
+    if (!stats?.startTime || !stats?.endTime) {
+      return 0;
+    }
+    const start = new Date(stats.startTime).getTime();
+    const end = new Date(stats.endTime).getTime();
+    return Math.max(0, end - start);
+  }
+
+  /**
+   * Format stop criteria from options
+   */
+  formatStopCriteria(options) {
+    if (!options) {
+      return 'Unknown';
+    }
+
+    if (options.totalShots) {
+      return `${options.totalShots} shots`;
+    } else if (options.stopTime) {
+      return `Until ${new Date(options.stopTime).toLocaleTimeString()}`;
+    } else {
+      return 'Manual stop';
+    }
   }
 
   formatDuration(ms) {

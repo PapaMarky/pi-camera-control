@@ -813,6 +813,15 @@ export function createWebSocketHandler(
         });
       });
 
+      // Request time sync from client before starting session
+      if (timeSyncService && ws) {
+        logger.info("Requesting time sync from client before starting timelapse");
+        const clientIP = ws._socket?.remoteAddress?.replace("::ffff:", "") || "unknown";
+        timeSyncService.requestClientTime(clientIP, ws);
+        // Wait briefly for sync to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
       // Start the session
       await server.activeIntervalometerSession.start();
 

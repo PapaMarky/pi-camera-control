@@ -309,7 +309,9 @@ export class TimelapseSession extends EventEmitter {
     this.emit("stopped", {
       sessionId: this.id,
       title: this.title,
+      reason: "Manually stopped by user",
       stats: { ...this.stats },
+      options: { ...this.options },
     });
 
     return true;
@@ -543,6 +545,7 @@ export class TimelapseSession extends EventEmitter {
       title: this.title,
       reason,
       stats: { ...this.stats },
+      options: { ...this.options },
     });
   }
 
@@ -569,6 +572,7 @@ export class TimelapseSession extends EventEmitter {
       title: this.title,
       reason,
       stats: { ...this.stats },
+      options: { ...this.options },
     });
   }
 
