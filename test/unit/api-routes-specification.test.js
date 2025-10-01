@@ -57,9 +57,24 @@ describe('API Routes Specification Compliance Tests', () => {
     mockCameraController = jest.fn(() => mockControllerInstance);
     mockCameraController.instance = mockControllerInstance;
 
+    // Mock intervalometer state manager (must be defined before mockServer uses it)
+    mockIntervalometerStateManager = {
+      getSessionStatus: jest.fn(function() {
+        // Check mockServer for active session
+        if (mockServer && mockServer.activeIntervalometerSession) {
+          return mockServer.activeIntervalometerSession.getStatus();
+        }
+        return {
+          state: 'stopped',
+          message: 'No active intervalometer session'
+        };
+      })
+    };
+
     // Mock server with proper intervalometer session
     mockServer = {
-      activeIntervalometerSession: null
+      activeIntervalometerSession: null,
+      intervalometerStateManager: mockIntervalometerStateManager
     };
 
     // Mock network state manager with specification-compliant responses
@@ -85,11 +100,6 @@ describe('API Routes Specification Compliance Tests', () => {
           dnsmasq: { active: true }     // ← REQUIRED by specification
         }
       }))
-    };
-
-    // Mock intervalometer state manager
-    mockIntervalometerStateManager = {
-      // Not used in these tests - we test the legacy route behavior
     };
 
     // Create router

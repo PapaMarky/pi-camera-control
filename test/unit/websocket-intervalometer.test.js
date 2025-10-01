@@ -291,6 +291,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 30,
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'Night Sky Test'
         }
       });
@@ -330,6 +331,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 15,
           stopTime: '23:30',
+          stopCondition: 'stop-at',
           title: 'Sunset Session'
         }
       });
@@ -357,6 +359,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 15,
           stopTime: '01:00', // 1 AM (assuming test runs during day)
+          stopCondition: 'stop-at',
           title: 'Early Morning Session'
         }
       });
@@ -387,6 +390,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 30,
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'Should Fail'
         }
       });
@@ -413,6 +417,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 30,
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'New Session'
         }
       });
@@ -439,6 +444,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 1, // Too short
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'Should Fail'
         }
       });
@@ -494,7 +500,8 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         type: 'start_intervalometer',
         data: {
           interval: 30,
-          shots: 50
+          shots: 50,
+          stopCondition: 'stop-after'
         }
       });
 
@@ -528,6 +535,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 30,
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'Event Test'
         }
       });
@@ -553,6 +561,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 30,
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'Event Test'
         }
       });
@@ -585,6 +594,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
         data: {
           interval: 30,
           shots: 100,
+          stopCondition: 'stop-after',
           title: 'Completion Test'
         }
       });

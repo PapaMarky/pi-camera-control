@@ -549,6 +549,14 @@ export function createApiRouter(
     try {
       const status = server.intervalometerStateManager.getSessionStatus();
 
+      // If no active session, return minimal response
+      if (status.state === "stopped" && !status.stats) {
+        return res.json({
+          running: false,
+          state: "stopped",
+        });
+      }
+
       // Return specification-compliant response with required fields
       res.json({
         running: status.state === "running",
