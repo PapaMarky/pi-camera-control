@@ -96,6 +96,10 @@ class TimelapseUI {
         this.loadReports(); // Refresh the list after saving
       });
 
+      this.wsManager.on('session_saved', (data) => {
+        this.handleSessionSaved(); // Hide completion page and show success
+      });
+
       this.wsManager.on('report_deleted', (data) => {
         this.loadReports(); // Refresh the list after deleting
       });
@@ -601,7 +605,19 @@ class TimelapseUI {
     this.unsavedSession = null;
     this.hideSessionCompletion();
     this.loadReports(); // Refresh reports list
-    this.switchToCard('timelapse-reports');
+    // Return to intervalometer page after saving
+    if (window.CameraUI && window.CameraUI.switchToCard) {
+      window.CameraUI.switchToCard('intervalometer');
+    } else {
+      // Fallback to showing the intervalometer card directly
+      document.querySelectorAll('.function-card').forEach(card => {
+        card.style.display = 'none';
+      });
+      const intervalometerCard = document.getElementById('intervalometer-card');
+      if (intervalometerCard) {
+        intervalometerCard.style.display = 'block';
+      }
+    }
     this.showSuccess('Session saved successfully');
   }
 
