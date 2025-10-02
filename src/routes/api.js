@@ -13,6 +13,7 @@ export function createApiRouter(
   networkStateManager,
   discoveryManager,
   intervalometerStateManager,
+  liveViewManager,
 ) {
   const router = Router();
 
@@ -122,6 +123,157 @@ export function createApiRouter(
           code: ErrorCodes.SYSTEM_ERROR,
           component: Components.API_ROUTER,
           operation: "getCameraDateTime",
+        }),
+      );
+    }
+  });
+
+  // Live View capture - capture a preview image from camera
+  router.post("/camera/liveview/capture", async (req, res) => {
+    try {
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "captureLiveView",
+          }),
+        );
+      }
+
+      const capture = await liveViewManager.captureImage();
+      res.json(capture);
+    } catch (error) {
+      logger.error("Failed to capture live view image:", error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.PHOTO_FAILED,
+          component: Components.API_ROUTER,
+          operation: "captureLiveView",
+        }),
+      );
+    }
+  });
+
+  // List all live view captures
+  router.get("/camera/liveview/images", (req, res) => {
+    try {
+      const captures = liveViewManager.listCaptures();
+      res.json({ captures });
+    } catch (error) {
+      logger.error("Failed to list live view captures:", error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "listLiveViewCaptures",
+        }),
+      );
+    }
+  });
+
+  // Get specific live view capture metadata by ID
+  router.get("/camera/liveview/images/:id", (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json(
+          createApiError("Invalid capture ID", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "getLiveViewCapture",
+          }),
+        );
+      }
+
+      const capture = liveViewManager.getCapture(id);
+      if (!capture) {
+        return res.status(404).json(
+          createApiError("Capture not found", {
+            code: ErrorCodes.SESSION_NOT_FOUND,
+            component: Components.API_ROUTER,
+            operation: "getLiveViewCapture",
+          }),
+        );
+      }
+
+      res.json(capture);
+    } catch (error) {
+      logger.error("Failed to get live view capture:", error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "getLiveViewCapture",
+        }),
+      );
+    }
+  });
+
+  // Serve live view image file
+  router.get("/camera/liveview/images/:id/file", (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json(
+          createApiError("Invalid capture ID", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "getLiveViewImageFile",
+          }),
+        );
+      }
+
+      const capture = liveViewManager.getCapture(id);
+      if (!capture) {
+        return res.status(404).json(
+          createApiError("Capture not found", {
+            code: ErrorCodes.SESSION_NOT_FOUND,
+            component: Components.API_ROUTER,
+            operation: "getLiveViewImageFile",
+          }),
+        );
+      }
+
+      res.sendFile(capture.filepath, (err) => {
+        if (err) {
+          logger.error("Failed to send live view image file:", err);
+          if (!res.headersSent) {
+            res.status(404).json(
+              createApiError("Image file not found", {
+                code: ErrorCodes.SESSION_NOT_FOUND,
+                component: Components.API_ROUTER,
+                operation: "getLiveViewImageFile",
+              }),
+            );
+          }
+        }
+      });
+    } catch (error) {
+      logger.error("Failed to serve live view image:", error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "getLiveViewImageFile",
+        }),
+      );
+    }
+  });
+
+  // Clear all live view captures
+  router.delete("/camera/liveview/clear", async (req, res) => {
+    try {
+      await liveViewManager.clearAll();
+      res.json({ success: true, message: "All live view captures cleared" });
+    } catch (error) {
+      logger.error("Failed to clear live view captures:", error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "clearLiveViewCaptures",
         }),
       );
     }
