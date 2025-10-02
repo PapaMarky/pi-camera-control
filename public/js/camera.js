@@ -615,8 +615,8 @@ class CameraManager {
   }
 
   async updateCameraConfiguration() {
-    const ipInput = document.getElementById('camera-ip');
-    const portInput = document.getElementById('camera-port');
+    const ipInput = document.getElementById('camera-ip-config');
+    const portInput = document.getElementById('camera-port-config');
     
     const ip = ipInput.value.trim();
     const port = portInput.value.trim() || '443';
@@ -667,8 +667,8 @@ class CameraManager {
 
   populateCameraConfigForm() {
     // Get current camera status to populate form with current IP
-    const ipInput = document.getElementById('camera-ip');
-    const portInput = document.getElementById('camera-port');
+    const ipInput = document.getElementById('camera-ip-config');
+    const portInput = document.getElementById('camera-port-config');
     
     if (this.status && this.status.ip) {
       ipInput.value = this.status.ip;
