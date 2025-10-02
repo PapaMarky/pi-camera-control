@@ -185,6 +185,7 @@ Format: YYYYMMDD_HHMMSS_<original_name>
 - Simple on-demand polling: Start poll → Take photo → Wait for `addedcontents` → Stop poll
 - No correlation complexity: Camera takes one photo at a time, so next `addedcontents` is our photo
 - Simple error handling: Timeout after reasonable period (30s?), report to user
+  - **User input** There is a minimum shutter speed. I think it is 30s but we should check the settings documentation. We should add 5s for a safety margin. Eventually we can test by setting shutter speed to the longest value, taking pictures and seeing how much pad we need.
 
 **Recommendation**: Implement as described - much simpler than initially planned. Provides photo completion time and file path.
 
@@ -742,7 +743,8 @@ GET    /api/camera/photos/test/:id      // Download specific photo
 - ✅ User feedback incorporated
 - ✅ Plan restructured for MVP-first approach
 - ✅ Simplified complexity based on user clarifications
-- **Next**: Begin Phase 0 CCAPI research
+- ✅ Phase 0 research infrastructure created
+- **Next**: Execute Phase 0 research on Pi
 
 **Key Decisions Made**:
 - Simple on-demand event polling (not continuous)
@@ -751,4 +753,10 @@ GET    /api/camera/photos/test/:id      // Download specific photo
 - Manual settings save with Apply button
 - MVP in ~1 week, iterate after testing
 
-**Ready to proceed with Phase 0**
+**Phase 0 Research Ready**:
+- ✅ Research script created: `scripts/phase0-research.js`
+- ✅ Report template created: `docs/phase0-ccapi-research.md`
+- ✅ EXIF library installed: `exifr@7.1.3`
+- ⏳ PENDING: Execute research on Pi with camera
+- ⏳ PENDING: Analyze results and update report
+- ⏳ PENDING: Make go/no-go decision for Phase 1
