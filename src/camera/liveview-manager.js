@@ -193,6 +193,39 @@ export class LiveViewManager {
   }
 
   /**
+   * Delete a specific capture by ID
+   * @param {number} id - Capture ID to delete
+   * @returns {Promise<boolean>} True if deleted, false if not found
+   */
+  async deleteCapture(id) {
+    const capture = this.captures.find((c) => c.id === id);
+
+    if (!capture) {
+      logger.warn('Capture not found for deletion', { id });
+      return false;
+    }
+
+    logger.info('Deleting live view capture', { id, filepath: capture.filepath });
+
+    // Remove from captures list
+    this.captures = this.captures.filter((c) => c.id !== id);
+
+    // Delete file from disk
+    try {
+      await fs.unlink(capture.filepath);
+      logger.info('Live view capture deleted', { id });
+    } catch (error) {
+      logger.warn('Failed to delete capture file (non-critical)', {
+        id,
+        filepath: capture.filepath,
+        error: error.message,
+      });
+    }
+
+    return true;
+  }
+
+  /**
    * Clear all captures
    * Note: For MVP, this clears the list and optionally deletes files
    * @returns {Promise<void>}

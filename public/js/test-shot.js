@@ -110,6 +110,33 @@ class TestShotUI {
     }
   }
 
+  async deleteImage(id) {
+    console.log('TestShotUI: Delete image clicked', id);
+
+    if (!confirm('Delete this image?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/camera/liveview/images/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Remove from local captures list
+      this.captures = this.captures.filter(c => c.id !== id);
+      this.renderGallery();
+      console.log('TestShotUI: Image deleted', id);
+
+    } catch (error) {
+      console.error('TestShotUI: Delete failed:', error);
+      alert(`Failed to delete: ${error.message}`);
+    }
+  }
+
   renderGallery() {
     console.log('TestShotUI: Rendering gallery with', this.captures.length, 'images');
 
@@ -124,16 +151,23 @@ class TestShotUI {
       return;
     }
 
-    // Simple list of images
-    gallery.innerHTML = this.captures.map(capture => `
+    // Simple list of images with delete buttons (newest first)
+    gallery.innerHTML = this.captures.slice().reverse().map(capture => `
       <div style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
         <img src="/api/camera/liveview/images/${capture.id}/file"
              style="max-width: 100%; height: auto; cursor: pointer;"
              onclick="window.open(this.src, '_blank')"
              alt="Live view ${capture.id}">
-        <p style="margin-top: 0.5rem; font-size: 0.875rem; color: #666;">
-          ID: ${capture.id} | ${new Date(capture.timestamp).toLocaleString()}
-        </p>
+        <div style="margin-top: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+          <p style="margin: 0; font-size: 0.875rem; color: #666;">
+            ID: ${capture.id} | ${new Date(capture.timestamp).toLocaleString()}
+          </p>
+          <button onclick="window.testShotUI.deleteImage(${capture.id})"
+                  style="background: rgba(220, 53, 69, 0.9); color: white; border: none; border-radius: 4px; padding: 0.25rem 0.5rem; cursor: pointer; font-size: 0.875rem;"
+                  title="Delete this image">
+            🗑️ Delete
+          </button>
+        </div>
       </div>
     `).join('');
   }

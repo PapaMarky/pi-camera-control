@@ -262,6 +262,44 @@ export function createApiRouter(
     }
   });
 
+  // Delete a specific live view capture
+  router.delete("/camera/liveview/images/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json(
+          createApiError("Invalid capture ID", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "deleteLiveViewCapture",
+          }),
+        );
+      }
+
+      const deleted = await liveViewManager.deleteCapture(id);
+      if (!deleted) {
+        return res.status(404).json(
+          createApiError("Capture not found", {
+            code: ErrorCodes.SESSION_NOT_FOUND,
+            component: Components.API_ROUTER,
+            operation: "deleteLiveViewCapture",
+          }),
+        );
+      }
+
+      res.json({ success: true, message: "Live view capture deleted", id });
+    } catch (error) {
+      logger.error("Failed to delete live view capture:", error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "deleteLiveViewCapture",
+        }),
+      );
+    }
+  });
+
   // Clear all live view captures
   router.delete("/camera/liveview/clear", async (req, res) => {
     try {
