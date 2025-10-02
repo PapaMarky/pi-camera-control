@@ -205,6 +205,9 @@ class TimelapseUI {
           <button class="view-report-btn icon-btn" data-report-id="${report.id}" title="View details">
             <span class="btn-icon">👁️</span>
           </button>
+          <button class="delete-report-btn icon-btn danger" data-report-id="${report.id}" title="Delete report">
+            <span class="btn-icon">🗑️</span>
+          </button>
         </div>
       </div>
     `).join('');
@@ -214,6 +217,19 @@ class TimelapseUI {
       btn.addEventListener('click', (e) => {
         const reportId = e.currentTarget.dataset.reportId;
         this.viewReport(reportId);
+      });
+    });
+
+    // Add click handlers for delete buttons
+    listElement.querySelectorAll('.delete-report-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const reportId = e.currentTarget.dataset.reportId;
+        const reportItem = e.currentTarget.closest('.report-item');
+        const reportTitle = reportItem.querySelector('.report-title').textContent;
+
+        if (confirm(`Are you sure you want to delete "${reportTitle}"? This action cannot be undone.`)) {
+          this.deleteReportById(reportId);
+        }
       });
     });
   }
@@ -430,12 +446,12 @@ class TimelapseUI {
   async deleteReportById(reportId) {
     try {
       if (this.wsManager && this.wsManager.isConnected()) {
-        this.wsManager.send('delete_timelapse_report', { reportId });
+        this.wsManager.send('delete_timelapse_report', { id: reportId });
       } else {
         const response = await fetch(`/api/timelapse/reports/${reportId}`, {
           method: 'DELETE'
         });
-        
+
         if (response.ok) {
           this.showReportsList();
           this.loadReports(); // Refresh the list
@@ -616,17 +632,17 @@ class TimelapseUI {
     this.unsavedSession = null;
     this.hideSessionCompletion();
     this.loadReports(); // Refresh reports list
-    // Return to intervalometer page after saving
+    // Navigate to timelapse reports page after saving
     if (window.CameraUI && window.CameraUI.switchToCard) {
-      window.CameraUI.switchToCard('intervalometer');
+      window.CameraUI.switchToCard('timelapse-reports');
     } else {
-      // Fallback to showing the intervalometer card directly
+      // Fallback to showing the timelapse reports card directly
       document.querySelectorAll('.function-card').forEach(card => {
         card.style.display = 'none';
       });
-      const intervalometerCard = document.getElementById('intervalometer-card');
-      if (intervalometerCard) {
-        intervalometerCard.style.display = 'block';
+      const reportsCard = document.getElementById('timelapse-reports-card');
+      if (reportsCard) {
+        reportsCard.style.display = 'block';
       }
     }
     this.showSuccess('Session saved successfully');

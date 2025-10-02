@@ -184,13 +184,7 @@ class CameraControlApp {
             cameraManager.getCameraSettings();
           }
           break;
-          
-        case 'v': // V - validate interval
-          if (!document.getElementById('validate-interval-btn').disabled) {
-            cameraManager.validateInterval();
-          }
-          break;
-          
+
         case 'i': // I - start intervalometer
           if (!document.getElementById('start-intervalometer-btn').disabled) {
             cameraManager.startIntervalometer();

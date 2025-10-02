@@ -323,20 +323,23 @@ class WebSocketManager {
   }
 
   handleTimeSyncRequest(message) {
+    console.log('WebSocket: Handling time-sync-request', message);
     const { requestId } = message;
 
     // Get current client time and timezone
     const clientTime = new Date().toISOString();
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+    console.log('WebSocket: Preparing time sync response', { clientTime, timezone, requestId });
+
     // Respond with client time
-    this.send('time-sync-response', {
+    const sent = this.send('time-sync-response', {
       clientTime,
       timezone,
       requestId
     });
 
-    console.log('Sent time sync response to server');
+    console.log('WebSocket: Time sync response sent:', sent);
   }
 
   // Event emitter functionality
@@ -385,10 +388,6 @@ class WebSocketManager {
 
   getCameraSettings() {
     return this.send('get_camera_settings');
-  }
-
-  validateInterval(interval) {
-    return this.send('validate_interval', { interval });
   }
 
   startIntervalometer(options) {

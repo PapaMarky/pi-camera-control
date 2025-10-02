@@ -472,21 +472,7 @@ describe('WebSocket Handler Unit Tests', () => {
       expect(sentMessages[0].error.message).toBe('Network management not available');
     });
 
-    test('handles validation failure', async () => {
-      const messageHandler = mockWebSocket.on.mock.calls.find(call => call[0] === 'message')[1];
-
-      const validateMessage = JSON.stringify({
-        type: 'validate_interval',
-        data: { interval: 2 } // Too short
-      });
-
-      await messageHandler(Buffer.from(validateMessage));
-
-      expect(sentMessages).toHaveLength(1);
-      expect(sentMessages[0].type).toBe('interval_validation');
-      expect(sentMessages[0].data.valid).toBe(false);
-      expect(sentMessages[0].data.error).toBe('Interval too short');
-    });
+    // validate_interval test removed - validation now happens automatically during intervalometer start
   });
 
   describe('Status Broadcasting', () => {

@@ -428,46 +428,7 @@ describe('API Routes Unit Tests', () => {
       });
     });
 
-    describe('POST /api/camera/validate-interval', () => {
-      test('validates interval successfully', async () => {
-        const response = await request(app)
-          .post('/api/camera/validate-interval')
-          .send({ interval: 30 })
-          .expect(200);
-
-        expect(response.body).toEqual({
-          valid: true,
-          error: null,
-          recommendedMin: 5
-        });
-
-        expect(mockCameraController.instance.validateInterval).toHaveBeenCalledWith(30);
-      });
-
-      test('handles invalid interval', async () => {
-        const response = await request(app)
-          .post('/api/camera/validate-interval')
-          .send({ interval: 2 })
-          .expect(200);
-
-        expect(response.body).toEqual({
-          valid: false,
-          error: 'Interval too short',
-          recommendedMin: 5
-        });
-      });
-
-      test('validates interval parameter', async () => {
-        const response = await request(app)
-          .post('/api/camera/validate-interval')
-          .send({})
-          .expect(400);
-
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Invalid interval value');
-      });
-    });
+    // validate-interval endpoint removed - validation now happens automatically during intervalometer start
   });
 
   describe('Intervalometer Routes', () => {
