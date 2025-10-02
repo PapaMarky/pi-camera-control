@@ -452,18 +452,29 @@ GET    /api/camera/photos/test/:id      // Download specific photo
 
 ---
 
-### Phase 2: MVP Frontend - Test Shot View (2-3 days)
-**Agent**: frontend-guardian
+### Phase 2: MVP Frontend - Test Shot View (2-3 days) ✅ COMPLETE
+**Agent**: frontend-guardian (manual implementation after auto-generation failed)
 **Goal**: Simple working UI to capture and view live view images
+**Status**: ✅ Complete (2025-10-02)
+**Actual Time**: ~2 hours (including debugging and Pi testing)
+
+**What Was Built**:
+- ✅ TestShotUI module with safe initialization pattern
+- ✅ Live view capture with visual feedback
+- ✅ Simple gallery with click-to-open fullscreen
+- ✅ Clear all functionality with confirmation
+- ✅ Fixed defensive DOM element checks in camera.js
+- ✅ Successful deployment and field testing on Pi
 
 **MVP Test Shot Card** (Minimal):
 - **File**: `public/js/test-shot.js`
 - **Features**:
   - "Capture Live View" button
   - Display captured images in simple list/grid
-  - Click image to view larger
-  - "Clear All" button
+  - Click image to view larger (opens in new tab)
+  - "Clear All" button with confirmation
   - Show basic error messages
+  - Buttons enable/disable with camera connection state
 
 **MVP HTML Structure**:
 ```html
@@ -756,6 +767,35 @@ GET    /api/camera/photos/test/:id      // Download specific photo
 
 ## Status Updates
 
+### 2025-10-02 - Phase 2 MVP Frontend Complete
+- ✅ Phase 0: CCAPI research complete (~30 minutes)
+- ✅ Phase 1: Backend MVP complete (~2 hours)
+- ✅ Phase 2: Frontend MVP complete (~2 hours)
+- **Next**: Phase 3 - MVP Integration & First Test
+
+**Phase 2 Achievements**:
+- ✅ TestShotUI module with safe initialization
+- ✅ Live view capture working (~3 seconds)
+- ✅ Gallery display with click-to-open functionality
+- ✅ Fixed null pointer errors in camera.js with defensive checks
+- ✅ Successfully tested on Pi hardware
+- ✅ All functionality working without errors
+
+**Key Lessons from Phase 2**:
+- Auto-generated frontend code broke existing UI - manual incremental approach safer
+- Defensive DOM element checks crucial for robustness
+- Simple inline styles sufficient for MVP
+- Direct API calls via fetch() simpler than WebSocket for MVP
+- Field testing on Pi essential to catch integration issues
+
+**Phase 3 Success Criteria**:
+- [ ] Can capture live view image
+- [ ] Image displays in UI
+- [ ] Fullscreen viewer works (opens in new tab)
+- [ ] Clear all works
+- [ ] No crashes/exceptions
+- **Status**: All criteria met during Phase 2 testing ✅
+
 ### 2025-10-02 - MVP Plan Complete
 - ✅ Feature specification analyzed
 - ✅ 7 critical issues identified and resolved with user feedback
@@ -763,7 +803,6 @@ GET    /api/camera/photos/test/:id      // Download specific photo
 - ✅ Plan restructured for MVP-first approach
 - ✅ Simplified complexity based on user clarifications
 - ✅ Phase 0 research infrastructure created
-- **Next**: Execute Phase 0 research on Pi
 
 **Key Decisions Made**:
 - Simple on-demand event polling (not continuous)
@@ -771,11 +810,3 @@ GET    /api/camera/photos/test/:id      // Download specific photo
 - No cleanup initially - observe usage
 - Manual settings save with Apply button
 - MVP in ~1 week, iterate after testing
-
-**Phase 0 Research Ready**:
-- ✅ Research script created: `scripts/phase0-research.js`
-- ✅ Report template created: `docs/phase0-ccapi-research.md`
-- ✅ EXIF library installed: `exifr@7.1.3`
-- ⏳ PENDING: Execute research on Pi with camera
-- ⏳ PENDING: Analyze results and update report
-- ⏳ PENDING: Make go/no-go decision for Phase 1
