@@ -6,9 +6,29 @@
 
 ## Executive Summary
 
-This document provides a comprehensive analysis of the Test Shot feature specification and outlines the implementation plan. The feature is complex and requires significant research, new backend infrastructure, and extensive frontend development.
+This document provides analysis of the Test Shot feature specification and an MVP-first implementation plan.
 
-**Critical Finding**: The specification contains several unresolved questions and potential architecture decisions that MUST be answered before implementation can proceed.
+**Strategy**: Build minimal working prototype in ~1 week, test with real camera, then iterate based on actual usage experience.
+
+**MVP Scope** (Phases 0-3, ~6-9 days):
+- Capture live view images from camera
+- Display images in simple gallery
+- View fullscreen
+- Basic error handling
+- **Goal**: Working feature to gather real usage feedback
+
+**Post-MVP Iterations** (Phases 4-6, ~6-9 days):
+- Add features based on MVP experience
+- Settings display and editing
+- Test photo capture with EXIF
+- Polish and documentation
+
+**Key Simplifications from User Feedback**:
+- Event polling: Simple on-demand only (not continuous)
+- File naming: User's original simple format (no sequence numbers)
+- Photo correlation: Obvious (camera takes one at a time)
+- Storage: No cleanup initially, observe usage first
+- Settings UI: Manual save with Apply button
 
 ---
 
@@ -34,7 +54,23 @@ This document provides a comprehensive analysis of the Test Shot feature specifi
 - How frequently should we poll? (CCAPI polling is blocking with `continue=on`)
 - What events do we care about besides mode changes?
 
-**Recommendation**: Implement CCAPI event polling in the backend, broadcast camera state changes via existing WebSocket infrastructure. This maintains architectural consistency.
+**User Input**
+- I was only suggesting that we poll the camera settings while on the Camera Settings page because the settings might be 
+  changed on the camera and we might want to update the settings screen to reflect changes on the camera or at least 
+  warn the user of the changes on the camera.
+- Because polling for setting changes is blocking wrt the camera (NOTE we should confirm this assumption. The camera 
+  might allow a polling connection and a control connection), we should 
+  only enable the polling when we are on the settings screen. (ie start when we enter the screen, stop when
+  we leave.)
+- We should poll CCAPI events and broadcast them via WebSocket? (Recommended)
+  - We may want polling to happen in a separate thread so that the entire server is not blocked while we are polling.
+  - This might already be how things work. I didn't check.
+
+**Updated Recommendation Based on User Feedback**:
+- **For Photo Capture**: Simple on-demand polling - start poll, take photo, wait for `addedcontents`, stop poll
+- **For Settings Page** (Optional/Future): Start polling on page enter, stop on page exit to detect external camera changes
+- **Threading**: Ensure polling runs in separate async context to avoid blocking server
+- **Phase 0 Task**: Test if polling blocks camera operations (can camera handle simultaneous poll + control?)
 
 ---
 
@@ -45,11 +81,18 @@ This document provides a comprehensive analysis of the Test Shot feature specifi
 
 **Questions**:
 - How do we measure "responsive enough"? What's the acceptable latency?
+  - **User Input** This is for user interface not device control, so "Acceptable" would be fast enough that it is not 
+    annoying to the user. I think for the first version of the feature we should use the unsaved changes indicator to 
+    make it obvious to the user that the currently entered settings have not been sent to the camera yet.
 - Should there be an "unsaved changes" indicator or not?
+  - **User Input** See above.
 - What happens if settings change fails mid-update?
+  - **User Input** We show an error to the user and leave the page dirty.
 - How do we handle conflicts between user changes and camera mode changes?
+  - **User Input** The same way we handle any failure: we inform the user and let them decide what to do.
 
 **Recommendation**: Start with **manual save** approach (safer, clearer UX). Can optimize to immediate update after field testing shows it's reliable.
+- **User Input** I agree.
 
 ---
 
@@ -68,6 +111,7 @@ This document provides a comprehensive analysis of the Test Shot feature specifi
 - Scroll/multipart are for continuous preview (more like video), not needed for still image comparison
 
 **Recommendation**: Use flip method for manual test shots. May need scroll for "live image on settings page" (Line 15) if implemented.
+- **User Input** I agree.
 
 ---
 
@@ -80,19 +124,29 @@ This document provides a comprehensive analysis of the Test Shot feature specifi
 
 **Additional Questions**:
 - What if two photos have same timestamp (burst mode, intervalometer)?
+  - **User Input** The camera will not create two sequential images with the same name. The camera creates images
+    with a 4 digit number that increases with each image created. When the 4 digits are used up (9999) the camera
+    creates a new directory (with a 3 digit increasing number in the name). New images go into the new directory.
+    The datetime plus the image name with 4 digits is more than sufficient for our needs. 
 - Should we use the camera's timestamp or download timestamp?
+  - **User Input** As I said in my document: `YYYYMMDD_HHMMSS_<imagefile name> where the timestamp comes from the metadata in the image file indicating when the photo was taken. If the metadata does not include a timestamp, use the download time with a "dl" appended.`
 - Where do we store these files? `/data/test-shots/`?
+  - That would be fine. Anywhere as long as it is a well known location
 - Do we have a cleanup strategy? (Disk space management)
+  - **User Input**
+    - I am using a 256 Gb SD card in the pi. We should consider this eventually, but it is not an urgent need. 
+    - I would recommend: Delete any image files older than N days old where N is configurable by the user (but that requires a new configuration feature which we have not planned yet.)
 
-**Recommendation**:
+**Updated Recommendation Based on User Feedback**:
 ```
-Format: YYYYMMDD_HHMMSS_NNN_<original_name>
-- YYYYMMDD_HHMMSS from EXIF timestamp
-- NNN = sequence number for collisions
+Format: YYYYMMDD_HHMMSS_<original_name>
+- YYYYMMDD_HHMMSS from EXIF timestamp (photo capture time)
+- If EXIF missing: YYYYMMDD_HHMMSS_dl_<original_name> (download time)
+- Camera's 4-digit numbering + directory structure prevents collisions
 - Store in /data/test-shots/liveview/ and /data/test-shots/photos/
-- Auto-cleanup: delete files older than 7 days OR when total > 100 images
+- NO auto-cleanup initially - observe actual usage first
+- Future: Configurable age-based cleanup (N days)
 ```
-
 ---
 
 #### Issue 5: Settings Organization - Needs Research
@@ -114,6 +168,8 @@ Format: YYYYMMDD_HHMMSS_NNN_<original_name>
 - Advanced: drive, flash, aeb, wbshift, etc.
 
 **Recommendation**: Create settings taxonomy after mode research is complete.
+- **User Input** I agree
+  - Note that my list (M, Av, Tv, P, etc.) refers to the setting of the physical shootingmodedial on the camera. There is an api for ignoring the shooting mode dial that we also need to research more.
 
 ---
 
@@ -125,12 +181,12 @@ Format: YYYYMMDD_HHMMSS_NNN_<original_name>
 2. File path in `addedcontents` field
 3. Better synchronization for intervalometer
 
-**Complexity**:
-- Requires continuous event polling loop in backend
-- Need to correlate `addedcontents` events with photo requests
-- More complex error handling (timeout if event never arrives)
+**Updated Complexity Based on User Feedback**:
+- Simple on-demand polling: Start poll → Take photo → Wait for `addedcontents` → Stop poll
+- No correlation complexity: Camera takes one photo at a time, so next `addedcontents` is our photo
+- Simple error handling: Timeout after reasonable period (30s?), report to user
 
-**Recommendation**: Good idea - implement this. Provides valuable telemetry for intervalometer timing improvements.
+**Recommendation**: Implement as described - much simpler than initially planned. Provides photo completion time and file path.
 
 ---
 
@@ -140,8 +196,11 @@ Format: YYYYMMDD_HHMMSS_NNN_<original_name>
 **Questions**:
 - Use EXIF parsing library (which one)?
 - What settings are we extracting? (ISO, shutter, aperture, WB, etc.)
+  - **User input** We can get a list of what is available from sample images and decide what we want or don't want. Generally it will match the settings we set in Camera Settings. The same settings we show with the Live View.
 - How do we display them in UI?
+  - **User input** The same way we show them in Live View. 
 - What if EXIF data is missing or corrupted?
+  - **User input** Like any other failure, we report the failure to the user.
 
 **Recommendation**: Use `exifr` npm package - lightweight, well-maintained. Extract: ISO, Shutter Speed, Aperture, WB, Focus Mode, Timestamp, Camera Model.
 
@@ -150,12 +209,19 @@ Format: YYYYMMDD_HHMMSS_NNN_<original_name>
 ### 📋 Missing Requirements
 
 1. **Error Handling**: What happens when live view fails? Camera disconnects mid-session?
+   2. **User input** Report the error to the user just like we do with every other error. 
 2. **Concurrent Usage**: Can multiple users access Test Shot simultaneously?
+   3. **User input** This would be a nice to have, but in this hobbyist system it should never be a problem.
 3. **Session Persistence**: Do test shot images survive server restart?
+   4. **User input** yes.
 4. **Storage Limits**: Max number of images? Max storage per session?
+   5. **User input** Once we get the basics working and get a feel for actual storage usage we can revisit this.
 5. **Image Size Override**: Document mentions "lowest size/quality" for test photos (line 34-36) - what are the actual CCAPI values?
+   6. **User input** RTFM
 6. **Navigation Flow**: How does user get back from fullscreen view? Back button? Swipe?
+   7. **User input** Swipe would be best, but ESC on desktop or even just a tap / click near the center of the image.
 7. **Mobile Optimization**: Touch gestures? Pinch to zoom in fullscreen?
+   8. **User input** those would be great features. Once we get the basics working, lets explore them.
 
 ---
 
@@ -172,21 +238,27 @@ Format: YYYYMMDD_HHMMSS_NNN_<original_name>
 7. POST /shooting/liveview {"liveviewsize": "off"} when done
 ```
 
-### Photo Workflow with Event Polling
+### Photo Workflow with Event Polling (Updated)
 ```
-1. Start event polling loop: GET /event/polling?continue=on
-2. User clicks "Take Photo"
-3. Temporarily override size/quality settings:
+1. User clicks "Take Photo"
+2. Temporarily override size/quality settings:
    - GET /shooting/settings/stillimagequality
-   - PUT /shooting/settings/stillimagequality {value: "small_fine"}
-4. POST /shooting/control/shutterbutton {af: true}
+   - PUT /shooting/settings/stillimagequality {value: "<smallest_value_from_phase0>"}
+3. Start event polling: GET /event/polling?continue=on
+4. POST /shooting/control/shutterbutton {af: <value_from_camera_settings>}
 5. Wait for event polling to return addedcontents: [...]
-6. Download photo from URL in addedcontents[0]
-7. Restore previous quality settings
-8. Extract EXIF metadata
-9. Rename file with timestamp prefix
-10. Broadcast to clients
+6. Stop event polling
+7. Download photo from URL in addedcontents[0]
+8. Restore previous quality settings
+9. Extract EXIF metadata
+10. Rename file: YYYYMMDD_HHMMSS_<original> (timestamp from EXIF)
+11. Broadcast to WebSocket: {id, url, metadata} - clients request image via GET
 ```
+
+**Clarifications**:
+- AF setting from current camera settings (not hardcoded true)
+- Broadcast metadata + URL, not full image data
+- Clients download image via GET request when needed
 
 ### Settings Query Workflow
 ```
@@ -201,20 +273,21 @@ Format: YYYYMMDD_HHMMSS_NNN_<original_name>
 
 ## Architecture Decisions Required
 
-### Decision 1: Event Polling Implementation
+### Decision 1: Event Polling Implementation (UPDATED)
 
-**Option A: Dedicated Polling Service** (Recommended)
-- Create `src/camera/event-polling.js` service
-- Continuous polling with `continue=on` parameter
-- Broadcasts events via existing WebSocket
-- Handles `addedcontents`, `deletedcontents`, mode changes, etc.
+**MVP Approach: On-Demand Polling Only**
+- Create `src/camera/event-polling.js` utility
+- Use only for photo capture: start → wait → stop
+- Simple, no continuous background polling
+- No blocking concerns
 
-**Option B: On-Demand Polling**
-- Only poll when waiting for specific events (photo capture)
-- Simpler but misses camera state changes
-- Could lead to stale UI state
+**Future Enhancement: Settings Page Polling**
+- Optional: Poll only when Settings page is active
+- Start on page enter, stop on page exit
+- Detects external camera changes (mode, settings)
+- **Requires Phase 0 testing**: Verify polling doesn't block camera operations
 
-**Recommendation**: Option A - provides better camera state synchronization
+**Decision**: Start with Option B (on-demand), add page-specific polling after MVP if needed
 
 ---
 
@@ -232,7 +305,10 @@ Format: YYYYMMDD_HHMMSS_NNN_<original_name>
 - Requires cleanup strategy
 - Slower but more images
 
-**Recommendation**: Option B with aggressive cleanup (delete on disconnect or max 20 images)
+**Decision**: Option B (disk storage) with NO cleanup initially
+- Observe actual storage usage patterns
+- Add configurable age-based cleanup later if needed
+- 256GB SD card provides plenty of headroom for testing
 
 ---
 
@@ -240,250 +316,267 @@ Format: YYYYMMDD_HHMMSS_NNN_<original_name>
 
 **Start**: Manual save with "Apply" button
 **Future**: Can add auto-apply toggle in user preferences
-
+- **User input** I agree
 ---
 
-## Implementation Phases
+## Implementation Phases - MVP First Approach
 
-### Phase 0: Research & Validation (2-3 days)
+### Phase 0: CCAPI Research & Validation (1-2 days)
 **Agent**: ccapi-camera-specialist
+**Goal**: Answer critical questions for MVP implementation
 
-**Tasks**:
-1. Test live view endpoints on actual camera
-   - `/liveview` POST with different sizes
-   - `/liveview/flip` GET
-   - Measure response times
-2. Test event polling
-   - Start polling loop
-   - Take photo, verify `addedcontents` event
-   - Change camera mode, verify event
-3. Query settings in different modes
-   - Set camera to M, Av, Tv, P modes
-   - GET `/shooting/settings` in each
-   - Document which settings are available in which modes
-4. Identify size/quality override values
-   - GET `/shooting/settings/stillimagequality`
-   - Find "small fine" or equivalent
+**MVP-Critical Research**:
+1. **Live View Testing**:
+   - POST `/liveview` with "small" size
+   - GET `/liveview/flip` - measure response time
+   - Verify JPEG size and quality acceptable for UI preview
+
+2. **Event Polling for Photo Capture**:
+   - Start poll: `GET /event/polling?continue=on`
+   - Take photo: `POST /shooting/control/shutterbutton`
+   - Verify `addedcontents` event received
+   - **CRITICAL**: Test if second control request works while polling active
+   - Measure time from shutter to event
+
+3. **Settings Query**:
+   - GET `/shooting/settings` - capture full response
+   - Identify smallest quality setting value for test photos
+   - Count total settings available
+
+4. **EXIF Extraction**:
+   - Download sample photo
+   - Test EXIF extraction with `exifr` library
+   - Document available metadata fields
+
+**Non-MVP Research (Deferred to Post-Prototype)**:
+- Settings by mode comparison (M, Av, Tv, P)
+- Settings organization/grouping
+- Continuous polling for settings page
 
 **Deliverables**:
-- CCAPI research report (update `ccapi-audit-report.md`)
-- Settings-by-mode mapping JSON
-- Performance benchmarks
-- Updated feature spec with research findings
+- Quick research report with answers to MVP questions
+- Sample settings JSON response
+- Sample EXIF metadata
+- Performance measurements (live view time, event poll latency)
 
 ---
 
-### Phase 1: Backend Infrastructure (3-5 days)
+### Phase 1: MVP Backend (2-3 days)
 **Agents**: backend-guardian, ccapi-camera-specialist
+**Goal**: Minimal working backend for single live view capture and basic settings
 
-**New Backend Components**:
+**MVP Backend Components** (Minimal):
 
-#### 1.1 Event Polling Service
-- **File**: `src/camera/event-polling.js`
-- **Responsibilities**:
-  - Continuous polling loop
-  - Event parsing and routing
-  - WebSocket broadcasting
-  - Error recovery
-
-#### 1.2 Live View Manager
+#### 1.1 Live View Manager (Minimal)
 - **File**: `src/camera/liveview-manager.js`
-- **Responsibilities**:
-  - Enable/disable live view
-  - Capture flip images
-  - Image storage and cleanup
-  - URL generation for client access
+- **MVP Scope**:
+  - Enable live view (POST /liveview {liveviewsize: "small"})
+  - Capture single image (GET /liveview/flip)
+  - Save to disk: `/data/test-shots/liveview/<timestamp>.jpg`
+  - Disable live view when done
+  - Simple in-memory list of captured images
 
-#### 1.3 Camera Settings Manager
-- **File**: `src/camera/settings-manager.js`
-- **Responsibilities**:
-  - Settings query and caching
-  - Settings update with validation
-  - Mode-based filtering
-  - Settings snapshot save/restore
+#### 1.2 Event Polling Utility (Minimal)
+- **File**: `src/utils/event-polling.js`
+- **MVP Scope**:
+  - Single function: `waitForPhotoComplete()`
+  - Start poll → wait for `addedcontents` → return file path → stop poll
+  - 30 second timeout with error
 
-#### 1.4 Photo Capture Service
-- **File**: `src/camera/photo-capture.js`
-- **Responsibilities**:
-  - Enhanced photo capture with event correlation
-  - Quality override management
-  - EXIF extraction
-  - File naming and storage
+#### 1.3 Test Photo Service (Minimal)
+- **File**: `src/camera/test-photo.js`
+- **MVP Scope**:
+  - Override quality to smallest
+  - Use event polling to capture
+  - Download image
+  - Extract EXIF (ISO, shutter, aperture, WB)
+  - Rename with EXIF timestamp
+  - Save to `/data/test-shots/photos/`
+  - Restore quality setting
 
-**New API Endpoints**:
+**MVP API Endpoints** (Minimal):
 ```javascript
-// Live View
-POST   /api/camera/liveview/start
-POST   /api/camera/liveview/stop
-POST   /api/camera/liveview/capture    // Returns image URL
-GET    /api/camera/liveview/images     // List all live view images
-DELETE /api/camera/liveview/images/:id
-DELETE /api/camera/liveview/images     // Clear all
+// Live View - MVP only
+POST   /api/camera/liveview/capture    // Capture ONE image, return URL
+GET    /api/camera/liveview/images     // List captured images
+GET    /api/camera/liveview/images/:id // Download specific image
+DELETE /api/camera/liveview/clear      // Clear all (for testing)
 
-// Camera Settings
-GET    /api/camera/settings/full       // All settings with organization
-PUT    /api/camera/settings/:name      // Update single setting
-POST   /api/camera/settings/snapshot   // Save current settings
-GET    /api/camera/settings/snapshots  // List saved snapshots
-POST   /api/camera/settings/restore/:id // Restore snapshot
+// Camera Settings - MVP only (read-only display)
+GET    /api/camera/settings             // Existing endpoint, add formatting
 
-// Enhanced Photo
-POST   /api/camera/photo/test          // Test photo with metadata
-GET    /api/camera/photos/test         // List test photos
-DELETE /api/camera/photos/test/:id
-GET    /api/camera/photos/test/:id/download
+// Test Photo - MVP only
+POST   /api/camera/photo/test           // Capture test photo, return metadata
+GET    /api/camera/photos/test          // List test photos
+GET    /api/camera/photos/test/:id      // Download specific photo
 ```
 
-**New WebSocket Events**:
+**MVP WebSocket Events**:
 ```javascript
-// Server -> Client
-{ type: "liveview_captured", data: { id, url, settings, timestamp } }
-{ type: "liveview_deleted", data: { id } }
-{ type: "camera_mode_changed", data: { mode, availableSettings } }
-{ type: "camera_setting_changed", data: { setting, value } }
-{ type: "test_photo_captured", data: { id, url, metadata, settings } }
-{ type: "settings_applied", data: { settings } }
+// Server -> Client (Minimal)
+{ type: "liveview_captured", data: { id, url, timestamp } }
+{ type: "test_photo_ready", data: { id, url, exif: {...} } }
+{ type: "error", data: { message, operation } }
 
-// Client -> Server
+// Client -> Server (Minimal)
 { type: "capture_liveview", data: {} }
-{ type: "delete_liveview", data: { id } }
-{ type: "update_setting", data: { name, value } }
-{ type: "apply_settings", data: { settings } }
 { type: "capture_test_photo", data: {} }
 ```
 
-**Tests Required**:
-- Event polling service tests
-- Live view manager tests
-- Settings manager tests
-- API endpoint integration tests
-- WebSocket message schema validation
-- File storage and cleanup tests
+**MVP Tests** (Basic Coverage):
+- Live view capture and retrieval
+- Event polling for photo
+- EXIF extraction
+- File naming with timestamp
+- API endpoint smoke tests
 
 ---
 
-### Phase 2: Frontend - Camera Settings Card (3-4 days)
+### Phase 2: MVP Frontend - Test Shot View (2-3 days)
 **Agent**: frontend-guardian
+**Goal**: Simple working UI to capture and view live view images
 
-**Components**:
-
-#### 2.1 Camera Settings UI
-- **File**: `public/js/camera-settings.js`
+**MVP Test Shot Card** (Minimal):
+- **File**: `public/js/test-shot.js`
 - **Features**:
-  - Collapsible setting groups
-  - Dynamic form generation from CCAPI settings
-  - Real-time validation
-  - Unsaved changes indicator
-  - Apply/Reset buttons
-  - Save/Load presets (future)
+  - "Capture Live View" button
+  - Display captured images in simple list/grid
+  - Click image to view larger
+  - "Clear All" button
+  - Show basic error messages
 
-**Settings Organization** (from wireframe):
-```
-Common Settings (always visible):
-- ISO
-- Shutter Speed
-- Aperture
-- White Balance
-- Color Temperature
-- Focus Mode
+**MVP HTML Structure**:
+```html
+<div id="test-shot-card" class="function-card">
+  <h2>Test Shot</h2>
 
-Exposure Settings (collapsible):
-- Shooting Mode
-- Metering
-- Exposure Compensation
-- AEB
+  <div class="capture-controls">
+    <button id="capture-liveview-btn">📷 Capture Live View</button>
+    <button id="clear-liveview-btn">🗑️ Clear All</button>
+  </div>
 
-Focus Settings (collapsible):
-- AF Operation
-- AF Method
-- Focus Distance
+  <div id="liveview-gallery" class="image-grid">
+    <!-- Images populated here -->
+  </div>
 
-Quality Settings (collapsible):
-- Image Format
-- Quality
-- Size
-- Aspect Ratio
-
-Advanced Settings (collapsible):
-- Drive Mode
-- Flash
-- Picture Style
-- Color Space
-- Noise Reduction
+  <div id="image-viewer" class="modal" style="display:none">
+    <img id="viewer-image" />
+    <button class="close-btn">✕</button>
+  </div>
+</div>
 ```
 
-**Tests Required**:
-- E2E tests for settings form
-- Settings validation tests
-- Mode-change behavior tests
-- Apply/Reset functionality
+**MVP Interactions**:
+1. Click "Capture Live View" → Show loading → Display new image
+2. Click image thumbnail → Show fullscreen
+3. Click/ESC in fullscreen → Close
+4. Click "Clear All" → Confirm → Remove all images
 
----
-
-### Phase 3: Frontend - Test Shot / Live View Card (4-5 days)
-**Agent**: frontend-guardian
-
-#### 3.1 Live View Gallery
-- **File**: `public/js/liveview-gallery.js`
-- **Features**:
-  - Image carousel/grid view
-  - Fullscreen viewer
-  - Settings overlay on each image
-  - Navigation controls
-  - Delete functionality
-  - Image comparison (side-by-side?)
-
-#### 3.2 Test Photo Gallery
-- **File**: `public/js/test-photo-gallery.js`
-- **Features**:
-  - Photo list with thumbnails
-  - EXIF data display
-  - Download functionality
-  - Delete functionality
-
-**UI Elements**:
-- Large preview area
-- Settings quick view
-- Test Shot button
-- Take Photo button
-- Image navigation (prev/next)
-- Fullscreen toggle
-- Download button
-- Delete button
-- Clear all button
-
-**Tests Required**:
-- E2E tests for test shot workflow
-- Image gallery navigation
-- Fullscreen mode
-- Delete/clear functionality
+**Deferred to Post-MVP**:
+- Settings display on images
+- Image comparison
 - Download functionality
+- Swipe gestures
+- Zoom/pan in fullscreen
+- Test photo capture (Phase 3)
+
+**MVP Tests**:
+- E2E: Capture live view
+- E2E: View fullscreen
+- E2E: Clear all
 
 ---
 
-### Phase 4: Integration & Polish (2-3 days)
+### Phase 3: MVP Integration & First Test (1 day)
 **Agents**: backend-guardian, frontend-guardian, test-validator
+**Goal**: Get MVP working end-to-end, test on real hardware
 
-**Tasks**:
-1. Integration testing with real camera
-2. Error handling refinement
-3. Loading states and progress indicators
-4. Mobile responsiveness testing
-5. Performance optimization
-6. Storage cleanup verification
-7. Memory leak testing
+**Integration Tasks**:
+1. Deploy to Pi: rsync code to picontrol-002
+2. Restart service
+3. Manual testing workflow:
+   - Open Test Shot card
+   - Capture live view image
+   - Verify image displays
+   - View fullscreen
+   - Capture another image
+   - Clear all images
+4. Fix critical bugs
+5. Document what works / what doesn't
+
+**Success Criteria for MVP**:
+- [ ] Can capture live view image
+- [ ] Image displays in UI
+- [ ] Fullscreen viewer works
+- [ ] Clear all works
+- [ ] No crashes/exceptions
+
+**Post-MVP Review**:
+- What's the live view response time?
+- Is image quality acceptable?
+- Are there UX issues?
+- What features are most needed next?
 
 ---
 
-### Phase 5: Documentation (1-2 days)
-**Agent**: tech-writer
+### Phase 4: Iteration 1 - Add Core Features (2-3 days)
+**Based on MVP feedback, add next priority features**
 
-**Documents to Update**:
-- `api-specification.md` - Add new endpoints and WebSocket events
-- `data-flow-and-events.md` - Document new event flows
-- `architecture-overview.md` - Add new components
-- `feature-test-shot.md` - Update with implementation details
-- Update wireframes if UI changes
+**Likely Additions**:
+1. **Settings Display** (if MVP shows it's needed):
+   - Show camera settings with each live view image
+   - GET /shooting/settings when capturing
+   - Display ISO, shutter, aperture, WB
+
+2. **Test Photo Capture**:
+   - Add "Take Photo" button
+   - Implement event polling photo workflow
+   - Display EXIF metadata
+   - Download functionality
+
+3. **Better Image Management**:
+   - Delete individual images
+   - Image timestamps
+   - Persistent storage across restarts
+
+**Defer Until Needed**:
+- Camera Settings editing
+- Settings presets
+- Image comparison
+- Advanced navigation
+
+---
+
+### Phase 5: Iteration 2 - Camera Settings (3-4 days)
+**Only if Phase 4 shows settings editing is priority**
+
+**Camera Settings Card**:
+- Read-only display of all settings first
+- Add editing for "common" settings
+- "Apply" button with unsaved indicator
+- Error handling for failed updates
+
+**Settings Organization**:
+- Use Phase 0 research (deferred earlier)
+- Query settings by mode
+- Create collapsible groups
+- Progressive disclosure of advanced settings
+
+---
+
+### Phase 6: Polish & Documentation (1-2 days)
+**Final touches before considering feature complete**
+
+**Polish**:
+- Loading states
+- Error message improvements
+- Mobile responsiveness check
+- Performance review
+
+**Documentation**:
+- Update `api-specification.md`
+- Update `feature-test-shot.md` with actual implementation
+- Add to user documentation
 
 ---
 
@@ -542,59 +635,80 @@ Advanced Settings (collapsible):
 
 ---
 
-## Estimated Timeline
+## Estimated Timeline - MVP First
 
-| Phase | Duration | Dependencies |
-|-------|----------|--------------|
-| Phase 0: Research | 2-3 days | Camera availability |
-| Phase 1: Backend | 3-5 days | Phase 0 complete |
-| Phase 2: Settings UI | 3-4 days | Phase 1 API done |
-| Phase 3: Test Shot UI | 4-5 days | Phase 1 API done |
-| Phase 4: Integration | 2-3 days | Phases 2&3 done |
-| Phase 5: Documentation | 1-2 days | Phase 4 done |
-| **Total** | **15-22 days** | Sequential phases |
+| Phase | Duration | Dependencies | Deliverable |
+|-------|----------|--------------|-------------|
+| Phase 0: Research | 1-2 days | Camera availability | CCAPI validation, perf data |
+| Phase 1: MVP Backend | 2-3 days | Phase 0 complete | Live view capture API |
+| Phase 2: MVP Frontend | 2-3 days | Phase 1 API done | Working Test Shot card |
+| Phase 3: MVP Integration | 1 day | Phase 2 done | **Working prototype** |
+| **MVP Total** | **6-9 days** | Sequential | **Usable feature** |
+| Phase 4: Iteration 1 | 2-3 days | MVP feedback | Core features added |
+| Phase 5: Iteration 2 | 3-4 days | If needed | Settings editing |
+| Phase 6: Polish & Docs | 1-2 days | Features done | Production ready |
+| **Full Feature** | **12-18 days** | Iterative | **Complete feature** |
 
-**Note**: Some overlap possible (e.g., Settings UI and Test Shot UI can be parallel after backend done)
+**Approach**: MVP in ~1 week, then iterate based on actual usage
 
 ---
 
-## Success Criteria
+## Success Criteria - Redefined for MVP
 
-### Must Have (MVP)
-- [ ] Capture and view live view images from camera
-- [ ] Display and edit camera settings
-- [ ] Apply settings to camera successfully
-- [ ] Take test photos with metadata extraction
-- [ ] View, download, and delete test images
-- [ ] Navigate between multiple images
-- [ ] Settings organized by functional groups
-- [ ] Works on both desktop and mobile
+### Minimal Viable Product (Phases 0-3)
+- [ ] **Phase 0**: CCAPI research answers all critical questions
+- [ ] **Phase 1**: Backend can capture live view images
+- [ ] **Phase 2**: UI displays captured images
+- [ ] **Phase 3**: End-to-end workflow works on Pi
+- [ ] Acceptable performance (< 3 seconds per capture)
+- [ ] No crashes during basic usage
+- [ ] Images persist across server restart
 
-### Should Have
-- [ ] Settings validation before apply
-- [ ] Event polling for camera state changes
-- [ ] Enhanced photo capture with timing data
-- [ ] Automatic file cleanup
-- [ ] Fullscreen image viewer
-- [ ] Image comparison between settings
+### Iteration 1 (Phase 4) - Likely Additions
+- [ ] Settings displayed with each image
+- [ ] Test photo capture with EXIF
+- [ ] Individual image deletion
+- [ ] Download functionality
+- [ ] Basic error handling
 
-### Nice to Have
-- [ ] Save/load settings presets
+### Iteration 2 (Phase 5) - If Needed
+- [ ] Camera settings editing (read/write)
+- [ ] Apply button with validation
+- [ ] Settings organized by category
+- [ ] Unsaved changes indicator
+
+### Nice to Have - Future
+- [ ] Settings presets (save/load)
+- [ ] Side-by-side comparison
+- [ ] Advanced navigation (swipe, keyboard)
+- [ ] Image zoom/pan
 - [ ] Continuous live preview on settings page
-- [ ] Side-by-side image comparison
-- [ ] Image zoom/pan in fullscreen
-- [ ] Histogram display
-- [ ] Focus peaking overlay
+- [ ] Histogram/focus peaking overlays
 
 ---
 
-## Next Steps
+## Next Steps to Start MVP
 
-1. **User Review**: Review this plan, answer open questions
-2. **Phase 0 Kickoff**: Assign ccapi-camera-specialist agent to research
-3. **Create Research Report Template**: Define what data we need from Phase 0
-4. **Update Feature Spec**: Incorporate research findings
-5. **Begin Phase 1**: Start backend implementation
+1. ✅ **User Review Complete**: Feedback incorporated into plan
+2. **Phase 0 Kickoff**: Begin CCAPI research
+   - Assign ccapi-camera-specialist agent
+   - Test live view endpoints
+   - Test event polling
+   - Measure performance
+   - Document findings
+3. **Phase 1**: Build minimal backend
+   - Live view manager
+   - Event polling utility
+   - Basic API endpoints
+4. **Phase 2**: Build minimal frontend
+   - Test Shot card
+   - Image gallery
+   - Fullscreen viewer
+5. **Phase 3**: Integration test
+   - Deploy to Pi
+   - Test end-to-end
+   - Gather feedback
+   - **Decision point**: What to build next?
 
 ---
 
@@ -622,8 +736,19 @@ Advanced Settings (collapsible):
 
 ## Status Updates
 
-### 2025-10-02 - Initial Analysis Complete
-- Document analyzed
-- Issues identified
-- Implementation plan created
-- Awaiting user review and Phase 0 kickoff
+### 2025-10-02 - MVP Plan Complete
+- ✅ Feature specification analyzed
+- ✅ 7 critical issues identified and resolved with user feedback
+- ✅ User feedback incorporated
+- ✅ Plan restructured for MVP-first approach
+- ✅ Simplified complexity based on user clarifications
+- **Next**: Begin Phase 0 CCAPI research
+
+**Key Decisions Made**:
+- Simple on-demand event polling (not continuous)
+- Original file naming format (YYYYMMDD_HHMMSS_<original>)
+- No cleanup initially - observe usage
+- Manual settings save with Apply button
+- MVP in ~1 week, iterate after testing
+
+**Ready to proceed with Phase 0**
