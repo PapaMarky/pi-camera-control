@@ -74,6 +74,28 @@ export class DiscoveryManager extends EventEmitter {
 
         // Start periodic status logging
         this.logDiscoveryStatus();
+
+        // Try to reconnect to last known IP after a short delay
+        // This allows UPnP discovery to run first, but provides a fallback
+        setTimeout(async () => {
+          const lastIP = this.cameraStateManager.cameraConnectionHistory.getLastIP();
+          if (lastIP) {
+            const cameras = this.cameraStateManager.getAllCameras();
+            const hasConnectedCamera = Object.values(cameras).some(
+              cam => cam.status === 'connected'
+            );
+
+            if (!hasConnectedCamera) {
+              logger.info(`Attempting to reconnect to last known camera IP: ${lastIP}`);
+              try {
+                await this.connectToIp(lastIP);
+              } catch (error) {
+                logger.debug(`Failed to reconnect to last known IP ${lastIP}:`, error.message);
+                // Not a critical error - UPnP discovery may still find the camera
+              }
+            }
+          }
+        }, 2000); // Wait 2 seconds for UPnP to respond first
       }
       return success;
     } catch (error) {

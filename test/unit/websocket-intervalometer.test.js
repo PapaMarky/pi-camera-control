@@ -207,75 +207,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
     jest.useRealTimers();
   });
 
-  describe('Interval Validation', () => {
-    beforeEach(async () => {
-      await wsHandler(mockWebSocket, mockRequest);
-      sentMessages = []; // Clear welcome message
-    });
-
-    test('validates interval against camera settings', async () => {
-      const messageHandler = mockWebSocket.on.mock.calls.find(call => call[0] === 'message')[1];
-
-      const validateMessage = JSON.stringify({
-        type: 'validate_interval',
-        data: { interval: 30 }
-      });
-
-      await messageHandler(Buffer.from(validateMessage));
-
-      expect(mockCameraController.instance.validateInterval).toHaveBeenCalledWith(30);
-      expect(sentMessages).toHaveLength(1);
-      expect(sentMessages[0].type).toBe('interval_validation');
-      expect(sentMessages[0].data.valid).toBe(true);
-      expect(sentMessages[0].data.recommendedMin).toBe(5);
-    });
-
-    test('handles interval too short error', async () => {
-      const messageHandler = mockWebSocket.on.mock.calls.find(call => call[0] === 'message')[1];
-
-      const validateMessage = JSON.stringify({
-        type: 'validate_interval',
-        data: { interval: 2 }
-      });
-
-      await messageHandler(Buffer.from(validateMessage));
-
-      expect(sentMessages).toHaveLength(1);
-      expect(sentMessages[0].type).toBe('interval_validation');
-      expect(sentMessages[0].data.valid).toBe(false);
-      expect(sentMessages[0].data.error).toBe('Interval must be at least 5 seconds');
-    });
-
-    test('handles invalid interval value', async () => {
-      const messageHandler = mockWebSocket.on.mock.calls.find(call => call[0] === 'message')[1];
-
-      const validateMessage = JSON.stringify({
-        type: 'validate_interval',
-        data: { interval: 0 }
-      });
-
-      await messageHandler(Buffer.from(validateMessage));
-
-      expect(sentMessages).toHaveLength(1);
-      expect(sentMessages[0].type).toBe('error');
-      expect(sentMessages[0].error.message).toBe('Invalid interval value');
-    });
-
-    test('handles missing interval parameter', async () => {
-      const messageHandler = mockWebSocket.on.mock.calls.find(call => call[0] === 'message')[1];
-
-      const validateMessage = JSON.stringify({
-        type: 'validate_interval',
-        data: {}
-      });
-
-      await messageHandler(Buffer.from(validateMessage));
-
-      expect(sentMessages).toHaveLength(1);
-      expect(sentMessages[0].type).toBe('error');
-      expect(sentMessages[0].error.message).toBe('Invalid interval value');
-    });
-  });
+  // validate_interval message type removed - validation now happens automatically during intervalometer start
 
   describe('Intervalometer Session Management', () => {
     beforeEach(async () => {

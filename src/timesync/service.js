@@ -213,6 +213,19 @@ class TimeSyncService {
         );
         // Still record that we checked
         this.state.recordPiSync(clientTimestamp, clientIP, driftMs);
+
+        // Broadcast sync status update
+        this.broadcastSyncStatus();
+
+        // If camera is connected and Pi is now reliable, sync camera
+        const cameraController =
+          typeof this.cameraController === "function"
+            ? this.cameraController()
+            : this.cameraController;
+
+        if (cameraController?.connected && this.state.isPiTimeReliable()) {
+          await this.syncCameraTime();
+        }
       }
 
       // Store GPS if provided
@@ -346,6 +359,10 @@ class TimeSyncService {
       } else {
         logger.debug(`Camera time drift within threshold: ${driftMs}ms`);
         this.state.recordCameraSync(driftMs);
+
+        // Broadcast sync status update
+        this.broadcastSyncStatus();
+        return true;
       }
     } catch (error) {
       logger.error("Error syncing camera time:", error);
@@ -469,7 +486,10 @@ class TimeSyncService {
     logger.info("TimeSyncService: Broadcasting sync status", {
       piSynchronized: uiStatus.pi.isSynchronized,
       piReliability: uiStatus.pi.reliability,
+      piLastSyncTime: uiStatus.pi.lastSyncTime,
       cameraSynchronized: uiStatus.camera.isSynchronized,
+      rawPiReliable: rawStatus.piReliable,
+      rawLastPiSync: rawStatus.lastPiSync,
     });
 
     this.wsManager.broadcast({

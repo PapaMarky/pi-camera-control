@@ -304,45 +304,6 @@ export function createApiRouter(
     }
   });
 
-  // Validate intervalometer settings
-  router.post("/camera/validate-interval", async (req, res) => {
-    try {
-      const { interval } = req.body;
-
-      if (!interval || interval <= 0) {
-        return res.status(400).json(
-          createApiError("Invalid interval value", {
-            code: ErrorCodes.INVALID_PARAMETER,
-            component: Components.API_ROUTER,
-            operation: "validateInterval",
-          }),
-        );
-      }
-
-      const currentController = getCameraController();
-      if (!currentController) {
-        return res.status(503).json(
-          createApiError("No camera available", {
-            code: ErrorCodes.CAMERA_OFFLINE,
-            component: Components.API_ROUTER,
-            operation: "validateInterval",
-          }),
-        );
-      }
-      const validation = await currentController.validateInterval(interval);
-      res.json(validation);
-    } catch (error) {
-      logger.error("Failed to validate interval:", error);
-      res.status(500).json(
-        createApiError(error.message, {
-          code: ErrorCodes.SYSTEM_ERROR,
-          component: Components.API_ROUTER,
-          operation: "validateInterval",
-        }),
-      );
-    }
-  });
-
   // Intervalometer control
   router.post("/intervalometer/start", async (req, res) => {
     try {

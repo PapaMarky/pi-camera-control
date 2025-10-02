@@ -341,10 +341,6 @@ export function createWebSocketHandler(
           await handleGetCameraSettings(ws);
           break;
 
-        case "validate_interval":
-          await handleValidateInterval(ws, data);
-          break;
-
         case "start_intervalometer":
           await handleStartIntervalometer(ws, data);
           break;
@@ -486,25 +482,6 @@ export function createWebSocketHandler(
       sendResponse(ws, "camera_settings", settings);
     } catch (error) {
       sendError(ws, `Failed to get camera settings: ${error.message}`);
-    }
-  };
-
-  const handleValidateInterval = async (ws, data) => {
-    try {
-      const { interval } = data;
-      if (!interval || interval <= 0) {
-        return sendError(ws, "Invalid interval value");
-      }
-
-      const currentController = cameraController();
-      if (!currentController) {
-        return sendError(ws, "No camera available");
-      }
-
-      const validation = await currentController.validateInterval(interval);
-      sendResponse(ws, "interval_validation", validation);
-    } catch (error) {
-      sendError(ws, `Failed to validate interval: ${error.message}`);
     }
   };
 

@@ -55,10 +55,6 @@ class CameraManager {
     });
 
     // Intervalometer controls
-    document.getElementById('validate-interval-btn').addEventListener('click', () => {
-      this.validateInterval();
-    });
-
     document.getElementById('start-intervalometer-btn').addEventListener('click', () => {
       this.startIntervalometer();
     });
@@ -192,10 +188,6 @@ class CameraManager {
 
     wsManager.on('camera_settings', (data) => {
       this.handleCameraSettings(data);
-    });
-
-    wsManager.on('interval_validation', (data) => {
-      this.handleIntervalValidation(data);
     });
 
     wsManager.on('error_response', (data) => {
@@ -690,39 +682,6 @@ class CameraManager {
     }
   }
 
-  async validateInterval() {
-    const interval = parseFloat(document.getElementById('interval-input').value);
-    
-    if (!interval || interval <= 0) {
-      this.handleError('Please enter a valid interval');
-      return;
-    }
-
-    this.log(`Validating interval: ${interval}s`, 'info');
-    this.setButtonLoading('validate-interval-btn', true, {
-      progressText: 'Validating...',
-      timeout: 10000
-    });
-
-    try {
-      if (wsManager.connected) {
-        wsManager.validateInterval(interval);
-      } else {
-        const response = await fetch('/api/camera/validate-interval', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ interval })
-        });
-        const result = await response.json();
-        this.handleIntervalValidation(result);
-      }
-    } catch (error) {
-      this.handleError(`Validation failed: ${error.message}`);
-    } finally {
-      this.setButtonLoading('validate-interval-btn', false);
-    }
-  }
-
   async startIntervalometer() {
     const interval = parseFloat(document.getElementById('interval-input').value);
     const stopCondition = document.querySelector('input[name="stop-condition"]:checked').value;
@@ -1128,18 +1087,6 @@ class CameraManager {
     this.showSettingsModal(settings);
   }
 
-  handleIntervalValidation(result) {
-    if (result.valid) {
-      this.log('Interval validation passed', 'success');
-    } else {
-      this.log(`Interval validation failed: ${result.error}`, 'error');
-    }
-    
-    if (result.warning) {
-      this.log(`Warning: ${result.warning}`, 'warning');
-    }
-  }
-
   handleError(message) {
     this.log(message, 'error');
   }
@@ -1282,9 +1229,8 @@ class CameraManager {
     // Enable individual buttons
     document.getElementById('take-photo-btn').disabled = false;
     document.getElementById('get-settings-btn').disabled = false;
-    document.getElementById('validate-interval-btn').disabled = false;
     document.getElementById('start-intervalometer-btn').disabled = false;
-    
+
     // Remove disabled styling from control groups
     const controlGroups = document.querySelectorAll('.controls-section .control-group');
     controlGroups.forEach(group => {
@@ -1296,10 +1242,9 @@ class CameraManager {
     // Disable individual buttons
     document.getElementById('take-photo-btn').disabled = true;
     document.getElementById('get-settings-btn').disabled = true;
-    document.getElementById('validate-interval-btn').disabled = true;
     document.getElementById('start-intervalometer-btn').disabled = true;
     document.getElementById('stop-intervalometer-btn').disabled = true;
-    
+
     // Add disabled styling to control groups
     const controlGroups = document.querySelectorAll('.controls-section .control-group');
     controlGroups.forEach(group => {
