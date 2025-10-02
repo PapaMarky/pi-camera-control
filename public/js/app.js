@@ -36,6 +36,12 @@ class CameraControlApp {
       this.timelapseUI = new TimelapseUI(wsManager);
       window.timelapseUI = this.timelapseUI;
 
+      // Initialize test shot UI
+      this.testShotUI = new TestShotUI(wsManager);
+      window.testShotUI = this.testShotUI;
+      // Call initialize explicitly after construction
+      this.testShotUI.initialize();
+
       // Initialize time sync
       this.timeSync = new TimeSync(wsManager);
       window.timeSync = this.timeSync;

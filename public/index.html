@@ -334,10 +334,19 @@
                 </div>
                 <div class="card-content">
                     <div class="button-grid">
-                        <button id="take-photo-btn" class="primary-btn" disabled>
+                        <button id="capture-liveview-btn" class="primary-btn" disabled>
                             <span class="btn-icon">📷</span>
-                            <span class="btn-text">Take Photo</span>
+                            <span class="btn-text">Capture Live View</span>
                         </button>
+                        <button id="clear-liveview-btn" class="secondary-btn" disabled>
+                            <span class="btn-icon">🗑️</span>
+                            <span class="btn-text">Clear All</span>
+                        </button>
+                    </div>
+
+                    <!-- Live View Gallery -->
+                    <div id="liveview-gallery" style="margin-top: 1.5rem;">
+                        <!-- Gallery populated by test-shot.js -->
                     </div>
                 </div>
             </div>
@@ -748,6 +757,7 @@
     <script src="js/network.js"></script>
     <script src="js/utilities.js"></script>
     <script src="js/timelapse.js"></script>
+    <script src="js/test-shot.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
