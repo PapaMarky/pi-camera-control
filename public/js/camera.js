@@ -60,12 +60,8 @@ class CameraManager {
 
   setupEventListeners() {
     // Camera control buttons (check if they exist first)
-    const takePhotoBtn = document.getElementById('take-photo-btn');
-    if (takePhotoBtn) {
-      takePhotoBtn.addEventListener('click', () => {
-        this.takePhoto();
-      });
-    }
+    // Note: take-photo-btn is now handled by TestShotUI (test-shot.js)
+    // The old takePhoto() handler has been removed to avoid conflicts
 
     const getSettingsBtn = document.getElementById('get-settings-btn');
     if (getSettingsBtn) {

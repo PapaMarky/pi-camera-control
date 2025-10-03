@@ -14,6 +14,7 @@ export function createApiRouter(
   discoveryManager,
   intervalometerStateManager,
   liveViewManager,
+  testPhotoService,
 ) {
   const router = Router();
 
@@ -363,6 +364,181 @@ export function createApiRouter(
           code: ErrorCodes.SYSTEM_ERROR,
           component: Components.API_ROUTER,
           operation: "clearLiveViewCaptures",
+        }),
+      );
+    }
+  });
+
+  // ===== Test Photo Capture Endpoints =====
+
+  // Capture test photo with EXIF metadata
+  router.post("/camera/photos/test", async (req, res) => {
+    try {
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "captureTestPhoto",
+          }),
+        );
+      }
+
+      const photo = await testPhotoService.capturePhoto();
+      res.json(photo);
+    } catch (error) {
+      logger.error("Failed to capture test photo:", error);
+      const statusCode = typeof error.status === 'number' ? error.status : 500;
+      res.status(statusCode).json(
+        createApiError(error.message, {
+          code: ErrorCodes.PHOTO_FAILED,
+          component: Components.API_ROUTER,
+          operation: "captureTestPhoto",
+        }),
+      );
+    }
+  });
+
+  // List all test photos
+  router.get("/camera/photos/test", (req, res) => {
+    try {
+      const photos = testPhotoService.listPhotos();
+      res.json({ photos });
+    } catch (error) {
+      logger.error("Failed to list test photos:", error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "listTestPhotos",
+        }),
+      );
+    }
+  });
+
+  // Get specific test photo metadata by ID
+  router.get("/camera/photos/test/:id", (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json(
+          createApiError("Invalid photo ID", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "getTestPhoto",
+          }),
+        );
+      }
+
+      const photo = testPhotoService.getPhoto(id);
+      if (!photo) {
+        return res.status(404).json(
+          createApiError("Photo not found", {
+            code: ErrorCodes.SESSION_NOT_FOUND,
+            component: Components.API_ROUTER,
+            operation: "getTestPhoto",
+          }),
+        );
+      }
+
+      res.json(photo);
+    } catch (error) {
+      logger.error("Failed to get test photo:", error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "getTestPhoto",
+        }),
+      );
+    }
+  });
+
+  // Serve test photo image file
+  router.get("/camera/photos/test/:id/file", (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json(
+          createApiError("Invalid photo ID", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "getTestPhotoFile",
+          }),
+        );
+      }
+
+      const photo = testPhotoService.getPhoto(id);
+      if (!photo) {
+        return res.status(404).json(
+          createApiError("Photo not found", {
+            code: ErrorCodes.SESSION_NOT_FOUND,
+            component: Components.API_ROUTER,
+            operation: "getTestPhotoFile",
+          }),
+        );
+      }
+
+      res.sendFile(photo.filepath, (err) => {
+        if (err) {
+          logger.error("Failed to send test photo file:", err);
+          if (!res.headersSent) {
+            res.status(404).json(
+              createApiError("Photo file not found", {
+                code: ErrorCodes.SESSION_NOT_FOUND,
+                component: Components.API_ROUTER,
+                operation: "getTestPhotoFile",
+              }),
+            );
+          }
+        }
+      });
+    } catch (error) {
+      logger.error("Failed to serve test photo:", error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "getTestPhotoFile",
+        }),
+      );
+    }
+  });
+
+  // Delete a specific test photo
+  router.delete("/camera/photos/test/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json(
+          createApiError("Invalid photo ID", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "deleteTestPhoto",
+          }),
+        );
+      }
+
+      const deleted = await testPhotoService.deletePhoto(id);
+      if (!deleted) {
+        return res.status(404).json(
+          createApiError("Photo not found", {
+            code: ErrorCodes.SESSION_NOT_FOUND,
+            component: Components.API_ROUTER,
+            operation: "deleteTestPhoto",
+          }),
+        );
+      }
+
+      res.json({ success: true, message: "Test photo deleted", id });
+    } catch (error) {
+      logger.error("Failed to delete test photo:", error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "deleteTestPhoto",
         }),
       );
     }

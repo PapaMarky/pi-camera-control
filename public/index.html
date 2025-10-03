@@ -1,771 +1,1098 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Camera Control">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="Camera Control" />
     <title>Pi Camera Control</title>
-    
-    <link rel="stylesheet" href="css/main.css">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="assets/icon-192.png">
-    
-    <meta name="theme-color" content="#1a1a1a">
-</head>
-<body class="dark-theme">
+
+    <link rel="stylesheet" href="css/main.css" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="assets/icon-192.png" />
+
+    <meta name="theme-color" content="#1a1a1a" />
+  </head>
+  <body class="dark-theme">
     <div id="app">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-content">
-                
-                <!-- Status Indicators -->
-                <div class="header-status">
-                    <div class="status-indicator" id="controller-status" title="Controller Status">
-                        <span class="status-icon">🎛️</span>
-                    </div>
-                    <div class="status-indicator" id="camera-status-header" title="Camera Status">
-                        <span class="status-icon">📷</span>
-                    </div>
-                    <div class="status-indicator" id="battery-status-header" title="Camera Battery">
-                        <span class="status-icon">🔋</span>
-                        <span class="status-text" id="battery-level-header">-</span>
-                    </div>
-                    <div class="status-indicator" id="storage-status-header" title="Camera Storage">
-                        <span class="status-icon">💾</span>
-                        <span class="status-text" id="storage-level-header">-</span>
-                    </div>
-                    <div class="status-indicator" id="timer-status-header" title="Intervalometer Status">
-                        <span class="status-icon">⏱️</span>
-                    </div>
-                    <div class="status-indicator" id="wifi-status-header" title="WiFi Status">
-                        <span class="status-icon">🛜</span>
-                        <span class="status-text" id="wifi-status-text">-</span>
-                    </div>
-                    <div class="status-indicator" id="ap-status-header" title="Access Point Status">
-                        <span class="status-icon">📡</span>
-                        <span class="status-text" id="ap-clients-count">-</span>
-                    </div>
-                </div>
-                
-                <!-- Header Controls -->
-                <div class="header-controls">
-                    <div class="function-menu-container">
-                        <button id="function-menu-toggle" class="icon-btn">
-                            <span class="menu-icon">☰</span>
-                        </button>
-                        <div id="function-menu-dropdown" class="function-menu-dropdown" style="display: none;">
-                            <button class="menu-item" data-card="controller-status">Controller Status</button>
-                            <button class="menu-item" data-card="network-settings">Network Settings</button>
-                            <button class="menu-item" data-card="utilities">Utilities</button>
-                            <button class="menu-item" data-card="test-shot" disabled>Test Shot</button>
-                            <button class="menu-item" data-card="camera-settings" disabled>Camera Settings</button>
-                            <button class="menu-item" data-card="intervalometer" disabled>Intervalometer</button>
-                            <button class="menu-item" data-card="timelapse-reports">Timelapse Reports</button>
-                            <button class="menu-item" data-card="activity-log">Activity Log</button>
-                        </div>
-                    </div>
-                </div>
+      <!-- Header -->
+      <header class="header">
+        <div class="header-content">
+          <!-- Status Indicators -->
+          <div class="header-status">
+            <div
+              class="status-indicator"
+              id="controller-status"
+              title="Controller Status"
+            >
+              <span class="status-icon">🎛️</span>
             </div>
-        </header>
-
-        <!-- Main Content Area -->
-        <main class="main-content">
-            <!-- Function Cards -->
-            
-            <!-- Controller Status Card -->
-            <div class="function-card" id="controller-status-card">
-                <div class="card-header">
-                    <h3>Controller Status</h3>
-                </div>
-                <div class="card-content">
-                    <!-- Camera Status -->
-                    <div class="status-section">
-                        <h4>Camera Status</h4>
-                        <div class="status-row">
-                            <span class="label">Status:</span>
-                            <span id="camera-status-text">Checking...</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="label">IP:</span>
-                            <span id="camera-ip">-</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="label">Mode:</span>
-                            <span id="camera-mode">-</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="label">Battery:</span>
-                            <span id="camera-battery">-</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="label">TimeSync:</span>
-                            <span id="camera-timesync" class="sync-none">-</span>
-                        </div>
-                        <div class="status-row" id="manual-connect-row" style="display: none;">
-                            <button id="manual-connect-btn" class="connect-btn">
-                                <span class="btn-icon">🔗</span>
-                                <span class="btn-text">Manual Connect</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Controller Status -->
-                    <div class="status-section">
-                        <h4>Controller Info</h4>
-                        <div class="status-row">
-                            <span class="label">Temp:</span>
-                            <span id="pi-temperature">-</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="label">Uptime:</span>
-                            <span id="pi-uptime">-</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="label">TimeSync:</span>
-                            <span id="controller-timesync" class="sync-none">-</span>
-                        </div>
-                        <div class="status-row power-warnings">
-                            <span id="power-warnings"></span>
-                        </div>
-                    </div>
-
-                    <!-- Network Status -->
-                    <div class="status-section">
-                        <h4>Network Status</h4>
-                        <div class="status-row">
-                            <span class="label">WiFi:</span>
-                            <span id="wifi-connection-status">-</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="label">Access Point:</span>
-                            <span id="ap-connection-status">-</span>
-                        </div>
-                        <div class="status-row">
-                            <span class="label">Clients:</span>
-                            <span id="ap-clients-detail">-</span>
-                        </div>
-                    </div>
-                </div>
+            <div
+              class="status-indicator"
+              id="camera-status-header"
+              title="Camera Status"
+            >
+              <span class="status-icon">📷</span>
             </div>
+            <div
+              class="status-indicator"
+              id="battery-status-header"
+              title="Camera Battery"
+            >
+              <span class="status-icon">🔋</span>
+              <span class="status-text" id="battery-level-header">-</span>
+            </div>
+            <div
+              class="status-indicator"
+              id="storage-status-header"
+              title="Camera Storage"
+            >
+              <span class="status-icon">💾</span>
+              <span class="status-text" id="storage-level-header">-</span>
+            </div>
+            <div
+              class="status-indicator"
+              id="timer-status-header"
+              title="Intervalometer Status"
+            >
+              <span class="status-icon">⏱️</span>
+            </div>
+            <div
+              class="status-indicator"
+              id="wifi-status-header"
+              title="WiFi Status"
+            >
+              <span class="status-icon">🛜</span>
+              <span class="status-text" id="wifi-status-text">-</span>
+            </div>
+            <div
+              class="status-indicator"
+              id="ap-status-header"
+              title="Access Point Status"
+            >
+              <span class="status-icon">📡</span>
+              <span class="status-text" id="ap-clients-count">-</span>
+            </div>
+          </div>
 
-            <!-- Network Settings Card -->
-            <div class="function-card" id="network-settings-card" style="display: none;">
-                <div class="card-header">
-                    <h3>Network Settings</h3>
-                </div>
-                <div class="card-content">
-                    <!-- WiFi Client Section -->
-                    <div class="network-section" id="wifi-client-section">
-                        <h4>WiFi Connection</h4>
-                        <div class="wifi-status">
-                            <div class="status-row">
-                                <span class="label">Status:</span>
-                                <span id="wifi-status">Off</span>
-                            </div>
-                            <div class="status-row">
-                                <span class="label">Current Network:</span>
-                                <span id="current-wifi-network">Not connected</span>
-                            </div>
-                            <div class="status-row">
-                                <span class="label">IP Address:</span>
-                                <span id="wifi-ip-address">-</span>
-                            </div>
-                        </div>
-                        
-                        <div class="button-grid">
-                            <button id="scan-wifi-btn" class="secondary-btn">
-                                <span class="btn-icon">🛜</span>
-                                <span class="btn-text">Switch Network</span>
-                            </button>
-                            <button id="wifi-toggle-btn" class="danger-btn" disabled>
-                                <span class="btn-icon" id="wifi-toggle-icon">❌</span>
-                                <span class="btn-text" id="wifi-toggle-text">Disconnect</span>
-                            </button>
-                        </div>
+          <!-- Header Controls -->
+          <div class="header-controls">
+            <div class="function-menu-container">
+              <button id="function-menu-toggle" class="icon-btn">
+                <span class="menu-icon">☰</span>
+              </button>
+              <div
+                id="function-menu-dropdown"
+                class="function-menu-dropdown"
+                style="display: none"
+              >
+                <button class="menu-item" data-card="controller-status">
+                  Controller Status
+                </button>
+                <button class="menu-item" data-card="network-settings">
+                  Network Settings
+                </button>
+                <button class="menu-item" data-card="utilities">
+                  Utilities
+                </button>
+                <button class="menu-item" data-card="test-shot" disabled>
+                  Test Shot
+                </button>
+                <button class="menu-item" data-card="camera-settings" disabled>
+                  Camera Settings
+                </button>
+                <button class="menu-item" data-card="intervalometer" disabled>
+                  Intervalometer
+                </button>
+                <button class="menu-item" data-card="timelapse-reports">
+                  Timelapse Reports
+                </button>
+                <button class="menu-item" data-card="activity-log">
+                  Activity Log
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
 
-                        <!-- WiFi Networks List -->
-                        <div class="wifi-networks" id="wifi-networks" style="display: none;">
-                            <div class="networks-header">
-                                <h5>Available Networks</h5>
-                                <button type="button" class="close-networks-btn" id="close-networks-btn" title="Close networks list">
-                                    <span aria-hidden="true">✕</span>
-                                </button>
-                            </div>
-                            <div class="networks-list" id="networks-list">
-                                <!-- Networks will be populated via JavaScript -->
-                            </div>
-                        </div>
-                    </div>
+      <!-- Main Content Area -->
+      <main class="main-content">
+        <!-- Function Cards -->
 
-                    <!-- Access Point Section -->
-                    <div class="network-section">
-                        <h4>Access Point</h4>
-                        <div class="ap-status">
-                            <div class="status-row">
-                                <span class="label">Status:</span>
-                                <span id="ap-status-text">-</span>
-                            </div>
-                            <div class="status-row">
-                                <span class="label">SSID:</span>
-                                <span id="ap-ssid">-</span>
-                            </div>
-                            <div class="status-row">
-                                <span class="label">IP Address:</span>
-                                <span id="ap-ip-address">192.168.4.1</span>
-                            </div>
-                            <div class="status-row">
-                                <span class="label">Connected Devices:</span>
-                                <span id="ap-connected-devices">0</span>
-                            </div>
-                        </div>
-                        
-                        <div class="button-grid">
-                            <button id="configure-ap-btn" class="secondary-btn">
-                                <span class="btn-icon">⚙️</span>
-                                <span class="btn-text">Configure AP</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- WiFi Country Section -->
-                    <div class="network-section">
-                        <h4>WiFi Country</h4>
-                        <div class="country-status">
-                            <div class="status-row">
-                                <span class="label">Current Country:</span>
-                                <span id="current-wifi-country">Loading...</span>
-                            </div>
-                        </div>
-
-                        <div class="button-grid">
-                            <button id="change-country-btn" class="secondary-btn">
-                                <span class="btn-icon">🌍</span>
-                                <span class="btn-text">Change Country</span>
-                            </button>
-                        </div>
-
-                        <!-- Country Selection Modal -->
-                        <div class="country-selection" id="country-selection" style="display: none;">
-                            <div class="country-header">
-                                <h5>Select WiFi Country</h5>
-                                <button type="button" class="close-country-btn" id="close-country-btn" title="Close country selection">
-                                    <span aria-hidden="true">✕</span>
-                                </button>
-                            </div>
-                            <div class="country-list" id="country-list">
-                                <!-- Countries will be populated via JavaScript -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Camera Connection Configuration -->
-                    <div class="network-section">
-                        <h4>Camera Connection</h4>
-                        <div class="config-form">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="camera-ip-config">Camera IP Address:</label>
-                                    <input type="text" id="camera-ip-config" placeholder="192.168.12.98" pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$">
-                                </div>
-                                <div class="form-group">
-                                    <label for="camera-port-config">Port:</label>
-                                    <input type="number" id="camera-port-config" placeholder="443" min="1" max="65535" value="443">
-                                </div>
-                            </div>
-                            <button id="update-camera-config-btn" class="primary-btn">
-                                <span class="btn-icon">🔗</span>
-                                <span class="btn-text">Update Connection</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+        <!-- Controller Status Card -->
+        <div class="function-card" id="controller-status-card">
+          <div class="card-header">
+            <h3>Controller Status</h3>
+          </div>
+          <div class="card-content">
+            <!-- Camera Status -->
+            <div class="status-section">
+              <h4>Camera Status</h4>
+              <div class="status-row">
+                <span class="label">Status:</span>
+                <span id="camera-status-text">Checking...</span>
+              </div>
+              <div class="status-row">
+                <span class="label">IP:</span>
+                <span id="camera-ip">-</span>
+              </div>
+              <div class="status-row">
+                <span class="label">Mode:</span>
+                <span id="camera-mode">-</span>
+              </div>
+              <div class="status-row">
+                <span class="label">Battery:</span>
+                <span id="camera-battery">-</span>
+              </div>
+              <div class="status-row">
+                <span class="label">TimeSync:</span>
+                <span id="camera-timesync" class="sync-none">-</span>
+              </div>
+              <div
+                class="status-row"
+                id="manual-connect-row"
+                style="display: none"
+              >
+                <button id="manual-connect-btn" class="connect-btn">
+                  <span class="btn-icon">🔗</span>
+                  <span class="btn-text">Manual Connect</span>
+                </button>
+              </div>
             </div>
 
-            <!-- Utilities Card -->
-            <div class="function-card" id="utilities-card" style="display: none;">
-                <div class="card-header">
-                    <h3>Utilities</h3>
-                </div>
-                <div class="card-content">
-                    <!-- Time Synchronization Section -->
-                    <div class="utility-section">
-                        <h4>Time Synchronization</h4>
-                        <p class="section-description">Sync system clock to prevent timelapse timing issues in remote locations</p>
-                        
-                        <div class="time-info">
-                            <div class="status-row">
-                                <span class="label">Pi Time:</span>
-                                <span id="pi-current-time">Loading...</span>
-                            </div>
-                            <div class="status-row">
-                                <span class="label">Your Device:</span>
-                                <span id="client-current-time">Loading...</span>
-                            </div>
-                            <div class="status-row">
-                                <span class="label">Time Difference:</span>
-                                <span id="time-difference">Calculating...</span>
-                            </div>
-                            <div class="status-row">
-                                <span class="label">Timezone Info:</span>
-                                <span id="pi-timezone">Loading...</span>
-                            </div>
-                        </div>
-                        
-                        <div class="button-grid">
-                            <button id="get-time-btn" class="secondary-btn">
-                                <span class="btn-icon">🕐</span>
-                                <span class="btn-text">Get Current Time</span>
-                            </button>
-                            <button id="sync-time-btn" class="primary-btn">
-                                <span class="btn-icon">🔄</span>
-                                <span class="btn-text">Sync Time to Pi</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            <!-- Controller Status -->
+            <div class="status-section">
+              <h4>Controller Info</h4>
+              <div class="status-row">
+                <span class="label">Temp:</span>
+                <span id="pi-temperature">-</span>
+              </div>
+              <div class="status-row">
+                <span class="label">Uptime:</span>
+                <span id="pi-uptime">-</span>
+              </div>
+              <div class="status-row">
+                <span class="label">TimeSync:</span>
+                <span id="controller-timesync" class="sync-none">-</span>
+              </div>
+              <div class="status-row power-warnings">
+                <span id="power-warnings"></span>
+              </div>
             </div>
 
-            <!-- Test Shot Card -->
-            <div class="function-card" id="test-shot-card" style="display: none;">
-                <div class="card-header">
-                    <h3>Test Shot</h3>
-                </div>
-                <div class="card-content">
-                    <!-- Camera Settings Section -->
-                    <div class="camera-settings-section" style="margin-bottom: 1.5rem;">
-                        <h4 style="margin-top: 0; margin-bottom: 1rem;">Camera Settings</h4>
-                        <div id="camera-settings-display" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                            <!-- Settings populated by test-shot.js -->
-                            <p style="color: #666; grid-column: 1 / -1;">Connect camera to view settings</p>
-                        </div>
-                        <div class="button-grid" style="margin-top: 1rem;">
-                            <button id="refresh-settings-btn" class="secondary-btn" disabled>
-                                <span class="btn-icon">🔄</span>
-                                <span class="btn-text">Refresh Settings</span>
-                            </button>
-                            <button id="apply-settings-btn" class="primary-btn" disabled style="display: none;">
-                                <span class="btn-icon">✓</span>
-                                <span class="btn-text">Apply Changes</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="button-grid">
-                        <button id="capture-liveview-btn" class="primary-btn" disabled>
-                            <span class="btn-icon">📷</span>
-                            <span class="btn-text">Capture Live View</span>
-                        </button>
-                        <button id="clear-liveview-btn" class="secondary-btn" disabled>
-                            <span class="btn-icon">🗑️</span>
-                            <span class="btn-text">Clear All</span>
-                        </button>
-                    </div>
-
-                    <!-- Live View Gallery -->
-                    <div id="liveview-gallery" style="margin-top: 1.5rem;">
-                        <!-- Gallery populated by test-shot.js -->
-                    </div>
-                </div>
+            <!-- Network Status -->
+            <div class="status-section">
+              <h4>Network Status</h4>
+              <div class="status-row">
+                <span class="label">WiFi:</span>
+                <span id="wifi-connection-status">-</span>
+              </div>
+              <div class="status-row">
+                <span class="label">Access Point:</span>
+                <span id="ap-connection-status">-</span>
+              </div>
+              <div class="status-row">
+                <span class="label">Clients:</span>
+                <span id="ap-clients-detail">-</span>
+              </div>
             </div>
-
-            <!-- Camera Settings Card -->
-            <div class="function-card" id="camera-settings-card" style="display: none;">
-                <div class="card-header">
-                    <h3>Camera Settings</h3>
-                </div>
-                <div class="card-content">
-                    <div class="button-grid">
-                        <button id="get-settings-btn" class="secondary-btn" disabled>
-                            <span class="btn-icon">⚙️</span>
-                            <span class="btn-text">Get Settings</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Intervalometer Card -->
-            <div class="function-card" id="intervalometer-card" style="display: none;">
-                <div class="card-header">
-                    <h3>Intervalometer</h3>
-                </div>
-                <div class="card-content">
-                    <!-- Setup Section -->
-                    <div class="intervalometer-setup" id="intervalometer-setup">
-                        <div class="intervalometer-controls">
-                            <div class="input-group">
-                                <label for="session-title-input">Session Title:</label>
-                                <input type="text" id="session-title-input" placeholder="Auto-generated (YYYYMMDD-HHMMSS)" maxlength="100">
-                                <small>Leave blank for automatic timestamp</small>
-                            </div>
-                            
-                            <div class="input-group">
-                                <label for="interval-input">Interval (seconds):</label>
-                                <input type="number" id="interval-input" value="10" min="1" max="3600">
-                            </div>
-                            
-                            <div class="input-group">
-                                <label>Stop Condition:</label>
-                                <div class="stop-condition-options">
-                                    <div class="radio-option">
-                                        <input type="radio" id="unlimited-radio" name="stop-condition" value="unlimited" checked>
-                                        <label for="unlimited-radio">Unlimited (until manually stopped)</label>
-                                    </div>
-                                    <div class="radio-option">
-                                        <input type="radio" id="shots-radio" name="stop-condition" value="shots">
-                                        <label for="shots-radio">Stop after</label>
-                                        <input type="number" id="shots-input" placeholder="10" min="1" disabled>
-                                        <span>shots</span>
-                                    </div>
-                                    <div class="radio-option">
-                                        <input type="radio" id="time-radio" name="stop-condition" value="time">
-                                        <label for="time-radio">Stop at</label>
-                                        <input type="time" id="stop-time-input" disabled>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <button id="start-intervalometer-btn" class="primary-btn" disabled>
-                                <span class="btn-icon">▶️</span>
-                                <span class="btn-text">Start</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Progress Section -->
-                    <div class="intervalometer-progress" id="intervalometer-progress" style="display: none;">
-                        <div class="progress-stats">
-                            <div class="stat-item">
-                                <span class="stat-label">Interval:</span>
-                                <span id="session-interval">-</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Stop Criteria:</span>
-                                <span id="session-stop-criteria">-</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Shots Taken:</span>
-                                <span id="shots-taken">0 of -</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Success Rate:</span>
-                                <span id="success-rate">100%</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Duration:</span>
-                                <span id="session-duration">00:00</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Next Shot:</span>
-                                <span id="next-shot-countdown">-</span>
-                            </div>
-                        </div>
-
-                        <div class="progress-bar">
-                            <div class="progress-fill" id="progress-fill"></div>
-                        </div>
-
-                        <div class="button-grid">
-                            <button id="stop-intervalometer-btn" class="danger-btn" disabled>
-                                <span class="btn-icon">⏹️</span>
-                                <span class="btn-text">Stop</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Activity Log Card -->
-            <div class="function-card" id="activity-log-card" style="display: none;">
-                <div class="card-header">
-                    <h3>Activity Log</h3>
-                </div>
-                <div class="card-content">
-                    <div class="log-container" id="activity-log">
-                        <div class="log-entry info">
-                            <span class="log-time">--:--:--</span>
-                            <span class="log-message">Initializing camera control interface...</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Timelapse Reports Card -->
-            <div class="function-card" id="timelapse-reports-card" style="display: none;">
-                <div class="card-header">
-                    <h3>Timelapse Reports</h3>
-                </div>
-                <div class="card-content">
-                    <!-- Reports List -->
-                    <div class="reports-section" id="reports-list-section">
-                        <div class="section-header">
-                            <h4>Saved Reports</h4>
-                            <button id="refresh-reports-btn" class="icon-btn" title="Refresh reports">
-                                <span class="btn-icon">🔄</span>
-                            </button>
-                        </div>
-                        
-                        <div class="reports-container" id="reports-container">
-                            <div class="loading-message" id="reports-loading">Loading reports...</div>
-                            <div class="empty-state" id="reports-empty" style="display: none;">
-                                <p>No timelapse reports found.</p>
-                                <p>Complete an intervalometer session to create your first report.</p>
-                            </div>
-                            <div class="reports-list" id="reports-list" style="display: none;">
-                                <!-- Reports will be populated via JavaScript -->
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Report Details View -->
-                    <div class="report-details-section" id="report-details-section" style="display: none;">
-                        <div class="section-header">
-                            <button id="back-to-reports-btn" class="icon-btn" title="Back to reports list">
-                                <span class="btn-icon">←</span>
-                            </button>
-                            <h4 id="report-title">Report Details</h4>
-                            <div class="header-actions">
-                                <button id="download-json-btn" class="icon-btn" title="Download as JSON">
-                                    <span class="btn-icon">📥</span>
-                                </button>
-                                <button id="download-markdown-btn" class="icon-btn" title="Download as Markdown">
-                                    <span class="btn-icon">📄</span>
-                                </button>
-                                <button id="edit-report-title-btn" class="icon-btn" title="Edit title">
-                                    <span class="btn-icon">✏️</span>
-                                </button>
-                                <button id="delete-report-btn" class="icon-btn danger" title="Delete report">
-                                    <span class="btn-icon">🗑️</span>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="report-content" id="report-content">
-                            <!-- Report details will be populated via JavaScript -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Session Completion Card -->
-            <div class="function-card" id="session-completion-card" style="display: none;">
-                <div class="card-header">
-                    <h3>Timelapse Session Complete</h3>
-                </div>
-                <div class="card-content">
-                    <div class="completion-summary" id="completion-summary">
-                        <!-- Session summary will be populated via JavaScript -->
-                    </div>
-                    
-                    <div class="title-edit-section">
-                        <div class="input-group">
-                            <label for="completion-title-input">Session Title:</label>
-                            <input type="text" id="completion-title-input" placeholder="Enter title for this session" maxlength="100">
-                        </div>
-                    </div>
-                    
-                    <div class="completion-actions">
-                        <div class="button-grid">
-                            <button id="discard-session-btn" class="secondary-btn">
-                                <span class="btn-icon">❌</span>
-                                <span class="btn-text">Discard</span>
-                            </button>
-                            <button id="save-session-btn" class="primary-btn">
-                                <span class="btn-icon">💾</span>
-                                <span class="btn-text">Save Report</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </main>
-
-        <!-- Settings Modal (for future use) -->
-        <div id="settings-modal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Camera Settings</h3>
-                    <button class="modal-close">&times;</button>
-                </div>
-                <div class="modal-body" id="settings-content">
-                    <!-- Settings content will be populated via JavaScript -->
-                </div>
-            </div>
+          </div>
         </div>
 
-        <!-- WiFi Connection Modal -->
-        <div id="wifi-connect-modal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Connect to WiFi</h3>
-                    <button class="modal-close">&times;</button>
+        <!-- Network Settings Card -->
+        <div
+          class="function-card"
+          id="network-settings-card"
+          style="display: none"
+        >
+          <div class="card-header">
+            <h3>Network Settings</h3>
+          </div>
+          <div class="card-content">
+            <!-- WiFi Client Section -->
+            <div class="network-section" id="wifi-client-section">
+              <h4>WiFi Connection</h4>
+              <div class="wifi-status">
+                <div class="status-row">
+                  <span class="label">Status:</span>
+                  <span id="wifi-status">Off</span>
                 </div>
-                <div class="modal-body">
-                    <div class="input-group">
-                        <label for="wifi-ssid-input">Network Name (SSID):</label>
-                        <input type="text" id="wifi-ssid-input" readonly>
-                    </div>
-                    <div class="input-group">
-                        <label for="wifi-password-input">Password:</label>
-                        <div class="password-input-container">
-                            <input type="password" id="wifi-password-input" placeholder="Enter WiFi password">
-                            <button type="button" class="password-toggle-btn" data-target="wifi-password-input" title="Show password" aria-label="Show password">
-                                <span class="toggle-icon" aria-hidden="true">👁️</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label for="wifi-priority-input">Priority (optional):</label>
-                        <input type="number" id="wifi-priority-input" value="1" min="0" max="100">
-                        <small>Higher numbers = higher priority</small>
-                    </div>
-
-                    <!-- Error display area -->
-                    <div class="modal-error" id="wifi-connect-error" style="display: none;">
-                        <div class="error-icon">⚠️</div>
-                        <div class="error-content">
-                            <div class="error-title">Connection Failed</div>
-                            <div class="error-message" id="wifi-connect-error-message">
-                                Unable to connect to network
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="button-grid">
-                        <button id="cancel-wifi-connect-btn" class="secondary-btn">Cancel</button>
-                        <button id="confirm-wifi-connect-btn" class="primary-btn">Connect</button>
-                    </div>
+                <div class="status-row">
+                  <span class="label">Current Network:</span>
+                  <span id="current-wifi-network">Not connected</span>
                 </div>
+                <div class="status-row">
+                  <span class="label">IP Address:</span>
+                  <span id="wifi-ip-address">-</span>
+                </div>
+              </div>
+
+              <div class="button-grid">
+                <button id="scan-wifi-btn" class="secondary-btn">
+                  <span class="btn-icon">🛜</span>
+                  <span class="btn-text">Switch Network</span>
+                </button>
+                <button id="wifi-toggle-btn" class="danger-btn" disabled>
+                  <span class="btn-icon" id="wifi-toggle-icon">❌</span>
+                  <span class="btn-text" id="wifi-toggle-text">Disconnect</span>
+                </button>
+              </div>
+
+              <!-- WiFi Networks List -->
+              <div
+                class="wifi-networks"
+                id="wifi-networks"
+                style="display: none"
+              >
+                <div class="networks-header">
+                  <h5>Available Networks</h5>
+                  <button
+                    type="button"
+                    class="close-networks-btn"
+                    id="close-networks-btn"
+                    title="Close networks list"
+                  >
+                    <span aria-hidden="true">✕</span>
+                  </button>
+                </div>
+                <div class="networks-list" id="networks-list">
+                  <!-- Networks will be populated via JavaScript -->
+                </div>
+              </div>
             </div>
+
+            <!-- Access Point Section -->
+            <div class="network-section">
+              <h4>Access Point</h4>
+              <div class="ap-status">
+                <div class="status-row">
+                  <span class="label">Status:</span>
+                  <span id="ap-status-text">-</span>
+                </div>
+                <div class="status-row">
+                  <span class="label">SSID:</span>
+                  <span id="ap-ssid">-</span>
+                </div>
+                <div class="status-row">
+                  <span class="label">IP Address:</span>
+                  <span id="ap-ip-address">192.168.4.1</span>
+                </div>
+                <div class="status-row">
+                  <span class="label">Connected Devices:</span>
+                  <span id="ap-connected-devices">0</span>
+                </div>
+              </div>
+
+              <div class="button-grid">
+                <button id="configure-ap-btn" class="secondary-btn">
+                  <span class="btn-icon">⚙️</span>
+                  <span class="btn-text">Configure AP</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- WiFi Country Section -->
+            <div class="network-section">
+              <h4>WiFi Country</h4>
+              <div class="country-status">
+                <div class="status-row">
+                  <span class="label">Current Country:</span>
+                  <span id="current-wifi-country">Loading...</span>
+                </div>
+              </div>
+
+              <div class="button-grid">
+                <button id="change-country-btn" class="secondary-btn">
+                  <span class="btn-icon">🌍</span>
+                  <span class="btn-text">Change Country</span>
+                </button>
+              </div>
+
+              <!-- Country Selection Modal -->
+              <div
+                class="country-selection"
+                id="country-selection"
+                style="display: none"
+              >
+                <div class="country-header">
+                  <h5>Select WiFi Country</h5>
+                  <button
+                    type="button"
+                    class="close-country-btn"
+                    id="close-country-btn"
+                    title="Close country selection"
+                  >
+                    <span aria-hidden="true">✕</span>
+                  </button>
+                </div>
+                <div class="country-list" id="country-list">
+                  <!-- Countries will be populated via JavaScript -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Camera Connection Configuration -->
+            <div class="network-section">
+              <h4>Camera Connection</h4>
+              <div class="config-form">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="camera-ip-config">Camera IP Address:</label>
+                    <input
+                      type="text"
+                      id="camera-ip-config"
+                      placeholder="192.168.12.98"
+                      pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="camera-port-config">Port:</label>
+                    <input
+                      type="number"
+                      id="camera-port-config"
+                      placeholder="443"
+                      min="1"
+                      max="65535"
+                      value="443"
+                    />
+                  </div>
+                </div>
+                <button id="update-camera-config-btn" class="primary-btn">
+                  <span class="btn-icon">🔗</span>
+                  <span class="btn-text">Update Connection</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- Manual Camera Connection Modal -->
-        <div id="manual-connect-modal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Manual Camera Connection</h3>
-                    <button class="modal-close">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <p class="modal-description">
-                        Enter the IP address shown on your camera's screen when connected to WiFi.
-                        The camera will display its IP address after successfully connecting to a network.
-                    </p>
-                    
-                    <div class="input-group">
-                        <label for="manual-ip-input">Camera IP Address:</label>
-                        <div class="input-with-clear">
-                            <input type="text" id="manual-ip-input" placeholder="192.168.12.98" pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$">
-                            <button type="button" class="clear-input-btn" id="clear-ip-btn" title="Clear IP address">
-                                <span aria-hidden="true">✕</span>
-                            </button>
-                        </div>
-                        <small>Enter the IP address shown on camera screen</small>
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="manual-port-input">Port (optional):</label>
-                        <input type="number" id="manual-port-input" value="443" min="1" max="65535">
-                        <small>Leave as 443 unless you know the camera uses a different port</small>
-                    </div>
+        <!-- Utilities Card -->
+        <div class="function-card" id="utilities-card" style="display: none">
+          <div class="card-header">
+            <h3>Utilities</h3>
+          </div>
+          <div class="card-content">
+            <!-- Time Synchronization Section -->
+            <div class="utility-section">
+              <h4>Time Synchronization</h4>
+              <p class="section-description">
+                Sync system clock to prevent timelapse timing issues in remote
+                locations
+              </p>
 
-                    <!-- Error display area -->
-                    <div class="modal-error" id="manual-connect-error" style="display: none;">
-                        <div class="error-icon">⚠️</div>
-                        <div class="error-content">
-                            <div class="error-title">Connection Failed</div>
-                            <div class="error-message" id="manual-connect-error-message">
-                                Unable to connect to camera
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="button-grid">
-                        <button id="cancel-manual-connect-btn" class="secondary-btn">Cancel</button>
-                        <button id="confirm-manual-connect-btn" class="primary-btn">Connect</button>
-                    </div>
+              <div class="time-info">
+                <div class="status-row">
+                  <span class="label">Pi Time:</span>
+                  <span id="pi-current-time">Loading...</span>
                 </div>
+                <div class="status-row">
+                  <span class="label">Your Device:</span>
+                  <span id="client-current-time">Loading...</span>
+                </div>
+                <div class="status-row">
+                  <span class="label">Time Difference:</span>
+                  <span id="time-difference">Calculating...</span>
+                </div>
+                <div class="status-row">
+                  <span class="label">Timezone Info:</span>
+                  <span id="pi-timezone">Loading...</span>
+                </div>
+              </div>
+
+              <div class="button-grid">
+                <button id="get-time-btn" class="secondary-btn">
+                  <span class="btn-icon">🕐</span>
+                  <span class="btn-text">Get Current Time</span>
+                </button>
+                <button id="sync-time-btn" class="primary-btn">
+                  <span class="btn-icon">🔄</span>
+                  <span class="btn-text">Sync Time to Pi</span>
+                </button>
+              </div>
             </div>
+          </div>
         </div>
 
-        <!-- WiFi Connectivity Warning Modal -->
-        <div id="wifi-connectivity-warning-modal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>⚠️ Connectivity Warning</h3>
-                    <button class="modal-close">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div class="warning-message">
-                        <p><strong>You're currently connected via WiFi.</strong></p>
-                        <p>Changing WiFi networks will disconnect you from the camera controller.</p>
-                        <p>We recommend connecting to the Access Point first:</p>
-                        <div class="ap-info">
-                            <span class="ap-ssid-display" id="warning-ap-ssid">PiCameraController</span>
-                        </div>
-                    </div>
-                    <div class="button-grid">
-                        <button id="cancel-wifi-setup-btn" class="secondary-btn">Cancel</button>
-                        <button id="proceed-wifi-setup-btn" class="danger-btn">Continue Anyway</button>
-                    </div>
-                </div>
+        <!-- Test Shot Card -->
+        <div class="function-card" id="test-shot-card" style="display: none">
+          <div class="card-header">
+            <h3>Test Shot</h3>
+          </div>
+          <div class="card-content">
+            <!-- Camera Settings Section -->
+            <div class="camera-settings-section" style="margin-bottom: 1.5rem">
+              <h4 style="margin-top: 0; margin-bottom: 1rem">
+                Camera Settings
+              </h4>
+              <div
+                id="camera-settings-display"
+                style="
+                  display: grid;
+                  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                  gap: 1rem;
+                "
+              >
+                <!-- Settings populated by test-shot.js -->
+                <p style="color: #666; grid-column: 1 / -1">
+                  Connect camera to view settings
+                </p>
+              </div>
+              <div class="button-grid" style="margin-top: 1rem">
+                <button
+                  id="refresh-settings-btn"
+                  class="secondary-btn"
+                  disabled
+                >
+                  <span class="btn-icon">🔄</span>
+                  <span class="btn-text">Refresh Settings</span>
+                </button>
+                <button
+                  id="apply-settings-btn"
+                  class="primary-btn"
+                  disabled
+                  style="display: none"
+                >
+                  <span class="btn-icon">✓</span>
+                  <span class="btn-text">Apply Changes</span>
+                </button>
+              </div>
             </div>
+
+            <div class="button-grid">
+              <button id="capture-liveview-btn" class="primary-btn" disabled>
+                <span class="btn-icon">📷</span>
+                <span class="btn-text">Capture Live View</span>
+              </button>
+              <button id="take-photo-btn" class="primary-btn" disabled>
+                <span class="btn-icon">📸</span>
+                <span class="btn-text">Take Photo</span>
+              </button>
+              <button id="clear-liveview-btn" class="secondary-btn" disabled>
+                <span class="btn-icon">🗑️</span>
+                <span class="btn-text">Clear All</span>
+              </button>
+            </div>
+
+            <!-- Live View Images Section -->
+            <div id="liveview-section" style="margin-top: 1.5rem">
+              <h3>Live View Images</h3>
+              <div id="liveview-gallery">
+                <!-- Gallery populated by test-shot.js -->
+              </div>
+            </div>
+
+            <!-- Test Photos Section -->
+            <div id="testphoto-section" style="margin-top: 1.5rem">
+              <h3>Test Photos</h3>
+              <div id="testphoto-gallery">
+                <!-- Test photos populated by test-shot.js -->
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- Access Point Configuration Modal -->
-        <div id="ap-config-modal" class="modal" style="display: none;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Configure Access Point</h3>
-                    <button class="modal-close">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div class="input-group">
-                        <label for="ap-ssid-input">Network Name (SSID):</label>
-                        <input type="text" id="ap-ssid-input" value="PiCameraController" maxlength="32">
-                    </div>
-                    <div class="input-group">
-                        <label for="ap-password-input">Password:</label>
-                        <div class="password-input-container">
-                            <input type="password" id="ap-password-input" placeholder="At least 8 characters" minlength="8">
-                            <button type="button" class="password-toggle-btn" data-target="ap-password-input" title="Show password" aria-label="Show password">
-                                <span class="toggle-icon" aria-hidden="true">👁️</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label for="ap-channel-input">WiFi Channel:</label>
-                        <select id="ap-channel-input">
-                            <option value="1">1 (2.412 GHz)</option>
-                            <option value="6">6 (2.437 GHz)</option>
-                            <option value="7" selected>7 (2.442 GHz)</option>
-                            <option value="11">11 (2.462 GHz)</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>
-                            <input type="checkbox" id="ap-hidden-checkbox">
-                            Hide network (don't broadcast SSID)
-                        </label>
-                    </div>
-                    <div class="warning-message">
-                        <p><strong>Note:</strong> Changing AP settings requires system privileges and may need a restart to take effect.</p>
-                    </div>
-                    <div class="button-grid">
-                        <button id="cancel-ap-config-btn" class="secondary-btn">Cancel</button>
-                        <button id="save-ap-config-btn" class="primary-btn">Save Configuration</button>
-                    </div>
-                </div>
+        <!-- Camera Settings Card -->
+        <div
+          class="function-card"
+          id="camera-settings-card"
+          style="display: none"
+        >
+          <div class="card-header">
+            <h3>Camera Settings</h3>
+          </div>
+          <div class="card-content">
+            <div class="button-grid">
+              <button id="get-settings-btn" class="secondary-btn" disabled>
+                <span class="btn-icon">⚙️</span>
+                <span class="btn-text">Get Settings</span>
+              </button>
             </div>
+          </div>
         </div>
+
+        <!-- Intervalometer Card -->
+        <div
+          class="function-card"
+          id="intervalometer-card"
+          style="display: none"
+        >
+          <div class="card-header">
+            <h3>Intervalometer</h3>
+          </div>
+          <div class="card-content">
+            <!-- Setup Section -->
+            <div class="intervalometer-setup" id="intervalometer-setup">
+              <div class="intervalometer-controls">
+                <div class="input-group">
+                  <label for="session-title-input">Session Title:</label>
+                  <input
+                    type="text"
+                    id="session-title-input"
+                    placeholder="Auto-generated (YYYYMMDD-HHMMSS)"
+                    maxlength="100"
+                  />
+                  <small>Leave blank for automatic timestamp</small>
+                </div>
+
+                <div class="input-group">
+                  <label for="interval-input">Interval (seconds):</label>
+                  <input
+                    type="number"
+                    id="interval-input"
+                    value="10"
+                    min="1"
+                    max="3600"
+                  />
+                </div>
+
+                <div class="input-group">
+                  <label>Stop Condition:</label>
+                  <div class="stop-condition-options">
+                    <div class="radio-option">
+                      <input
+                        type="radio"
+                        id="unlimited-radio"
+                        name="stop-condition"
+                        value="unlimited"
+                        checked
+                      />
+                      <label for="unlimited-radio"
+                        >Unlimited (until manually stopped)</label
+                      >
+                    </div>
+                    <div class="radio-option">
+                      <input
+                        type="radio"
+                        id="shots-radio"
+                        name="stop-condition"
+                        value="shots"
+                      />
+                      <label for="shots-radio">Stop after</label>
+                      <input
+                        type="number"
+                        id="shots-input"
+                        placeholder="10"
+                        min="1"
+                        disabled
+                      />
+                      <span>shots</span>
+                    </div>
+                    <div class="radio-option">
+                      <input
+                        type="radio"
+                        id="time-radio"
+                        name="stop-condition"
+                        value="time"
+                      />
+                      <label for="time-radio">Stop at</label>
+                      <input type="time" id="stop-time-input" disabled />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  id="start-intervalometer-btn"
+                  class="primary-btn"
+                  disabled
+                >
+                  <span class="btn-icon">▶️</span>
+                  <span class="btn-text">Start</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Progress Section -->
+            <div
+              class="intervalometer-progress"
+              id="intervalometer-progress"
+              style="display: none"
+            >
+              <div class="progress-stats">
+                <div class="stat-item">
+                  <span class="stat-label">Interval:</span>
+                  <span id="session-interval">-</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Stop Criteria:</span>
+                  <span id="session-stop-criteria">-</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Shots Taken:</span>
+                  <span id="shots-taken">0 of -</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Success Rate:</span>
+                  <span id="success-rate">100%</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Duration:</span>
+                  <span id="session-duration">00:00</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Next Shot:</span>
+                  <span id="next-shot-countdown">-</span>
+                </div>
+              </div>
+
+              <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+              </div>
+
+              <div class="button-grid">
+                <button
+                  id="stop-intervalometer-btn"
+                  class="danger-btn"
+                  disabled
+                >
+                  <span class="btn-icon">⏹️</span>
+                  <span class="btn-text">Stop</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity Log Card -->
+        <div class="function-card" id="activity-log-card" style="display: none">
+          <div class="card-header">
+            <h3>Activity Log</h3>
+          </div>
+          <div class="card-content">
+            <div class="log-container" id="activity-log">
+              <div class="log-entry info">
+                <span class="log-time">--:--:--</span>
+                <span class="log-message"
+                  >Initializing camera control interface...</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Timelapse Reports Card -->
+        <div
+          class="function-card"
+          id="timelapse-reports-card"
+          style="display: none"
+        >
+          <div class="card-header">
+            <h3>Timelapse Reports</h3>
+          </div>
+          <div class="card-content">
+            <!-- Reports List -->
+            <div class="reports-section" id="reports-list-section">
+              <div class="section-header">
+                <h4>Saved Reports</h4>
+                <button
+                  id="refresh-reports-btn"
+                  class="icon-btn"
+                  title="Refresh reports"
+                >
+                  <span class="btn-icon">🔄</span>
+                </button>
+              </div>
+
+              <div class="reports-container" id="reports-container">
+                <div class="loading-message" id="reports-loading">
+                  Loading reports...
+                </div>
+                <div
+                  class="empty-state"
+                  id="reports-empty"
+                  style="display: none"
+                >
+                  <p>No timelapse reports found.</p>
+                  <p>
+                    Complete an intervalometer session to create your first
+                    report.
+                  </p>
+                </div>
+                <div
+                  class="reports-list"
+                  id="reports-list"
+                  style="display: none"
+                >
+                  <!-- Reports will be populated via JavaScript -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Report Details View -->
+            <div
+              class="report-details-section"
+              id="report-details-section"
+              style="display: none"
+            >
+              <div class="section-header">
+                <button
+                  id="back-to-reports-btn"
+                  class="icon-btn"
+                  title="Back to reports list"
+                >
+                  <span class="btn-icon">←</span>
+                </button>
+                <h4 id="report-title">Report Details</h4>
+                <div class="header-actions">
+                  <button
+                    id="download-json-btn"
+                    class="icon-btn"
+                    title="Download as JSON"
+                  >
+                    <span class="btn-icon">📥</span>
+                  </button>
+                  <button
+                    id="download-markdown-btn"
+                    class="icon-btn"
+                    title="Download as Markdown"
+                  >
+                    <span class="btn-icon">📄</span>
+                  </button>
+                  <button
+                    id="edit-report-title-btn"
+                    class="icon-btn"
+                    title="Edit title"
+                  >
+                    <span class="btn-icon">✏️</span>
+                  </button>
+                  <button
+                    id="delete-report-btn"
+                    class="icon-btn danger"
+                    title="Delete report"
+                  >
+                    <span class="btn-icon">🗑️</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="report-content" id="report-content">
+                <!-- Report details will be populated via JavaScript -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Session Completion Card -->
+        <div
+          class="function-card"
+          id="session-completion-card"
+          style="display: none"
+        >
+          <div class="card-header">
+            <h3>Timelapse Session Complete</h3>
+          </div>
+          <div class="card-content">
+            <div class="completion-summary" id="completion-summary">
+              <!-- Session summary will be populated via JavaScript -->
+            </div>
+
+            <div class="title-edit-section">
+              <div class="input-group">
+                <label for="completion-title-input">Session Title:</label>
+                <input
+                  type="text"
+                  id="completion-title-input"
+                  placeholder="Enter title for this session"
+                  maxlength="100"
+                />
+              </div>
+            </div>
+
+            <div class="completion-actions">
+              <div class="button-grid">
+                <button id="discard-session-btn" class="secondary-btn">
+                  <span class="btn-icon">❌</span>
+                  <span class="btn-text">Discard</span>
+                </button>
+                <button id="save-session-btn" class="primary-btn">
+                  <span class="btn-icon">💾</span>
+                  <span class="btn-text">Save Report</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Settings Modal (for future use) -->
+      <div id="settings-modal" class="modal" style="display: none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Camera Settings</h3>
+            <button class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body" id="settings-content">
+            <!-- Settings content will be populated via JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <!-- WiFi Connection Modal -->
+      <div id="wifi-connect-modal" class="modal" style="display: none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Connect to WiFi</h3>
+            <button class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="input-group">
+              <label for="wifi-ssid-input">Network Name (SSID):</label>
+              <input type="text" id="wifi-ssid-input" readonly />
+            </div>
+            <div class="input-group">
+              <label for="wifi-password-input">Password:</label>
+              <div class="password-input-container">
+                <input
+                  type="password"
+                  id="wifi-password-input"
+                  placeholder="Enter WiFi password"
+                />
+                <button
+                  type="button"
+                  class="password-toggle-btn"
+                  data-target="wifi-password-input"
+                  title="Show password"
+                  aria-label="Show password"
+                >
+                  <span class="toggle-icon" aria-hidden="true">👁️</span>
+                </button>
+              </div>
+            </div>
+            <div class="input-group">
+              <label for="wifi-priority-input">Priority (optional):</label>
+              <input
+                type="number"
+                id="wifi-priority-input"
+                value="1"
+                min="0"
+                max="100"
+              />
+              <small>Higher numbers = higher priority</small>
+            </div>
+
+            <!-- Error display area -->
+            <div
+              class="modal-error"
+              id="wifi-connect-error"
+              style="display: none"
+            >
+              <div class="error-icon">⚠️</div>
+              <div class="error-content">
+                <div class="error-title">Connection Failed</div>
+                <div class="error-message" id="wifi-connect-error-message">
+                  Unable to connect to network
+                </div>
+              </div>
+            </div>
+
+            <div class="button-grid">
+              <button id="cancel-wifi-connect-btn" class="secondary-btn">
+                Cancel
+              </button>
+              <button id="confirm-wifi-connect-btn" class="primary-btn">
+                Connect
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual Camera Connection Modal -->
+      <div id="manual-connect-modal" class="modal" style="display: none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Manual Camera Connection</h3>
+            <button class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p class="modal-description">
+              Enter the IP address shown on your camera's screen when connected
+              to WiFi. The camera will display its IP address after successfully
+              connecting to a network.
+            </p>
+
+            <div class="input-group">
+              <label for="manual-ip-input">Camera IP Address:</label>
+              <div class="input-with-clear">
+                <input
+                  type="text"
+                  id="manual-ip-input"
+                  placeholder="192.168.12.98"
+                  pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
+                />
+                <button
+                  type="button"
+                  class="clear-input-btn"
+                  id="clear-ip-btn"
+                  title="Clear IP address"
+                >
+                  <span aria-hidden="true">✕</span>
+                </button>
+              </div>
+              <small>Enter the IP address shown on camera screen</small>
+            </div>
+
+            <div class="input-group">
+              <label for="manual-port-input">Port (optional):</label>
+              <input
+                type="number"
+                id="manual-port-input"
+                value="443"
+                min="1"
+                max="65535"
+              />
+              <small
+                >Leave as 443 unless you know the camera uses a different
+                port</small
+              >
+            </div>
+
+            <!-- Error display area -->
+            <div
+              class="modal-error"
+              id="manual-connect-error"
+              style="display: none"
+            >
+              <div class="error-icon">⚠️</div>
+              <div class="error-content">
+                <div class="error-title">Connection Failed</div>
+                <div class="error-message" id="manual-connect-error-message">
+                  Unable to connect to camera
+                </div>
+              </div>
+            </div>
+
+            <div class="button-grid">
+              <button id="cancel-manual-connect-btn" class="secondary-btn">
+                Cancel
+              </button>
+              <button id="confirm-manual-connect-btn" class="primary-btn">
+                Connect
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- WiFi Connectivity Warning Modal -->
+      <div
+        id="wifi-connectivity-warning-modal"
+        class="modal"
+        style="display: none"
+      >
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>⚠️ Connectivity Warning</h3>
+            <button class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="warning-message">
+              <p><strong>You're currently connected via WiFi.</strong></p>
+              <p>
+                Changing WiFi networks will disconnect you from the camera
+                controller.
+              </p>
+              <p>We recommend connecting to the Access Point first:</p>
+              <div class="ap-info">
+                <span class="ap-ssid-display" id="warning-ap-ssid"
+                  >PiCameraController</span
+                >
+              </div>
+            </div>
+            <div class="button-grid">
+              <button id="cancel-wifi-setup-btn" class="secondary-btn">
+                Cancel
+              </button>
+              <button id="proceed-wifi-setup-btn" class="danger-btn">
+                Continue Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Access Point Configuration Modal -->
+      <div id="ap-config-modal" class="modal" style="display: none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Configure Access Point</h3>
+            <button class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="input-group">
+              <label for="ap-ssid-input">Network Name (SSID):</label>
+              <input
+                type="text"
+                id="ap-ssid-input"
+                value="PiCameraController"
+                maxlength="32"
+              />
+            </div>
+            <div class="input-group">
+              <label for="ap-password-input">Password:</label>
+              <div class="password-input-container">
+                <input
+                  type="password"
+                  id="ap-password-input"
+                  placeholder="At least 8 characters"
+                  minlength="8"
+                />
+                <button
+                  type="button"
+                  class="password-toggle-btn"
+                  data-target="ap-password-input"
+                  title="Show password"
+                  aria-label="Show password"
+                >
+                  <span class="toggle-icon" aria-hidden="true">👁️</span>
+                </button>
+              </div>
+            </div>
+            <div class="input-group">
+              <label for="ap-channel-input">WiFi Channel:</label>
+              <select id="ap-channel-input">
+                <option value="1">1 (2.412 GHz)</option>
+                <option value="6">6 (2.437 GHz)</option>
+                <option value="7" selected>7 (2.442 GHz)</option>
+                <option value="11">11 (2.462 GHz)</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>
+                <input type="checkbox" id="ap-hidden-checkbox" />
+                Hide network (don't broadcast SSID)
+              </label>
+            </div>
+            <div class="warning-message">
+              <p>
+                <strong>Note:</strong> Changing AP settings requires system
+                privileges and may need a restart to take effect.
+              </p>
+            </div>
+            <div class="button-grid">
+              <button id="cancel-ap-config-btn" class="secondary-btn">
+                Cancel
+              </button>
+              <button id="save-ap-config-btn" class="primary-btn">
+                Save Configuration
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Loading Indicator -->
     <div id="loading-overlay" class="loading-overlay">
-        <div class="loading-spinner"></div>
-        <p>Connecting to camera...</p>
+      <div class="loading-spinner"></div>
+      <p>Connecting to camera...</p>
     </div>
 
     <!-- Scripts -->
@@ -778,5 +1105,5 @@
     <script src="js/timelapse.js"></script>
     <script src="js/test-shot.js"></script>
     <script src="js/app.js"></script>
-</body>
+  </body>
 </html>

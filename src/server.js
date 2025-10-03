@@ -15,6 +15,7 @@ import { NetworkStateManager } from "./network/state-manager.js";
 // import { NetworkServiceManager } from './network/service-manager.js'; // Unused import
 import { IntervalometerStateManager } from "./intervalometer/state-manager.js";
 import { LiveViewManager } from "./camera/liveview-manager.js";
+import { TestPhotoService } from "./camera/test-photo.js";
 import { createApiRouter } from "./routes/api.js";
 import { createWebSocketHandler } from "./websocket/handler.js";
 import timeSyncService from "./timesync/service.js";
@@ -48,6 +49,11 @@ class CameraControlServer {
     // Initialize live view manager with camera controller getter function
     // LiveViewManager will call this function to get the current controller
     this.liveViewManager = new LiveViewManager(() =>
+      this.getCurrentCameraController(),
+    );
+
+    // Initialize test photo service with camera controller getter function
+    this.testPhotoService = new TestPhotoService(() =>
       this.getCurrentCameraController(),
     );
 
@@ -205,6 +211,7 @@ class CameraControlServer {
         this.discoveryManager,
         this.intervalometerStateManager,
         this.liveViewManager,
+        this.testPhotoService,
       ),
     );
 
