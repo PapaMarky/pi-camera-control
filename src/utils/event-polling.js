@@ -43,73 +43,133 @@ export async function waitForPhotoComplete(
     timeout: `${timeoutMs}ms`,
   });
 
+  const startTime = Date.now();
+  let pollCount = 0;
+
   try {
-    // Start event polling with timeout=long for long-polling (ver110)
-    const response = await cameraController.client.get(
-      `${cameraController.baseUrl}/ccapi/ver110/event/polling`,
-      {
-        params: {
-          timeout: "long",
-        },
-        timeout: timeoutMs,
-      },
-    );
+    // Keep polling until we get addedcontents event or timeout
+    while (Date.now() - startTime < timeoutMs) {
+      pollCount++;
+      const remainingTime = timeoutMs - (Date.now() - startTime);
 
-    // Extract addedcontents from response
-    const addedcontents = response.data?.addedcontents;
-
-    if (!addedcontents || addedcontents.length === 0) {
-      logger.error("Event polling returned no photo path", {
-        responseData: response.data,
+      logger.debug(`Event poll attempt ${pollCount}`, {
+        remainingTime: `${remainingTime}ms`,
       });
-      throw new Error("No photo path in event response");
+
+      try {
+        // Poll for events with timeout=long (waits ~30s for events)
+        // Use remaining time or 35s, whichever is less
+        const pollTimeout = Math.min(remainingTime, 35000);
+
+        const response = await cameraController.client.get(
+          `${cameraController.baseUrl}/ccapi/ver110/event/polling`,
+          {
+            params: {
+              timeout: "long",
+            },
+            timeout: pollTimeout,
+          },
+        );
+
+        // Check if this response contains addedcontents
+        const addedcontents = response.data?.addedcontents;
+
+        if (addedcontents && addedcontents.length > 0) {
+          // Found it! Return first file path (typically JPEG, may have RAW as second entry)
+          const filePath = addedcontents[0];
+          const elapsed = Date.now() - startTime;
+
+          logger.info("Photo completion event received", {
+            filePath,
+            totalFiles: addedcontents.length,
+            pollCount,
+            elapsed: `${elapsed}ms`,
+          });
+
+          return filePath;
+        }
+
+        // No addedcontents in this event, continue polling
+        // Add small delay to avoid rapid successive requests
+        logger.debug("Event received but no addedcontents, continuing", {
+          eventKeys: Object.keys(response.data || {}),
+        });
+        await new Promise((resolve) => setTimeout(resolve, 50)); // 50ms delay
+      } catch (pollError) {
+        // Handle errors from individual poll attempts
+        if (
+          pollError.code === "ECONNABORTED" ||
+          pollError.message.includes("timeout")
+        ) {
+          // HTTP timeout on this poll - check if we have time to retry
+          const elapsed = Date.now() - startTime;
+          if (elapsed >= timeoutMs) {
+            throw new Error(
+              `Timeout waiting for photo completion (${timeoutMs}ms)`,
+            );
+          }
+          logger.debug("Poll timeout, retrying", { elapsed: `${elapsed}ms` });
+          continue;
+        }
+
+        // Connection errors should be re-thrown
+        if (
+          pollError.code === "ECONNREFUSED" ||
+          pollError.code === "ENOTFOUND" ||
+          pollError.message.includes("Network Error")
+        ) {
+          throw new Error("Camera disconnected during photo capture");
+        }
+
+        // CCAPI errors - handle "Already started" with retry
+        if (pollError.response?.status) {
+          const apiMessage =
+            pollError.response.data?.message || "CCAPI event polling failed";
+
+          // Handle "Already started" - camera session may not be fully closed yet
+          if (apiMessage === "Already started") {
+            logger.debug(
+              "Polling session already active, waiting before retry",
+            );
+            await new Promise((resolve) => setTimeout(resolve, 100)); // Wait 100ms
+            continue;
+          }
+
+          throw new Error(apiMessage);
+        }
+
+        // Unknown error - re-throw
+        throw pollError;
+      }
     }
 
-    // Return first file path (typically JPEG, may have RAW as second entry)
-    const filePath = addedcontents[0];
-    logger.info("Photo completion event received", {
-      filePath,
-      totalFiles: addedcontents.length,
+    // If we exit the loop, we've timed out
+    const elapsed = Date.now() - startTime;
+    logger.error("Timeout waiting for addedcontents event", {
+      elapsed: `${elapsed}ms`,
+      pollCount,
     });
-
-    return filePath;
+    throw new Error(
+      `Timeout waiting for photo completion (${timeoutMs}ms, ${pollCount} polls)`,
+    );
   } catch (error) {
-    // Handle specific error cases
-    if (error.code === "ECONNABORTED" || error.message.includes("timeout")) {
-      logger.error("Timeout waiting for photo completion", {
-        timeout: `${timeoutMs}ms`,
-        error: error.message,
-      });
-      throw new Error(`Timeout waiting for photo completion (${timeoutMs}ms)`);
+    // Handle top-level errors
+    if (error.message.includes("Camera controller is required")) {
+      throw error;
     }
 
-    if (
-      error.code === "ECONNREFUSED" ||
-      error.code === "ENOTFOUND" ||
-      error.message.includes("Network Error")
-    ) {
+    if (error.message.includes("Camera disconnected")) {
       logger.error("Camera disconnected during event polling", {
         error: error.message,
       });
-      throw new Error("Camera disconnected during photo capture");
+      throw error;
     }
 
-    // Handle CCAPI error responses
-    if (error.response?.status) {
-      const apiMessage =
-        error.response.data?.message || "CCAPI event polling failed";
-      logger.error("CCAPI error during event polling", {
-        status: error.response.status,
-        message: apiMessage,
+    if (error.message.includes("Timeout waiting for photo completion")) {
+      logger.error("Timeout waiting for photo completion", {
+        timeout: `${timeoutMs}ms`,
+        pollCount,
       });
-      throw new Error(apiMessage);
-    }
-
-    // Re-throw if already processed (e.g., "No photo path in event response")
-    if (
-      error.message === "No photo path in event response" ||
-      error.message === "Camera controller is required"
-    ) {
       throw error;
     }
 
@@ -117,6 +177,7 @@ export async function waitForPhotoComplete(
     logger.error("Unknown error during event polling", {
       error: error.message,
       code: error.code,
+      pollCount,
     });
     throw new Error(`Event polling failed: ${error.message}`);
   }

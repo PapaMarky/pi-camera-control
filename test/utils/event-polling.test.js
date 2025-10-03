@@ -68,10 +68,11 @@ describe("EventPollingUtility", () => {
       const customTimeout = 60000; // 60 seconds
       await waitForPhotoComplete(mockCameraController, customTimeout);
 
+      // First poll uses Math.min(remainingTime, 35000) = 35000
       expect(mockCameraController.client.get).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          timeout: customTimeout,
+          timeout: 35000,
         }),
       );
     });
@@ -95,14 +96,16 @@ describe("EventPollingUtility", () => {
     });
 
     test("should throw error when timeout occurs", async () => {
-      // Mock timeout error
-      const timeoutError = new Error("timeout of 35000ms exceeded");
-      timeoutError.code = "ECONNABORTED";
-      mockCameraController.client.get.mockRejectedValueOnce(timeoutError);
+      // Mock response without addedcontents to keep polling until timeout
+      mockCameraController.client.get.mockResolvedValue({
+        status: 200,
+        data: {}, // No addedcontents - will keep polling
+      });
 
-      await expect(waitForPhotoComplete(mockCameraController)).rejects.toThrow(
-        "Timeout waiting for photo completion (35000ms)",
-      );
+      // Use short timeout to avoid long test
+      await expect(
+        waitForPhotoComplete(mockCameraController, 100),
+      ).rejects.toThrow("Timeout waiting for photo completion");
     });
 
     test("should throw error when camera disconnects during polling", async () => {
@@ -128,32 +131,48 @@ describe("EventPollingUtility", () => {
       );
     });
 
-    test("should throw error when no addedcontents in response", async () => {
-      // Mock response without addedcontents
+    test("should continue polling when no addedcontents in response", async () => {
+      // First poll - no addedcontents
       mockCameraController.client.get.mockResolvedValueOnce({
         status: 200,
         data: {
-          // No addedcontents field
           someOtherEvent: "value",
         },
       });
-
-      await expect(waitForPhotoComplete(mockCameraController)).rejects.toThrow(
-        "No photo path in event response",
-      );
-    });
-
-    test("should throw error when addedcontents is empty array", async () => {
+      // Second poll - has addedcontents
       mockCameraController.client.get.mockResolvedValueOnce({
         status: 200,
         data: {
-          addedcontents: [], // Empty array
+          addedcontents: ["/DCIM/100CANON/IMG_0002.JPG"],
         },
       });
 
-      await expect(waitForPhotoComplete(mockCameraController)).rejects.toThrow(
-        "No photo path in event response",
-      );
+      const filePath = await waitForPhotoComplete(mockCameraController);
+
+      expect(filePath).toBe("/DCIM/100CANON/IMG_0002.JPG");
+      expect(mockCameraController.client.get).toHaveBeenCalledTimes(2);
+    });
+
+    test("should continue polling when addedcontents is empty array", async () => {
+      // First poll - empty addedcontents
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          addedcontents: [],
+        },
+      });
+      // Second poll - has addedcontents
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          addedcontents: ["/DCIM/100CANON/IMG_0003.JPG"],
+        },
+      });
+
+      const filePath = await waitForPhotoComplete(mockCameraController);
+
+      expect(filePath).toBe("/DCIM/100CANON/IMG_0003.JPG");
+      expect(mockCameraController.client.get).toHaveBeenCalledTimes(2);
     });
 
     test("should handle multiple files and return first one", async () => {
