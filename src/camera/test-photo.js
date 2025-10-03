@@ -255,6 +255,7 @@ export class TestPhotoService {
       logger.debug("EXIF metadata extracted", {
         hasDate: !!exif?.DateTimeOriginal,
         ISO: exif?.ISO,
+        ExposureTime: exif?.ExposureTime,
         ShutterSpeed: exif?.ShutterSpeed,
         FNumber: exif?.FNumber,
       });
@@ -270,14 +271,19 @@ export class TestPhotoService {
 
       const elapsed = Date.now() - startTime;
 
+      // Extract camera path from photoPath (e.g., "/ccapi/ver130/contents/card1/100CANON/IMG_0031.JPG" -> "100CANON/IMG_0031.JPG")
+      const cameraPath = photoPath.split("/").slice(-2).join("/");
+
       // Create photo metadata
       const photo = {
         id: photoId,
         url: `/api/camera/photos/test/${photoId}`,
         filename,
         timestamp,
+        cameraPath, // Original path on camera
         exif: {
           ISO: exif?.ISO,
+          ExposureTime: exif?.ExposureTime,
           ShutterSpeed: exif?.ShutterSpeed,
           FNumber: exif?.FNumber,
           WhiteBalance: exif?.WhiteBalance,

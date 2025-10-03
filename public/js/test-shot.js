@@ -498,10 +498,17 @@ class TestShotUI {
       const originalText = btn.querySelector(".btn-text").textContent;
       btn.querySelector(".btn-text").textContent = "Taking photo...";
 
+      // Update to "Downloading..." after 1.5s (after shutter fires)
+      const downloadTextTimeout = setTimeout(() => {
+        btn.querySelector(".btn-text").textContent = "Downloading...";
+      }, 1500);
+
       // Call API
       const response = await fetch("/api/camera/photos/test", {
         method: "POST",
       });
+
+      clearTimeout(downloadTextTimeout);
 
       if (!response.ok) {
         const errorMessage = await this.extractErrorMessage(response);
@@ -594,17 +601,15 @@ class TestShotUI {
 
           <!-- EXIF Metadata -->
           <div class="exif-metadata" data-exif style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0,0,0,0.05); border-radius: 4px; font-size: 0.875rem;">
-            <div style="font-weight: 600; margin-bottom: 0.5rem;">Camera Settings</div>
+            <div style="font-weight: 600; margin-bottom: 0.5rem;">Details</div>
+            ${photo.cameraPath ? `<div style="margin-bottom: 0.5rem;"><strong>${photo.cameraPath}</strong></div>` : ""}
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem;">
               ${exifDisplay}
             </div>
           </div>
 
           <!-- Action Buttons -->
-          <div style="margin-top: 0.75rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-            <div style="font-size: 0.875rem; color: #666;">
-              ID: ${photo.id} | ${new Date(photo.timestamp).toLocaleString()}
-            </div>
+          <div style="margin-top: 0.75rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
             <div style="display: flex; gap: 0.5rem;">
               <button onclick="window.testShotUI.downloadPhoto(${photo.id}, '${photo.filename}')"
                       data-action="download-photo"
@@ -639,10 +644,11 @@ class TestShotUI {
       fields.push(`<div><strong>ISO:</strong> ${exif.ISO}</div>`);
     }
 
-    // Shutter Speed
-    if (exif.ShutterSpeed) {
-      const shutterDisplay = this.formatShutterSpeed(exif.ShutterSpeed);
-      fields.push(`<div><strong>Shutter:</strong> ${shutterDisplay}</div>`);
+    // Exposure Time (prefer ExposureTime over ShutterSpeed as it's more standard)
+    const exposureValue = exif.ExposureTime || exif.ShutterSpeed;
+    if (exposureValue) {
+      const shutterDisplay = this.formatShutterSpeed(exposureValue);
+      fields.push(`<div><strong>Exposure:</strong> ${shutterDisplay}</div>`);
     }
 
     // Aperture
@@ -653,11 +659,6 @@ class TestShotUI {
     // White Balance
     if (exif.WhiteBalance) {
       fields.push(`<div><strong>WB:</strong> ${exif.WhiteBalance}</div>`);
-    }
-
-    // Camera Model
-    if (exif.Model) {
-      fields.push(`<div><strong>Camera:</strong> ${exif.Model}</div>`);
     }
 
     // Capture Date
