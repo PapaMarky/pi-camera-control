@@ -38,6 +38,8 @@ graph TB
     subgraph "Camera Layer"
         CAM_STATE[CameraStateManager<br/>Camera registry]
         CAM_CTRL[CameraController<br/>CCAPI communication]
+        LIVEVIEW[LiveViewManager<br/>Live view capture]
+        TESTPHOTO[TestPhotoService<br/>Test photo capture]
         UPNP[UPnPDiscovery<br/>Network discovery]
     end
 
@@ -68,6 +70,8 @@ graph TB
     API --> POWER
     API --> INTERVAL
     API --> TIMESYNC
+    API --> LIVEVIEW
+    API --> TESTPHOTO
 
     WS_SVC --> DISC
     WS_SVC --> NET
@@ -78,6 +82,8 @@ graph TB
     DISC --> CAM_STATE
     DISC --> UPNP
     CAM_STATE --> CAM_CTRL
+    LIVEVIEW --> CAM_CTRL
+    TESTPHOTO --> CAM_CTRL
 
     NET --> NET_SVC
     NET --> NET_CFG
@@ -158,6 +164,19 @@ Main application server that orchestrates all components:
 - Connection monitoring and health checks
 - Photo capture with error recovery
 - Camera settings retrieval
+
+**LiveViewManager** (`src/camera/liveview-manager.js`)
+- Live view image capture from camera
+- Image storage and management
+- Real-time preview generation
+
+**TestPhotoService** (`src/camera/test-photo.js`)
+- Test photo capture with quality override
+- EXIF metadata extraction
+- Timestamped photo naming and storage
+- Integration with CCAPI event polling
+- In-memory photo management
+- Concurrent capture prevention
 
 ### 4. Network Management
 **NetworkStateManager** (`src/network/state-manager.js`)

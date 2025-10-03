@@ -5,11 +5,13 @@
 class TestShotUI {
   constructor(wsManager) {
     this.wsManager = wsManager;
-    this.captures = [];
+    this.captures = []; // Live view captures
+    this.testPhotos = []; // Test photos with EXIF
     this.settings = null; // Current camera settings
     this.pendingChanges = {}; // Track pending setting changes
+    this.isCapturing = false; // Prevent concurrent test photo captures
 
-    console.log('TestShotUI: Constructor called');
+    console.log("TestShotUI: Constructor called");
   }
 
   /**
@@ -34,67 +36,101 @@ class TestShotUI {
   // Will be called after DOM is fully ready
 
   initialize() {
-    console.log('TestShotUI: Initialize called');
+    console.log("TestShotUI: Initialize called");
 
     try {
       // Setup event handlers
       this.setupEventHandlers();
+      this.updateButtonStates(); // Enable buttons if camera connected
 
-      console.log('TestShotUI: Initialized successfully');
+      console.log("TestShotUI: Initialized successfully");
     } catch (error) {
-      console.error('TestShotUI: Initialization failed:', error);
+      console.error("TestShotUI: Initialization failed:", error);
     }
+  }
+
+  updateButtonStates() {
+    // Enable/disable buttons based on camera connection
+    const captureBtn = document.getElementById("capture-liveview-btn");
+    const takePhotoBtn = document.getElementById("take-photo-btn");
+    const clearBtn = document.getElementById("clear-liveview-btn");
+
+    // Check if camera is connected via global cameraManager status
+    const isConnected =
+      window.cameraManager &&
+      window.cameraManager.status &&
+      window.cameraManager.status.connected;
+
+    if (captureBtn) captureBtn.disabled = !isConnected;
+    if (takePhotoBtn) takePhotoBtn.disabled = !isConnected;
+    if (clearBtn) clearBtn.disabled = this.captures.length === 0;
+
+    console.log(
+      `TestShotUI: Buttons ${isConnected ? "enabled" : "disabled"} (camera ${isConnected ? "connected" : "disconnected"})`,
+    );
   }
 
   setupEventHandlers() {
-    console.log('TestShotUI: Setting up event handlers');
+    console.log("TestShotUI: Setting up event handlers");
 
-    // Capture button
-    const captureBtn = document.getElementById('capture-liveview-btn');
+    // Capture live view button
+    const captureBtn = document.getElementById("capture-liveview-btn");
     if (captureBtn) {
-      captureBtn.addEventListener('click', () => this.captureLiveView());
-      console.log('TestShotUI: Capture button handler attached');
+      captureBtn.addEventListener("click", () => this.captureLiveView());
+      console.log("TestShotUI: Capture button handler attached");
     } else {
-      console.log('TestShotUI: Capture button not found (OK if not on page yet)');
+      console.log(
+        "TestShotUI: Capture button not found (OK if not on page yet)",
+      );
+    }
+
+    // Take photo button
+    const takePhotoBtn = document.getElementById("take-photo-btn");
+    if (takePhotoBtn) {
+      takePhotoBtn.addEventListener("click", () => this.captureTestPhoto());
+      console.log("TestShotUI: Take photo button handler attached");
     }
 
     // Clear button
-    const clearBtn = document.getElementById('clear-liveview-btn');
+    const clearBtn = document.getElementById("clear-liveview-btn");
     if (clearBtn) {
-      clearBtn.addEventListener('click', () => this.clearAll());
-      console.log('TestShotUI: Clear button handler attached');
+      clearBtn.addEventListener("click", () => this.clearAll());
+      console.log("TestShotUI: Clear button handler attached");
     }
 
     // Refresh settings button
-    const refreshSettingsBtn = document.getElementById('refresh-settings-btn');
+    const refreshSettingsBtn = document.getElementById("refresh-settings-btn");
     if (refreshSettingsBtn) {
-      refreshSettingsBtn.addEventListener('click', () => this.loadSettings());
-      console.log('TestShotUI: Refresh settings button handler attached');
+      refreshSettingsBtn.addEventListener("click", () => this.loadSettings());
+      console.log("TestShotUI: Refresh settings button handler attached");
     }
 
     // Apply settings button
-    const applySettingsBtn = document.getElementById('apply-settings-btn');
+    const applySettingsBtn = document.getElementById("apply-settings-btn");
     if (applySettingsBtn) {
-      applySettingsBtn.addEventListener('click', () => this.applySettings());
-      console.log('TestShotUI: Apply settings button handler attached');
+      applySettingsBtn.addEventListener("click", () => this.applySettings());
+      console.log("TestShotUI: Apply settings button handler attached");
     }
+
+    // Load existing test photos
+    this.loadTestPhotos();
   }
 
   async captureLiveView() {
-    console.log('TestShotUI: Capture live view clicked');
+    console.log("TestShotUI: Capture live view clicked");
 
-    const btn = document.getElementById('capture-liveview-btn');
+    const btn = document.getElementById("capture-liveview-btn");
     if (!btn) return;
 
     try {
       // Disable button and show loading
       btn.disabled = true;
-      const originalText = btn.querySelector('.btn-text').textContent;
-      btn.querySelector('.btn-text').textContent = 'Capturing...';
+      const originalText = btn.querySelector(".btn-text").textContent;
+      btn.querySelector(".btn-text").textContent = "Capturing...";
 
       // Call API
-      const response = await fetch('/api/camera/liveview/capture', {
-        method: 'POST'
+      const response = await fetch("/api/camera/liveview/capture", {
+        method: "POST",
       });
 
       if (!response.ok) {
@@ -103,32 +139,31 @@ class TestShotUI {
       }
 
       const capture = await response.json();
-      console.log('TestShotUI: Capture successful:', capture);
+      console.log("TestShotUI: Capture successful:", capture);
 
       // Add to captures list
       this.captures.push(capture);
       this.renderGallery();
-
     } catch (error) {
-      console.error('TestShotUI: Capture failed:', error);
+      console.error("TestShotUI: Capture failed:", error);
       alert(`Failed to capture: ${error.message}`);
     } finally {
       // Restore button
       btn.disabled = false;
-      btn.querySelector('.btn-text').textContent = 'Capture Live View';
+      btn.querySelector(".btn-text").textContent = "Capture Live View";
     }
   }
 
   async clearAll() {
-    console.log('TestShotUI: Clear all clicked');
+    console.log("TestShotUI: Clear all clicked");
 
-    if (!confirm('Clear all captured images?')) {
+    if (!confirm("Clear all captured images?")) {
       return;
     }
 
     try {
-      const response = await fetch('/api/camera/liveview/clear', {
-        method: 'DELETE'
+      const response = await fetch("/api/camera/liveview/clear", {
+        method: "DELETE",
       });
 
       if (!response.ok) {
@@ -138,24 +173,23 @@ class TestShotUI {
 
       this.captures = [];
       this.renderGallery();
-      console.log('TestShotUI: All captures cleared');
-
+      console.log("TestShotUI: All captures cleared");
     } catch (error) {
-      console.error('TestShotUI: Clear failed:', error);
+      console.error("TestShotUI: Clear failed:", error);
       alert(`Failed to clear: ${error.message}`);
     }
   }
 
   async deleteImage(id) {
-    console.log('TestShotUI: Delete image clicked', id);
+    console.log("TestShotUI: Delete image clicked", id);
 
-    if (!confirm('Delete this image?')) {
+    if (!confirm("Delete this image?")) {
       return;
     }
 
     try {
       const response = await fetch(`/api/camera/liveview/images/${id}`, {
-        method: 'DELETE'
+        method: "DELETE",
       });
 
       if (!response.ok) {
@@ -164,32 +198,40 @@ class TestShotUI {
       }
 
       // Remove from local captures list
-      this.captures = this.captures.filter(c => c.id !== id);
+      this.captures = this.captures.filter((c) => c.id !== id);
       this.renderGallery();
-      console.log('TestShotUI: Image deleted', id);
-
+      console.log("TestShotUI: Image deleted", id);
     } catch (error) {
-      console.error('TestShotUI: Delete failed:', error);
+      console.error("TestShotUI: Delete failed:", error);
       alert(`Failed to delete: ${error.message}`);
     }
   }
 
   renderGallery() {
-    console.log('TestShotUI: Rendering gallery with', this.captures.length, 'images');
+    console.log(
+      "TestShotUI: Rendering gallery with",
+      this.captures.length,
+      "images",
+    );
 
-    const gallery = document.getElementById('liveview-gallery');
+    const gallery = document.getElementById("liveview-gallery");
     if (!gallery) {
-      console.log('TestShotUI: Gallery element not found');
+      console.log("TestShotUI: Gallery element not found");
       return;
     }
 
     if (this.captures.length === 0) {
-      gallery.innerHTML = '<p style="text-align: center; padding: 2rem; color: #666;">No images captured yet. Click "Capture Live View" to start.</p>';
+      gallery.innerHTML =
+        '<p style="text-align: center; padding: 2rem; color: #666;">No images captured yet. Click "Capture Live View" to start.</p>';
       return;
     }
 
     // Simple list of images with delete buttons (newest first)
-    gallery.innerHTML = this.captures.slice().reverse().map(capture => `
+    gallery.innerHTML = this.captures
+      .slice()
+      .reverse()
+      .map(
+        (capture) => `
       <div style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
         <img src="/api/camera/liveview/images/${capture.id}/file"
              style="max-width: 100%; height: auto; cursor: pointer;"
@@ -206,28 +248,30 @@ class TestShotUI {
           </button>
         </div>
       </div>
-    `).join('');
+    `,
+      )
+      .join("");
   }
 
   async loadSettings() {
-    console.log('TestShotUI: Loading camera settings');
+    console.log("TestShotUI: Loading camera settings");
 
-    const refreshBtn = document.getElementById('refresh-settings-btn');
-    const displayDiv = document.getElementById('camera-settings-display');
+    const refreshBtn = document.getElementById("refresh-settings-btn");
+    const displayDiv = document.getElementById("camera-settings-display");
 
     if (!displayDiv) {
-      console.log('TestShotUI: Settings display element not found');
+      console.log("TestShotUI: Settings display element not found");
       return;
     }
 
     try {
       if (refreshBtn) {
         refreshBtn.disabled = true;
-        const btnText = refreshBtn.querySelector('.btn-text');
-        if (btnText) btnText.textContent = 'Loading...';
+        const btnText = refreshBtn.querySelector(".btn-text");
+        if (btnText) btnText.textContent = "Loading...";
       }
 
-      const response = await fetch('/api/camera/settings');
+      const response = await fetch("/api/camera/settings");
 
       if (!response.ok) {
         const errorMessage = await this.extractErrorMessage(response);
@@ -238,26 +282,32 @@ class TestShotUI {
       this.pendingChanges = {};
       this.renderSettings();
 
-      console.log('TestShotUI: Camera settings loaded', this.settings);
-
+      console.log("TestShotUI: Camera settings loaded", this.settings);
     } catch (error) {
-      console.error('TestShotUI: Failed to load settings:', error);
+      console.error("TestShotUI: Failed to load settings:", error);
       displayDiv.innerHTML = `<p style="color: #dc3545; grid-column: 1 / -1;">Failed to load settings: ${error.message}</p>`;
     } finally {
       if (refreshBtn) {
         refreshBtn.disabled = false;
-        const btnText = refreshBtn.querySelector('.btn-text');
-        if (btnText) btnText.textContent = 'Refresh Settings';
+        const btnText = refreshBtn.querySelector(".btn-text");
+        if (btnText) btnText.textContent = "Refresh Settings";
       }
     }
   }
 
   renderSettings() {
-    const displayDiv = document.getElementById('camera-settings-display');
+    const displayDiv = document.getElementById("camera-settings-display");
     if (!displayDiv || !this.settings) return;
 
     // Common settings to display (top priority)
-    const commonSettings = ['iso', 'av', 'tv', 'wb', 'colortemperature', 'exposuremode'];
+    const commonSettings = [
+      "iso",
+      "av",
+      "tv",
+      "wb",
+      "colortemperature",
+      "exposuremode",
+    ];
 
     // Filter to only show settings that have ability values (editable)
     const editableSettings = Object.entries(this.settings)
@@ -273,33 +323,36 @@ class TestShotUI {
       });
 
     if (editableSettings.length === 0) {
-      displayDiv.innerHTML = '<p style="color: #666; grid-column: 1 / -1;">No editable settings available</p>';
+      displayDiv.innerHTML =
+        '<p style="color: #666; grid-column: 1 / -1;">No editable settings available</p>';
       return;
     }
 
     // Clear existing content
-    displayDiv.innerHTML = '';
+    displayDiv.innerHTML = "";
 
     // Create DOM elements instead of HTML strings to avoid escaping issues
     editableSettings.forEach(([key, data]) => {
       const currentValue = this.pendingChanges[key] || data.value;
       const hasChange = this.pendingChanges.hasOwnProperty(key);
 
-      const container = document.createElement('div');
-      container.style.cssText = `display: flex; flex-direction: column; gap: 0.5rem; ${hasChange ? 'background: rgba(255, 193, 7, 0.1); padding: 0.5rem; border-radius: 4px;' : ''}`;
+      const container = document.createElement("div");
+      container.style.cssText = `display: flex; flex-direction: column; gap: 0.5rem; ${hasChange ? "background: rgba(255, 193, 7, 0.1); padding: 0.5rem; border-radius: 4px;" : ""}`;
 
-      const label = document.createElement('label');
-      label.style.cssText = 'font-weight: 600; font-size: 0.875rem; text-transform: uppercase;';
+      const label = document.createElement("label");
+      label.style.cssText =
+        "font-weight: 600; font-size: 0.875rem; text-transform: uppercase;";
       label.textContent = key;
 
-      const select = document.createElement('select');
+      const select = document.createElement("select");
       select.id = `setting-${key}`;
-      select.style.cssText = 'padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.875rem;';
+      select.style.cssText =
+        "padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.875rem;";
 
       // Add options
-      data.ability.forEach(val => {
-        const option = document.createElement('option');
-        option.value = val;  // No escaping needed - DOM handles it
+      data.ability.forEach((val) => {
+        const option = document.createElement("option");
+        option.value = val; // No escaping needed - DOM handles it
         option.textContent = val;
         if (currentValue === val) {
           option.selected = true;
@@ -308,7 +361,7 @@ class TestShotUI {
       });
 
       // Add change handler
-      select.addEventListener('change', (e) => {
+      select.addEventListener("change", (e) => {
         this.onSettingChange(key, e.target.value);
       });
 
@@ -316,9 +369,9 @@ class TestShotUI {
       container.appendChild(select);
 
       if (hasChange) {
-        const modifiedLabel = document.createElement('span');
-        modifiedLabel.style.cssText = 'color: #ffc107; font-size: 0.75rem;';
-        modifiedLabel.textContent = '● Modified';
+        const modifiedLabel = document.createElement("span");
+        modifiedLabel.style.cssText = "color: #ffc107; font-size: 0.75rem;";
+        modifiedLabel.textContent = "● Modified";
         container.appendChild(modifiedLabel);
       }
 
@@ -327,7 +380,7 @@ class TestShotUI {
   }
 
   escapeHtml(text) {
-    const div = document.createElement('div');
+    const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
   }
@@ -336,7 +389,11 @@ class TestShotUI {
     console.log(`TestShotUI: Setting changed: ${key} = ${value}`);
 
     // Check if this is different from the original value
-    if (this.settings && this.settings[key] && this.settings[key].value === value) {
+    if (
+      this.settings &&
+      this.settings[key] &&
+      this.settings[key].value === value
+    ) {
       // Changed back to original, remove from pending changes
       delete this.pendingChanges[key];
     } else {
@@ -348,43 +405,43 @@ class TestShotUI {
     this.renderSettings();
 
     // Show/hide Apply button
-    const applyBtn = document.getElementById('apply-settings-btn');
+    const applyBtn = document.getElementById("apply-settings-btn");
     if (applyBtn) {
       if (Object.keys(this.pendingChanges).length > 0) {
-        applyBtn.style.display = 'block';
+        applyBtn.style.display = "block";
         applyBtn.disabled = false;
       } else {
-        applyBtn.style.display = 'none';
+        applyBtn.style.display = "none";
         applyBtn.disabled = true;
       }
     }
   }
 
   async applySettings() {
-    console.log('TestShotUI: Applying settings changes', this.pendingChanges);
+    console.log("TestShotUI: Applying settings changes", this.pendingChanges);
 
     if (Object.keys(this.pendingChanges).length === 0) {
-      console.log('TestShotUI: No changes to apply');
+      console.log("TestShotUI: No changes to apply");
       return;
     }
 
-    const applyBtn = document.getElementById('apply-settings-btn');
+    const applyBtn = document.getElementById("apply-settings-btn");
 
     try {
       if (applyBtn) {
         applyBtn.disabled = true;
-        const btnText = applyBtn.querySelector('.btn-text');
-        if (btnText) btnText.textContent = 'Applying...';
+        const btnText = applyBtn.querySelector(".btn-text");
+        if (btnText) btnText.textContent = "Applying...";
       }
 
       // Apply all pending changes
       for (const [setting, value] of Object.entries(this.pendingChanges)) {
         const response = await fetch(`/api/camera/settings/${setting}`, {
-          method: 'PUT',
+          method: "PUT",
           headers: {
-            'Content-Type': 'application/json'
+            "Content-Type": "application/json",
           },
-          body: JSON.stringify({ value })
+          body: JSON.stringify({ value }),
         });
 
         if (!response.ok) {
@@ -399,23 +456,297 @@ class TestShotUI {
       this.pendingChanges = {};
       await this.loadSettings();
 
-      console.log('TestShotUI: All settings applied successfully');
-
+      console.log("TestShotUI: All settings applied successfully");
     } catch (error) {
-      console.error('TestShotUI: Failed to apply settings:', error);
+      console.error("TestShotUI: Failed to apply settings:", error);
       alert(`Failed to apply settings: ${error.message}`);
     } finally {
       if (applyBtn) {
         applyBtn.disabled = true;
-        applyBtn.style.display = 'none';
-        const btnText = applyBtn.querySelector('.btn-text');
-        if (btnText) btnText.textContent = 'Apply Changes';
+        applyBtn.style.display = "none";
+        const btnText = applyBtn.querySelector(".btn-text");
+        if (btnText) btnText.textContent = "Apply Changes";
       }
+    }
+  }
+
+  // ===== Test Photo Functions =====
+
+  /**
+   * Capture a test photo with EXIF metadata
+   */
+  async captureTestPhoto() {
+    console.log("TestShotUI: Capture test photo clicked");
+
+    // Prevent concurrent captures
+    if (this.isCapturing) {
+      console.log("TestShotUI: Capture already in progress, ignoring click");
+      return;
+    }
+
+    const btn = document.getElementById("take-photo-btn");
+    if (!btn) return;
+
+    this.isCapturing = true;
+
+    try {
+      // Disable both capture buttons during operation
+      btn.disabled = true;
+      const liveviewBtn = document.getElementById("capture-liveview-btn");
+      if (liveviewBtn) liveviewBtn.disabled = true;
+
+      const originalText = btn.querySelector(".btn-text").textContent;
+      btn.querySelector(".btn-text").textContent = "Taking photo...";
+
+      // Call API
+      const response = await fetch("/api/camera/photos/test", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const errorMessage = await this.extractErrorMessage(response);
+        throw new Error(errorMessage);
+      }
+
+      const photo = await response.json();
+      console.log("TestShotUI: Test photo captured:", photo);
+
+      // Add to test photos list
+      this.testPhotos.push(photo);
+      this.renderTestPhotoGallery();
+    } catch (error) {
+      console.error("TestShotUI: Test photo capture failed:", error);
+      alert(`Failed to capture test photo: ${error.message}`);
+    } finally {
+      // Restore buttons
+      this.isCapturing = false;
+      btn.disabled = false;
+      btn.querySelector(".btn-text").textContent = "Take Photo";
+      const liveviewBtn = document.getElementById("capture-liveview-btn");
+      if (liveviewBtn) liveviewBtn.disabled = false;
+    }
+  }
+
+  /**
+   * Load all test photos from server
+   */
+  async loadTestPhotos() {
+    console.log("TestShotUI: Loading test photos");
+
+    try {
+      const response = await fetch("/api/camera/photos/test");
+
+      if (!response.ok) {
+        // If 404 or other error, just show empty gallery
+        console.log("TestShotUI: No test photos available");
+        this.testPhotos = [];
+        this.renderTestPhotoGallery();
+        return;
+      }
+
+      const data = await response.json();
+      this.testPhotos = data.photos || [];
+      console.log("TestShotUI: Loaded", this.testPhotos.length, "test photos");
+      this.renderTestPhotoGallery();
+    } catch (error) {
+      console.error("TestShotUI: Failed to load test photos:", error);
+      this.testPhotos = [];
+      this.renderTestPhotoGallery();
+    }
+  }
+
+  /**
+   * Render the test photo gallery
+   */
+  renderTestPhotoGallery() {
+    console.log(
+      "TestShotUI: Rendering test photo gallery with",
+      this.testPhotos.length,
+      "photos",
+    );
+
+    const gallery = document.getElementById("testphoto-gallery");
+    if (!gallery) {
+      console.log("TestShotUI: Test photo gallery element not found");
+      return;
+    }
+
+    if (this.testPhotos.length === 0) {
+      gallery.innerHTML =
+        '<p style="text-align: center; padding: 2rem; color: #666;">No test photos captured yet. Click "Take Photo" to capture a full-resolution photo.</p>';
+      return;
+    }
+
+    // Display photos (newest first)
+    gallery.innerHTML = this.testPhotos
+      .slice()
+      .reverse()
+      .map((photo) => {
+        const exif = photo.exif || {};
+        const exifDisplay = this.formatExif(exif);
+
+        return `
+        <div class="test-photo-card" style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
+          <img src="${photo.url}/file"
+               style="max-width: 100%; height: auto; cursor: pointer;"
+               onclick="window.open(this.src, '_blank')"
+               alt="Test photo ${photo.id}">
+
+          <!-- EXIF Metadata -->
+          <div class="exif-metadata" data-exif style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0,0,0,0.05); border-radius: 4px; font-size: 0.875rem;">
+            <div style="font-weight: 600; margin-bottom: 0.5rem;">Camera Settings</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem;">
+              ${exifDisplay}
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div style="margin-top: 0.75rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+            <div style="font-size: 0.875rem; color: #666;">
+              ID: ${photo.id} | ${new Date(photo.timestamp).toLocaleString()}
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button onclick="window.testShotUI.downloadPhoto(${photo.id}, '${photo.filename}')"
+                      data-action="download-photo"
+                      style="background: rgba(13, 110, 253, 0.9); color: white; border: none; border-radius: 4px; padding: 0.25rem 0.5rem; cursor: pointer; font-size: 0.875rem;"
+                      title="Download photo">
+                📥 Download
+              </button>
+              <button onclick="window.testShotUI.deleteTestPhoto(${photo.id})"
+                      data-action="delete-photo"
+                      style="background: rgba(220, 53, 69, 0.9); color: white; border: none; border-radius: 4px; padding: 0.25rem 0.5rem; cursor: pointer; font-size: 0.875rem;"
+                      title="Delete photo">
+                🗑️ Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      })
+      .join("");
+  }
+
+  /**
+   * Format EXIF metadata for display
+   * @param {Object} exif - EXIF data object
+   * @returns {string} HTML string for EXIF display
+   */
+  formatExif(exif) {
+    const fields = [];
+
+    // ISO
+    if (exif.ISO) {
+      fields.push(`<div><strong>ISO:</strong> ${exif.ISO}</div>`);
+    }
+
+    // Shutter Speed
+    if (exif.ShutterSpeed) {
+      const shutterDisplay = this.formatShutterSpeed(exif.ShutterSpeed);
+      fields.push(`<div><strong>Shutter:</strong> ${shutterDisplay}</div>`);
+    }
+
+    // Aperture
+    if (exif.FNumber) {
+      fields.push(`<div><strong>Aperture:</strong> f/${exif.FNumber}</div>`);
+    }
+
+    // White Balance
+    if (exif.WhiteBalance) {
+      fields.push(`<div><strong>WB:</strong> ${exif.WhiteBalance}</div>`);
+    }
+
+    // Camera Model
+    if (exif.Model) {
+      fields.push(`<div><strong>Camera:</strong> ${exif.Model}</div>`);
+    }
+
+    // Capture Date
+    if (exif.DateTimeOriginal) {
+      const date = new Date(exif.DateTimeOriginal);
+      fields.push(
+        `<div><strong>Captured:</strong> ${date.toLocaleString()}</div>`,
+      );
+    }
+
+    return fields.length > 0
+      ? fields.join("")
+      : "<div>No EXIF data available</div>";
+  }
+
+  /**
+   * Format shutter speed for display
+   * @param {string|number} speed - Shutter speed value
+   * @returns {string} Formatted shutter speed (e.g., "1/250" or "30s")
+   */
+  formatShutterSpeed(speed) {
+    if (typeof speed === "string") {
+      // Already formatted
+      return speed;
+    }
+
+    const numSpeed = parseFloat(speed);
+    if (numSpeed >= 1) {
+      // Long exposure (1 second or more)
+      return `${numSpeed}s`;
+    } else if (numSpeed > 0) {
+      // Fast shutter (fraction of a second)
+      return `1/${Math.round(1 / numSpeed)}`;
+    }
+
+    return speed.toString();
+  }
+
+  /**
+   * Download a test photo
+   * @param {number} photoId - Photo ID
+   * @param {string} filename - Original filename
+   */
+  downloadPhoto(photoId, filename) {
+    console.log("TestShotUI: Download photo", photoId, filename);
+
+    // Create a temporary link and trigger download
+    const link = document.createElement("a");
+    link.href = `/api/camera/photos/test/${photoId}/file`;
+    link.download = filename;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  /**
+   * Delete a test photo
+   * @param {number} photoId - Photo ID to delete
+   */
+  async deleteTestPhoto(photoId) {
+    console.log("TestShotUI: Delete test photo clicked", photoId);
+
+    if (!confirm("Delete this test photo?")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/camera/photos/test/${photoId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorMessage = await this.extractErrorMessage(response);
+        throw new Error(errorMessage);
+      }
+
+      // Remove from local list
+      this.testPhotos = this.testPhotos.filter((p) => p.id !== photoId);
+      this.renderTestPhotoGallery();
+      console.log("TestShotUI: Test photo deleted", photoId);
+    } catch (error) {
+      console.error("TestShotUI: Delete failed:", error);
+      alert(`Failed to delete photo: ${error.message}`);
     }
   }
 }
 
 // Export for use in app.js
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   window.TestShotUI = TestShotUI;
 }

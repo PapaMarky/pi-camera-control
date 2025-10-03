@@ -80,6 +80,121 @@ Triggers single photo capture.
 }
 ```
 
+#### Test Photo Capture
+
+##### Capture Test Photo
+```http
+POST /api/camera/photos/test
+```
+Captures a test photo with EXIF metadata extraction. Temporarily overrides camera quality to smallest setting for faster capture, then restores original settings.
+
+**Workflow:**
+1. Saves current quality settings
+2. Sets quality to smallest available (e.g., small_fine)
+3. Triggers shutter with autofocus
+4. Waits for photo completion via CCAPI event polling
+5. Downloads photo from camera
+6. Restores original quality settings
+7. Extracts EXIF metadata (ISO, shutter speed, aperture, etc.)
+8. Saves photo with timestamped filename: `YYYYMMDD_HHMMSS_<original>.jpg`
+
+**Response:**
+```json
+{
+  "id": 1,
+  "url": "/api/camera/photos/test/1",
+  "filename": "20251002_193000_IMG_0001.JPG",
+  "timestamp": "2025-10-02T19:30:00.000Z",
+  "exif": {
+    "ISO": 6400,
+    "ShutterSpeed": "30",
+    "FNumber": 2.8,
+    "WhiteBalance": "Auto",
+    "DateTimeOriginal": "2025-10-02T19:30:00.000Z",
+    "Model": "Canon EOS R50"
+  },
+  "filepath": "/data/test-shots/photos/20251002_193000_IMG_0001.JPG",
+  "size": 1234567
+}
+```
+
+**Error Responses:**
+- `503 CAMERA_OFFLINE` - Camera not connected
+- `500 PHOTO_FAILED` - Capture failed (timeout, camera busy, etc.)
+- `500 PHOTO_FAILED` - Photo capture already in progress
+
+##### List Test Photos
+```http
+GET /api/camera/photos/test
+```
+Returns list of all captured test photos.
+
+**Response:**
+```json
+{
+  "photos": [
+    {
+      "id": 1,
+      "url": "/api/camera/photos/test/1",
+      "filename": "20251002_193000_IMG_0001.JPG",
+      "timestamp": "2025-10-02T19:30:00.000Z",
+      "exif": {
+        "ISO": 6400,
+        "ShutterSpeed": "30",
+        "FNumber": 2.8,
+        "WhiteBalance": "Auto",
+        "DateTimeOriginal": "2025-10-02T19:30:00.000Z",
+        "Model": "Canon EOS R50"
+      },
+      "size": 1234567
+    }
+  ]
+}
+```
+
+##### Get Test Photo Metadata
+```http
+GET /api/camera/photos/test/:id
+```
+Returns metadata for a specific test photo.
+
+**Response:** Same as capture response
+
+**Error Responses:**
+- `400 INVALID_PARAMETER` - Invalid photo ID
+- `404 SESSION_NOT_FOUND` - Photo not found
+
+##### Download Test Photo File
+```http
+GET /api/camera/photos/test/:id/file
+```
+Serves the actual JPEG image file.
+
+**Response:** Binary JPEG data with appropriate Content-Type header
+
+**Error Responses:**
+- `400 INVALID_PARAMETER` - Invalid photo ID
+- `404 SESSION_NOT_FOUND` - Photo or file not found
+
+##### Delete Test Photo
+```http
+DELETE /api/camera/photos/test/:id
+```
+Deletes a test photo and its file from disk.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Test photo deleted",
+  "id": 1
+}
+```
+
+**Error Responses:**
+- `400 INVALID_PARAMETER` - Invalid photo ID
+- `404 SESSION_NOT_FOUND` - Photo not found
+
 #### Manual Reconnect
 ```http
 POST /api/camera/reconnect
