@@ -19,6 +19,24 @@ class NetworkUI {
         this.init();
     }
 
+    /**
+     * Helper to extract error message from API response
+     * @param {Response} response - Fetch API response object
+     * @returns {Promise<string>} Error message from response body or generic message
+     */
+    async extractErrorMessage(response) {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+            const errorData = await response.json();
+            if (errorData.error && errorData.error.message) {
+                errorMessage = errorData.error.message;
+            }
+        } catch (e) {
+            // If parsing fails, use the generic message
+        }
+        return errorMessage;
+    }
+
     init() {
         this.bindEvents();
         this.bindModals();
@@ -635,7 +653,8 @@ class NetworkUI {
             console.log('Saved networks response status:', response.status);
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const errorMessage = await this.extractErrorMessage(response);
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();

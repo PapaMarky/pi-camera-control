@@ -14,6 +14,7 @@ import { PowerManager } from "./system/power.js";
 import { NetworkStateManager } from "./network/state-manager.js";
 // import { NetworkServiceManager } from './network/service-manager.js'; // Unused import
 import { IntervalometerStateManager } from "./intervalometer/state-manager.js";
+import { LiveViewManager } from "./camera/liveview-manager.js";
 import { createApiRouter } from "./routes/api.js";
 import { createWebSocketHandler } from "./websocket/handler.js";
 import timeSyncService from "./timesync/service.js";
@@ -43,6 +44,12 @@ class CameraControlServer {
     // Initialize centralized intervalometer state manager
     this.intervalometerStateManager = new IntervalometerStateManager();
     this.setupIntervalometerHandlers();
+
+    // Initialize live view manager with camera controller getter function
+    // LiveViewManager will call this function to get the current controller
+    this.liveViewManager = new LiveViewManager(() =>
+      this.getCurrentCameraController(),
+    );
 
     // Keep legacy activeIntervalometerSession for backward compatibility
     this.activeIntervalometerSession = null;
@@ -197,6 +204,7 @@ class CameraControlServer {
         this.networkManager,
         this.discoveryManager,
         this.intervalometerStateManager,
+        this.liveViewManager,
       ),
     );
 
@@ -246,6 +254,7 @@ class CameraControlServer {
       this.networkManager,
       this.discoveryManager,
       this.intervalometerStateManager,
+      this.liveViewManager,
       timeSyncService,
     );
     this.wss.on("connection", this.wsHandler);

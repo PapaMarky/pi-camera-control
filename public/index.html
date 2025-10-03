@@ -333,11 +333,39 @@
                     <h3>Test Shot</h3>
                 </div>
                 <div class="card-content">
+                    <!-- Camera Settings Section -->
+                    <div class="camera-settings-section" style="margin-bottom: 1.5rem;">
+                        <h4 style="margin-top: 0; margin-bottom: 1rem;">Camera Settings</h4>
+                        <div id="camera-settings-display" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                            <!-- Settings populated by test-shot.js -->
+                            <p style="color: #666; grid-column: 1 / -1;">Connect camera to view settings</p>
+                        </div>
+                        <div class="button-grid" style="margin-top: 1rem;">
+                            <button id="refresh-settings-btn" class="secondary-btn" disabled>
+                                <span class="btn-icon">🔄</span>
+                                <span class="btn-text">Refresh Settings</span>
+                            </button>
+                            <button id="apply-settings-btn" class="primary-btn" disabled style="display: none;">
+                                <span class="btn-icon">✓</span>
+                                <span class="btn-text">Apply Changes</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="button-grid">
-                        <button id="take-photo-btn" class="primary-btn" disabled>
+                        <button id="capture-liveview-btn" class="primary-btn" disabled>
                             <span class="btn-icon">📷</span>
-                            <span class="btn-text">Take Photo</span>
+                            <span class="btn-text">Capture Live View</span>
                         </button>
+                        <button id="clear-liveview-btn" class="secondary-btn" disabled>
+                            <span class="btn-icon">🗑️</span>
+                            <span class="btn-text">Clear All</span>
+                        </button>
+                    </div>
+
+                    <!-- Live View Gallery -->
+                    <div id="liveview-gallery" style="margin-top: 1.5rem;">
+                        <!-- Gallery populated by test-shot.js -->
                     </div>
                 </div>
             </div>
@@ -748,6 +776,7 @@
     <script src="js/network.js"></script>
     <script src="js/utilities.js"></script>
     <script src="js/timelapse.js"></script>
+    <script src="js/test-shot.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

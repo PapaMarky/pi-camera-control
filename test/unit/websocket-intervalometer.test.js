@@ -185,6 +185,14 @@ describe('WebSocket Intervalometer Handler Tests', () => {
     };
 
     // Create WebSocket handler
+    // Mock LiveViewManager
+    const mockLiveViewManager = {
+      captureImage: jest.fn(),
+      listCaptures: jest.fn(),
+      getCapture: jest.fn(),
+      clearAll: jest.fn()
+    };
+
     wsHandler = createWebSocketHandler(
       mockCameraController,
       mockPowerManager,
@@ -192,6 +200,7 @@ describe('WebSocket Intervalometer Handler Tests', () => {
       mockNetworkManager,
       mockDiscoveryManager,
       mockIntervalometerStateManager,
+      mockLiveViewManager,
       mockTimeSyncService
     );
 

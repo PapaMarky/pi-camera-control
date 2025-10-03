@@ -13,6 +13,7 @@ export function createWebSocketHandler(
   networkManager,
   discoveryManager,
   intervalometerStateManager,
+  liveViewManager,
   timeSyncService = null,
 ) {
   const clients = new Set();
@@ -337,6 +338,10 @@ export function createWebSocketHandler(
           await handleTakePhoto(ws, data);
           break;
 
+        case "capture_liveview":
+          await handleCaptureLiveView(ws, data);
+          break;
+
         case "get_camera_settings":
           await handleGetCameraSettings(ws);
           break;
@@ -461,6 +466,35 @@ export function createWebSocketHandler(
       sendError(ws, `Failed to take photo: ${error.message}`, {
         code: ErrorCodes.PHOTO_FAILED,
         operation: "takePhoto",
+      });
+    }
+  };
+
+  const handleCaptureLiveView = async (ws, _data) => {
+    try {
+      const currentController = cameraController();
+      if (!currentController) {
+        sendError(ws, "No camera available", {
+          code: ErrorCodes.CAMERA_OFFLINE,
+          operation: "captureLiveView",
+        });
+        return;
+      }
+
+      const capture = await liveViewManager.captureImage();
+
+      // Send response to requesting client
+      sendResponse(ws, "liveview_capture_result", {
+        success: true,
+        capture,
+      });
+
+      // Broadcast event to all clients
+      broadcastEvent("liveview_captured", { capture });
+    } catch (error) {
+      sendError(ws, `Failed to capture live view: ${error.message}`, {
+        code: ErrorCodes.PHOTO_FAILED,
+        operation: "captureLiveView",
       });
     }
   };

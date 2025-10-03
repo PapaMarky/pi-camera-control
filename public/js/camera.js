@@ -15,6 +15,24 @@ class CameraManager {
     this.statusUpdateInterval = null;
   }
 
+  /**
+   * Helper to extract error message from API response
+   * @param {Response} response - Fetch API response object
+   * @returns {Promise<string>} Error message from response body or generic message
+   */
+  async extractErrorMessage(response) {
+    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    try {
+      const errorData = await response.json();
+      if (errorData.error && errorData.error.message) {
+        errorMessage = errorData.error.message;
+      }
+    } catch (e) {
+      // If parsing fails, use the generic message
+    }
+    return errorMessage;
+  }
+
   async initialize() {
     // Set up button event listeners
     this.setupEventListeners();
@@ -41,14 +59,20 @@ class CameraManager {
   }
 
   setupEventListeners() {
-    // Camera control buttons
-    document.getElementById('take-photo-btn').addEventListener('click', () => {
-      this.takePhoto();
-    });
+    // Camera control buttons (check if they exist first)
+    const takePhotoBtn = document.getElementById('take-photo-btn');
+    if (takePhotoBtn) {
+      takePhotoBtn.addEventListener('click', () => {
+        this.takePhoto();
+      });
+    }
 
-    document.getElementById('get-settings-btn').addEventListener('click', () => {
-      this.getCameraSettings();
-    });
+    const getSettingsBtn = document.getElementById('get-settings-btn');
+    if (getSettingsBtn) {
+      getSettingsBtn.addEventListener('click', () => {
+        this.getCameraSettings();
+      });
+    }
 
     document.getElementById('update-camera-config-btn').addEventListener('click', () => {
       this.updateCameraConfiguration();
@@ -291,9 +315,10 @@ class CameraManager {
     try {
       console.log('Fetching camera status...');
       const response = await fetch('/api/camera/status');
-      
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorMessage = await this.extractErrorMessage(response);
+        throw new Error(errorMessage);
       }
       
       const status = await response.json();
@@ -1226,10 +1251,18 @@ class CameraManager {
   }
 
   enableControls() {
-    // Enable individual buttons
-    document.getElementById('take-photo-btn').disabled = false;
-    document.getElementById('get-settings-btn').disabled = false;
-    document.getElementById('start-intervalometer-btn').disabled = false;
+    // Enable individual buttons (check if they exist)
+    const getSettingsBtn = document.getElementById('get-settings-btn');
+    const startIntervalBtn = document.getElementById('start-intervalometer-btn');
+    const captureLiveviewBtn = document.getElementById('capture-liveview-btn');
+    const clearLiveviewBtn = document.getElementById('clear-liveview-btn');
+    const refreshSettingsBtn = document.getElementById('refresh-settings-btn');
+
+    if (getSettingsBtn) getSettingsBtn.disabled = false;
+    if (startIntervalBtn) startIntervalBtn.disabled = false;
+    if (captureLiveviewBtn) captureLiveviewBtn.disabled = false;
+    if (clearLiveviewBtn) clearLiveviewBtn.disabled = false;
+    if (refreshSettingsBtn) refreshSettingsBtn.disabled = false;
 
     // Remove disabled styling from control groups
     const controlGroups = document.querySelectorAll('.controls-section .control-group');
@@ -1239,11 +1272,20 @@ class CameraManager {
   }
 
   disableControls() {
-    // Disable individual buttons
-    document.getElementById('take-photo-btn').disabled = true;
-    document.getElementById('get-settings-btn').disabled = true;
-    document.getElementById('start-intervalometer-btn').disabled = true;
-    document.getElementById('stop-intervalometer-btn').disabled = true;
+    // Disable individual buttons (check if they exist)
+    const getSettingsBtn = document.getElementById('get-settings-btn');
+    const startIntervalBtn = document.getElementById('start-intervalometer-btn');
+    const stopIntervalBtn = document.getElementById('stop-intervalometer-btn');
+    const captureLiveviewBtn = document.getElementById('capture-liveview-btn');
+    const clearLiveviewBtn = document.getElementById('clear-liveview-btn');
+    const refreshSettingsBtn = document.getElementById('refresh-settings-btn');
+
+    if (getSettingsBtn) getSettingsBtn.disabled = true;
+    if (startIntervalBtn) startIntervalBtn.disabled = true;
+    if (stopIntervalBtn) stopIntervalBtn.disabled = true;
+    if (captureLiveviewBtn) captureLiveviewBtn.disabled = true;
+    if (clearLiveviewBtn) clearLiveviewBtn.disabled = true;
+    if (refreshSettingsBtn) refreshSettingsBtn.disabled = true;
 
     // Add disabled styling to control groups
     const controlGroups = document.querySelectorAll('.controls-section .control-group');
