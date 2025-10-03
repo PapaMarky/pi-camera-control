@@ -33,8 +33,9 @@ const __dirname = path.dirname(__filename);
 // Storage directory for test photos
 const PHOTOS_DIR = path.join(__dirname, "../../data/test-shots/photos");
 
-// Timeout for photo capture (30s max shutter + 5s margin)
-const PHOTO_TIMEOUT_MS = 35000;
+// Timeout for photo capture (30s max shutter + processing + margin)
+// Increased to handle long exposures with multiple polling attempts
+const PHOTO_TIMEOUT_MS = 60000;
 
 /**
  * Manages test photo capture with EXIF extraction
@@ -177,7 +178,14 @@ export class TestPhotoService {
         );
       }
 
-      // Step 3-6: Trigger shutter and wait for completion
+      // Step 3-6: Start polling BEFORE pressing shutter to avoid race condition
+      // Events can fire within 640ms of shutter press, so we must be listening first
+      logger.debug("Starting event polling (before shutter press)");
+      const photoCompletionPromise = waitForPhotoComplete(
+        controller,
+        PHOTO_TIMEOUT_MS,
+      );
+
       logger.debug("Pressing shutter button");
       await controller.client.post(
         `${controller.baseUrl}/ccapi/ver100/shooting/control/shutterbutton`,
@@ -185,29 +193,60 @@ export class TestPhotoService {
       );
 
       logger.debug("Waiting for photo completion event");
-      const photoPath = await waitForPhotoComplete(
-        controller,
-        PHOTO_TIMEOUT_MS,
-      );
+      const photoPath = await photoCompletionPromise;
 
       logger.info("Photo completion event received", { photoPath });
 
-      // Brief delay to let camera finalize the file before download
-      logger.debug("Waiting 500ms for camera to finalize file");
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Step 7: Download photo from CCAPI with retry for camera busy
+      // Camera may need time to finalize file after reporting it's ready
+      let photoData = null;
+      const maxDownloadRetries = 5;
+      let downloadRetry = 0;
 
-      // Step 7: Download photo from CCAPI
-      logger.debug("Downloading photo from camera", { photoPath });
-      const photoResponse = await controller.client.get(
-        `${controller.baseUrl}${photoPath}`,
-        {
-          responseType: "arraybuffer",
-          timeout: 30000, // 30s timeout for download
-        },
-      );
+      while (downloadRetry < maxDownloadRetries) {
+        try {
+          // Exponential backoff: 500ms, 1s, 2s, 4s, 8s
+          const delayMs = 500 * Math.pow(2, downloadRetry);
+          logger.debug(
+            `Waiting ${delayMs}ms before download attempt ${downloadRetry + 1}/${maxDownloadRetries}`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
 
-      const photoData = Buffer.from(photoResponse.data);
-      logger.debug("Photo downloaded", { size: photoData.length });
+          logger.debug("Downloading photo from camera", {
+            photoPath,
+            attempt: downloadRetry + 1,
+          });
+
+          const photoResponse = await controller.client.get(
+            `${controller.baseUrl}${photoPath}`,
+            {
+              responseType: "arraybuffer",
+              timeout: 30000, // 30s timeout for download
+            },
+          );
+
+          photoData = Buffer.from(photoResponse.data);
+          logger.debug("Photo downloaded successfully", {
+            size: photoData.length,
+            attempts: downloadRetry + 1,
+          });
+          break; // Success, exit retry loop
+        } catch (downloadError) {
+          const isCameraBusy = downloadError.response?.status === 503;
+
+          if (isCameraBusy && downloadRetry < maxDownloadRetries - 1) {
+            logger.debug(`Camera busy (503), will retry`, {
+              attempt: downloadRetry + 1,
+              remaining: maxDownloadRetries - downloadRetry - 1,
+            });
+            downloadRetry++;
+            continue; // Retry
+          }
+
+          // Out of retries or different error - throw
+          throw downloadError;
+        }
+      }
 
       // Step 9: Extract EXIF metadata
       logger.debug("Extracting EXIF metadata");
@@ -294,6 +333,9 @@ export class TestPhotoService {
 
       // Step 8: Restore previous quality settings (always, even on failure)
       if (originalQuality) {
+        // Wait a moment for camera to finish processing before restoring settings
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
         try {
           logger.debug("Restoring original quality settings", {
             quality: originalQuality,

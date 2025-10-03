@@ -134,10 +134,10 @@ describe("TestPhotoService", () => {
         { af: true },
       );
 
-      // Verify event polling was called
+      // Verify event polling was called with 60s timeout
       expect(mockWaitForPhotoComplete).toHaveBeenCalledWith(
         mockCameraController,
-        35000,
+        60000,
       );
 
       // Verify photo was downloaded
