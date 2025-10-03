@@ -194,7 +194,7 @@ export class TestPhotoService {
 
       // Brief delay to let camera finalize the file before download
       logger.debug("Waiting 500ms for camera to finalize file");
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Step 7: Download photo from CCAPI
       logger.debug("Downloading photo from camera", { photoPath });

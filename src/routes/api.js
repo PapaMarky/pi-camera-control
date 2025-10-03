@@ -389,7 +389,7 @@ export function createApiRouter(
       res.json(photo);
     } catch (error) {
       logger.error("Failed to capture test photo:", error);
-      const statusCode = typeof error.status === 'number' ? error.status : 500;
+      const statusCode = typeof error.status === "number" ? error.status : 500;
       res.status(statusCode).json(
         createApiError(error.message, {
           code: ErrorCodes.PHOTO_FAILED,
