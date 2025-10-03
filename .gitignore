@@ -231,6 +231,8 @@ coverage/
 *.lcov
 .nyc_output
 test_results/
+test-results/
+playwright-report/
 
 # Build outputs
 build/
