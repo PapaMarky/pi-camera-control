@@ -73,6 +73,52 @@ export function createApiRouter(
     }
   });
 
+  // Update a specific camera setting
+  router.put("/camera/settings/:setting", async (req, res) => {
+    try {
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "updateCameraSetting",
+          }),
+        );
+      }
+
+      const { setting } = req.params;
+      const { value } = req.body;
+
+      if (!value) {
+        return res.status(400).json(
+          createApiError("Missing value in request body", {
+            code: ErrorCodes.INVALID_PARAMETER,
+            component: Components.API_ROUTER,
+            operation: "updateCameraSetting",
+          }),
+        );
+      }
+
+      await currentController.updateCameraSetting(setting, value);
+      res.json({
+        success: true,
+        message: `Setting ${setting} updated to ${value}`,
+        setting,
+        value
+      });
+    } catch (error) {
+      logger.error(`Failed to update camera setting ${req.params.setting}:`, error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "updateCameraSetting",
+        }),
+      );
+    }
+  });
+
   // Camera battery status
   router.get("/camera/battery", async (req, res) => {
     try {
@@ -146,7 +192,9 @@ export function createApiRouter(
       res.json(capture);
     } catch (error) {
       logger.error("Failed to capture live view image:", error);
-      res.status(500).json(
+      // Use the error's status code if available, otherwise default to 500
+      const statusCode = error.status || 500;
+      res.status(statusCode).json(
         createApiError(error.message, {
           code: ErrorCodes.PHOTO_FAILED,
           component: Components.API_ROUTER,

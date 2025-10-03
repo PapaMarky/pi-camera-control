@@ -196,7 +196,18 @@ export class CameraController {
       );
       return response.data;
     } catch (error) {
-      logger.error("Failed to get camera settings:", error.message);
+      // Extract Canon API error details
+      const statusCode = error.response?.status || "unknown";
+      const apiMessage = error.response?.data?.message || error.message;
+
+      logger.error(
+        `Failed to get camera settings - Status: ${statusCode}, API Message: "${apiMessage}"`,
+      );
+
+      // Log full response for Canon API errors (400, 503) for debugging
+      if (error.response?.data && [400, 503].includes(error.response.status)) {
+        logger.debug("Canon API error response:", error.response.data);
+      }
 
       // If we get a network error, handle disconnection
       if (
@@ -208,12 +219,74 @@ export class CameraController {
         this.handleDisconnection(error);
       }
 
-      // Create a clean error without circular references
+      // Create a clean error with Canon's message
       const cleanError = new Error(
-        error.message || "Failed to get camera settings",
+        apiMessage || "Failed to get camera settings",
       );
-      cleanError.status = error.response?.status;
+      cleanError.status = statusCode;
       cleanError.statusText = error.response?.statusText;
+      cleanError.ccapiMessage = error.response?.data?.message;
+      throw cleanError;
+    }
+  }
+
+  /**
+   * Update a specific camera setting
+   *
+   * CCAPI Reference: 4.9.1 - Update shooting parameter
+   * Endpoint: PUT /ccapi/ver100/shooting/settings/{setting_name}
+   * Request: { value: "setting_value" }
+   *
+   * @param {string} settingName - Name of the setting to update (e.g., 'iso', 'av', 'tv')
+   * @param {string} value - New value for the setting
+   * @returns {Promise<void>}
+   * @throws {Error} If camera not connected or update fails
+   */
+  async updateCameraSetting(settingName, value) {
+    if (!this.connected) {
+      throw new Error("Camera not connected");
+    }
+
+    try {
+      logger.debug(`Updating camera setting: ${settingName} = ${value}`);
+      await this.client.put(
+        `${this.baseUrl}/ccapi/ver100/shooting/settings/${settingName}`,
+        { value },
+      );
+      logger.info(`Camera setting updated: ${settingName} = ${value}`);
+    } catch (error) {
+      // Extract Canon API error details
+      const statusCode = error.response?.status || "unknown";
+      const apiMessage = error.response?.data?.message || error.message;
+
+      logger.error(
+        `Failed to update camera setting ${settingName} - Status: ${statusCode}, API Message: "${apiMessage}"`,
+      );
+
+      // Log full response for Canon API errors (400, 503) for debugging
+      if (error.response?.data && [400, 503].includes(error.response.status)) {
+        logger.debug("Canon API error response:", error.response.data);
+      }
+
+      // If we get a network error, handle disconnection
+      if (
+        error.code === "EHOSTUNREACH" ||
+        error.code === "ECONNREFUSED" ||
+        error.code === "ETIMEDOUT"
+      ) {
+        logger.warn("Camera network error detected, handling disconnection");
+        this.handleDisconnection(error);
+      }
+
+      // Create a clean error with Canon's message
+      const cleanError = new Error(
+        apiMessage || `Failed to update setting ${settingName}`,
+      );
+      cleanError.status = statusCode;
+      cleanError.statusText = error.response?.statusText;
+      cleanError.settingName = settingName;
+      cleanError.value = value;
+      cleanError.ccapiMessage = error.response?.data?.message;
       throw cleanError;
     }
   }
@@ -242,7 +315,18 @@ export class CameraController {
       });
       return response.data;
     } catch (error) {
-      logger.error("Failed to get device information:", error.message);
+      // Extract Canon API error details
+      const statusCode = error.response?.status || "unknown";
+      const apiMessage = error.response?.data?.message || error.message;
+
+      logger.error(
+        `Failed to get device information - Status: ${statusCode}, API Message: "${apiMessage}"`,
+      );
+
+      // Log full response for Canon API errors (400, 503) for debugging
+      if (error.response?.data && [400, 503].includes(error.response.status)) {
+        logger.debug("Canon API error response:", error.response.data);
+      }
 
       // If we get a network error, handle disconnection
       if (
@@ -254,12 +338,13 @@ export class CameraController {
         this.handleDisconnection(error);
       }
 
-      // Create a clean error without circular references
+      // Create a clean error with Canon's message
       const cleanError = new Error(
-        error.message || "Failed to get device information",
+        apiMessage || "Failed to get device information",
       );
-      cleanError.status = error.response?.status;
+      cleanError.status = statusCode;
       cleanError.statusText = error.response?.statusText;
+      cleanError.ccapiMessage = error.response?.data?.message;
       throw cleanError;
     }
   }
@@ -707,7 +792,19 @@ export class CameraController {
       }
       throw new Error("Invalid datetime response from camera");
     } catch (error) {
-      logger.error("Failed to get camera datetime:", error.message);
+      // Extract Canon API error details
+      const statusCode = error.response?.status || "unknown";
+      const apiMessage = error.response?.data?.message || error.message;
+
+      logger.error(
+        `Failed to get camera datetime - Status: ${statusCode}, API Message: "${apiMessage}"`,
+      );
+
+      // Log full response for Canon API errors (400, 503) for debugging
+      if (error.response?.data && [400, 503].includes(error.response.status)) {
+        logger.debug("Canon API error response:", error.response.data);
+      }
+
       return null;
     }
   }
@@ -737,7 +834,19 @@ export class CameraController {
 
       return response.data;
     } catch (error) {
-      logger.error("Failed to get camera datetime details:", error.message);
+      // Extract Canon API error details
+      const statusCode = error.response?.status || "unknown";
+      const apiMessage = error.response?.data?.message || error.message;
+
+      logger.error(
+        `Failed to get camera datetime details - Status: ${statusCode}, API Message: "${apiMessage}"`,
+      );
+
+      // Log full response for Canon API errors (400, 503) for debugging
+      if (error.response?.data && [400, 503].includes(error.response.status)) {
+        logger.debug("Canon API error response:", error.response.data);
+      }
+
       return null;
     }
   }
@@ -840,7 +949,19 @@ export class CameraController {
 
       throw new Error(`Failed to set camera datetime: ${response.status}`);
     } catch (error) {
-      logger.error("Failed to set camera datetime:", error.message);
+      // Extract Canon API error details
+      const statusCode = error.response?.status || "unknown";
+      const apiMessage = error.response?.data?.message || error.message;
+
+      logger.error(
+        `Failed to set camera datetime - Status: ${statusCode}, API Message: "${apiMessage}"`,
+      );
+
+      // Log full response for Canon API errors (400, 503) for debugging
+      if (error.response?.data && [400, 503].includes(error.response.status)) {
+        logger.debug("Canon API error response:", error.response.data);
+      }
+
       return false;
     }
   }

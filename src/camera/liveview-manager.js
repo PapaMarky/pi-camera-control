@@ -148,11 +148,40 @@ export class LiveViewManager {
 
       return capture;
     } catch (error) {
+      // Extract Canon API error details
+      const statusCode = error.response?.status || 'unknown';
+
+      // When responseType is 'arraybuffer', error responses might also be buffers
+      // Parse them as JSON to get the Canon error message
+      let apiMessage = error.message;
+      if (error.response?.data) {
+        try {
+          let errorData = error.response.data;
+          // If data is ArrayBuffer, convert to string first
+          if (errorData instanceof ArrayBuffer || Buffer.isBuffer(errorData)) {
+            const text = Buffer.from(errorData).toString('utf8');
+            errorData = JSON.parse(text);
+          }
+          if (errorData.message) {
+            apiMessage = errorData.message;
+          }
+        } catch (parseError) {
+          // If parsing fails, use the default axios error message
+          logger.debug('Could not parse error response as JSON:', parseError.message);
+        }
+      }
+
       logger.error('Live view capture failed', {
         captureId,
-        error: error.message,
+        error: apiMessage,
+        status: statusCode,
         elapsed: `${Date.now() - startTime}ms`,
       });
+
+      // Log full response for Canon API errors (400, 503) for debugging
+      if (error.response?.data && [400, 503].includes(error.response.status)) {
+        logger.debug('Canon API error response (raw):', error.response.data);
+      }
 
       // Attempt cleanup on failure
       try {
@@ -171,7 +200,12 @@ export class LiveViewManager {
         });
       }
 
-      throw error;
+      // Create clean error with Canon's message
+      const cleanError = new Error(apiMessage || 'Live view capture failed');
+      cleanError.status = statusCode;
+      cleanError.statusText = error.response?.statusText;
+      cleanError.ccapiMessage = error.response?.data?.message; // Preserve original CCAPI message
+      throw cleanError;
     }
   }
 
