@@ -343,7 +343,7 @@ describe("TestPhotoService", () => {
       mockCameraController.client.put.mockResolvedValueOnce({ status: 200 });
 
       await expect(testPhotoService.capturePhoto()).rejects.toThrow(
-        "Camera is busy",
+        "Camera busy (503) - please wait a moment before trying again",
       );
     });
   });
