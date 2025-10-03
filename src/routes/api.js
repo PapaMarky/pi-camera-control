@@ -105,10 +105,13 @@ export function createApiRouter(
         success: true,
         message: `Setting ${setting} updated to ${value}`,
         setting,
-        value
+        value,
       });
     } catch (error) {
-      logger.error(`Failed to update camera setting ${req.params.setting}:`, error);
+      logger.error(
+        `Failed to update camera setting ${req.params.setting}:`,
+        error,
+      );
       res.status(500).json(
         createApiError(error.message, {
           code: ErrorCodes.SYSTEM_ERROR,

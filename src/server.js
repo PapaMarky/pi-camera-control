@@ -47,7 +47,9 @@ class CameraControlServer {
 
     // Initialize live view manager with camera controller getter function
     // LiveViewManager will call this function to get the current controller
-    this.liveViewManager = new LiveViewManager(() => this.getCurrentCameraController());
+    this.liveViewManager = new LiveViewManager(() =>
+      this.getCurrentCameraController(),
+    );
 
     // Keep legacy activeIntervalometerSession for backward compatibility
     this.activeIntervalometerSession = null;
