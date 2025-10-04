@@ -102,6 +102,7 @@ graph TB
 ## Technology Stack
 
 ### Backend (Phase 2)
+
 - **Runtime**: Node.js ≥20.0.0
 - **Framework**: Express.js with middleware (helmet, cors, compression)
 - **WebSocket**: ws library for real-time communication
@@ -110,6 +111,7 @@ graph TB
 - **Process Management**: systemd service for automatic startup/restart
 
 ### Core Dependencies
+
 ```json
 {
   "axios": "^1.5.0",
@@ -122,6 +124,7 @@ graph TB
 ```
 
 ### Frontend (Phase 3)
+
 - **UI**: Mobile-optimized Progressive Web App (PWA)
 - **Architecture**: Static HTML/CSS/JS served by Express
 - **Communication**: WebSocket for real-time updates
@@ -130,7 +133,9 @@ graph TB
 ## Core Components
 
 ### 1. CameraControlServer (`src/server.js`)
+
 Main application server that orchestrates all components:
+
 - Express.js HTTP server with WebSocket upgrade capability
 - Middleware configuration (security, compression, CORS)
 - Route setup and static file serving
@@ -138,7 +143,9 @@ Main application server that orchestrates all components:
 - Event coordination between managers
 
 ### 2. Discovery System
+
 **DiscoveryManager** (`src/discovery/manager.js`)
+
 - UPnP-based automatic camera discovery
 - Manual IP connection fallback
 - Camera registry management
@@ -146,19 +153,23 @@ Main application server that orchestrates all components:
 - Camera IP change detection and reconnection
 
 **UPnPDiscovery** (`src/discovery/upnp.js`)
+
 - Network interface discovery
 - UPnP SSDP protocol implementation
 - Device lifecycle management
 - Multicast group management
 
 ### 3. Camera Management
+
 **CameraStateManager** (`src/camera/state-manager.js`)
+
 - Centralized camera registry
 - Connection state tracking
 - Primary camera management
 - Camera IP change handling
 
 **CameraController** (`src/camera/controller.js`)
+
 - Canon CCAPI v100+ communication
 - Automatic endpoint discovery
 - Connection monitoring and health checks
@@ -166,11 +177,13 @@ Main application server that orchestrates all components:
 - Camera settings retrieval
 
 **LiveViewManager** (`src/camera/liveview-manager.js`)
+
 - Live view image capture from camera
 - Image storage and management
 - Real-time preview generation
 
 **TestPhotoService** (`src/camera/test-photo.js`)
+
 - Test photo capture with quality override
 - EXIF metadata extraction
 - Timestamped photo naming and storage
@@ -179,7 +192,9 @@ Main application server that orchestrates all components:
 - Concurrent capture prevention
 
 ### 4. Network Management
+
 **NetworkStateManager** (`src/network/state-manager.js`)
+
 - High-level network state management
 - Access point configuration
 - Interface state monitoring
@@ -187,6 +202,7 @@ Main application server that orchestrates all components:
 - Network transition handling
 
 **NetworkServiceManager** (`src/network/service-manager.js`)
+
 - Low-level NetworkManager operations via nmcli
 - WiFi scanning and connection
 - Service management (hostapd, dnsmasq)
@@ -194,17 +210,21 @@ Main application server that orchestrates all components:
 - Saved network management
 
 **NetworkConfigManager** (`src/network/config-manager.js`)
+
 - Network configuration persistence
 - Access point settings management
 - Interface configuration
 
 **NetworkHandler** (`src/network/handler.js`)
+
 - Network event coordination
 - WebSocket message handling for network operations
 - Connection result broadcasting
 
 ### 5. Power and Monitoring
+
 **PowerManager** (`src/system/power.js`)
+
 - Raspberry Pi specific monitoring
 - Battery/UPS detection
 - Thermal monitoring
@@ -212,7 +232,9 @@ Main application server that orchestrates all components:
 - System uptime tracking
 
 ### 6. Intervalometer System
+
 **IntervalometerStateManager** (`src/intervalometer/state-manager.js`)
+
 - Centralized session management
 - Report persistence and retrieval
 - User decision workflows
@@ -220,13 +242,16 @@ Main application server that orchestrates all components:
 - Cross-reboot session handling
 
 **TimelapseSession** (`src/intervalometer/timelapse-session.js`)
+
 - Session execution engine
 - Event-driven state machine
 - Error handling and recovery
 - Session statistics tracking
 
 ### 7. Time Synchronization System
+
 **TimeSyncService** (`src/timesync/service.js`)
+
 - Client time synchronization protocol
 - GPS integration support
 - Camera time synchronization
@@ -234,19 +259,23 @@ Main application server that orchestrates all components:
 - Activity logging
 
 **TimeSyncState** (`src/timesync/state.js`)
+
 - Time sync state management
 - Synchronization status tracking
 - Reliability monitoring
 - Activity log management
 
 ### 8. WebSocket Management
+
 **WebSocketHandler** (`src/websocket/handler.js`)
+
 - Client connection management
 - Message routing and dispatch
 - Event broadcasting
 - Connection health monitoring
 
 **WebSocketServiceManager** (`src/websocket/service-manager.js`)
+
 - Service-specific WebSocket operations
 - Message type handling
 - Response coordination
@@ -254,11 +283,13 @@ Main application server that orchestrates all components:
 ## Deployment Architecture
 
 ### Target Hardware
+
 - **Primary**: Raspberry Pi Zero 2W (control device)
 - **Camera**: Canon EOS R50 via CCAPI
 - **Network**: Dual WiFi capability (client + access point)
 
 ### Service Configuration
+
 ```bash
 # Systemd service
 /etc/systemd/system/pi-camera-control.service
@@ -271,6 +302,7 @@ Main application server that orchestrates all components:
 ```
 
 ### Network Configuration
+
 - **Access Point**: `192.168.4.x` network for direct camera connection
 - **WiFi Client**: Connects to external networks for internet access
 - **Dual Interface**: Simultaneous AP and client operation via NetworkManager
@@ -280,11 +312,13 @@ Main application server that orchestrates all components:
 The system uses EventEmitter patterns throughout for loose coupling:
 
 ### Event Flow
+
 1. **System Events** → State Managers → WebSocket Broadcasts
 2. **User Actions** → API/WebSocket → State Changes → Event Propagation
 3. **Hardware Events** → Monitoring → State Updates → Client Notifications
 
 ### Key Event Types
+
 - **Discovery Events**: Camera found/lost, connection changes
 - **Network Events**: WiFi state changes, AP configuration
 - **Power Events**: Battery status, thermal warnings
@@ -293,6 +327,7 @@ The system uses EventEmitter patterns throughout for loose coupling:
 ## Configuration Management
 
 ### Environment Variables
+
 ```bash
 PORT=3000                    # Server port
 CAMERA_IP=192.168.12.98     # Fallback camera IP
@@ -301,6 +336,7 @@ NODE_ENV=production         # Environment mode
 ```
 
 ### File Structure
+
 ```
 src/
 ├── server.js                    # Main server entry point
@@ -338,16 +374,19 @@ data/timelapse-reports/         # Persistent session data
 ## Security Considerations
 
 ### Network Security
+
 - HTTPS for Canon CCAPI (self-signed certificates accepted)
 - CORS configured for cross-origin requests
 - Helmet.js for security headers
 
 ### Access Control
+
 - Local network access only (no internet exposure)
 - systemd service isolation
 - Root privileges only for network operations
 
 ### SSL/TLS
+
 - Canon cameras use self-signed certificates
 - `NODE_TLS_REJECT_UNAUTHORIZED='0'` for camera communication
 - Production deployment should use proper certificates for web interface
@@ -355,16 +394,19 @@ data/timelapse-reports/         # Persistent session data
 ## Performance Optimizations
 
 ### Memory Management
+
 - JSON payload limits (10MB) for Pi optimization
 - Periodic cleanup of dead WebSocket connections
 - Efficient event listener management
 
 ### Network Efficiency
+
 - Connection pooling for camera communication
 - Compressed responses via compression middleware
 - Optimized polling intervals (10s monitoring, 30s status)
 
 ### Battery Optimization
+
 - Configurable monitoring intervals
 - Thermal throttling detection
 - Power state caching
@@ -372,18 +414,21 @@ data/timelapse-reports/         # Persistent session data
 ## Monitoring and Logging
 
 ### Logging Strategy
+
 - **winston** structured logging
 - Log levels: error, warn, info, debug
 - Timestamp and context information
 - File and console output
 
 ### Health Monitoring
+
 - `/health` endpoint for system status
 - WebSocket connection monitoring
 - Camera connection health checks
 - System resource monitoring
 
 ### Metrics
+
 - Connection uptime tracking
 - Photo success/failure rates
 - Network state transitions
@@ -392,7 +437,9 @@ data/timelapse-reports/         # Persistent session data
 ## Known Issues and Technical Debt
 
 ### Error Response Patterns
+
 **Issue**: The system currently uses three different error response patterns:
+
 1. WebSocket error messages: `{ type: 'error', data: { message: 'Error' } }`
 2. Operation result errors: `{ type: 'operation_result', success: false, error: 'Error message' }`
 3. Event-based errors: `{ type: 'event', eventType: 'operation_failed', data: { error: 'Error' } }`
@@ -400,7 +447,9 @@ data/timelapse-reports/         # Persistent session data
 **Impact**: Inconsistent error handling in frontend code, requiring multiple error checking patterns.
 
 ### WebSocket Message Schema ✅ **RESOLVED**
+
 **Status**: Comprehensive schema validation system implemented.
+
 - All message types documented with formal schemas (`test/schemas/`)
 - API specification compliance tests enforce correct behavior
 - Schema validation prevents field name inconsistencies
@@ -409,7 +458,9 @@ data/timelapse-reports/         # Persistent session data
 **Resolution**: Test-driven approach with specification compliance testing ensures API and WebSocket message consistency.
 
 ### Time Synchronization Documentation
+
 **Issue**: The entire time synchronization subsystem was added without updating design documentation.
+
 - Missing design document for timesync architecture
 - WebSocket protocol for time sync not documented
 - Camera sync workflow not specified
@@ -417,7 +468,9 @@ data/timelapse-reports/         # Persistent session data
 **Impact**: Difficult to maintain or extend time sync features without understanding the design.
 
 ### Session Management Complexity
+
 **Issue**: Session save/discard workflow has multiple state transitions not fully documented.
+
 - User decision flow for unsaved sessions
 - Cross-reboot session recovery logic
 - Report management lifecycle
@@ -425,7 +478,9 @@ data/timelapse-reports/         # Persistent session data
 **Impact**: Complex state management that's difficult to debug or modify.
 
 ### Network Transition Handling
+
 **Issue**: Camera IP change detection and reconnection logic is undocumented.
+
 - Automatic reconnection on network changes
 - Primary camera failover behavior
 - Connection verification timing
@@ -433,7 +488,9 @@ data/timelapse-reports/         # Persistent session data
 **Impact**: Network-related bugs are difficult to diagnose without understanding the transition logic.
 
 ### Component Coupling
+
 **Issue**: Some components have evolved to have tighter coupling than originally designed.
+
 - WebSocketServiceManager directly accesses multiple state managers
 - Network events trigger cascading updates across components
 - Time sync touches camera controller directly
@@ -441,7 +498,9 @@ data/timelapse-reports/         # Persistent session data
 **Impact**: Changes in one component can have unexpected effects on others.
 
 ### API Endpoint Proliferation
+
 **Issue**: API endpoints have grown organically without consistent naming or structure.
+
 - 60+ endpoints vs 47 originally documented
 - Inconsistent URL patterns and parameter naming
 - Some endpoints duplicate WebSocket functionality
@@ -451,6 +510,7 @@ data/timelapse-reports/         # Persistent session data
 ## Migration and Improvement Notes
 
 ### Planned Improvements
+
 1. **Standardize error responses**: Define single error format for all responses
 2. **Create WebSocket schemas**: Formal message type definitions with validation
 3. **Document time sync system**: Complete design document for time synchronization
@@ -458,6 +518,7 @@ data/timelapse-reports/         # Persistent session data
 5. **API consolidation**: Review and consolidate redundant endpoints
 
 ### Development Guidelines
+
 1. **Always check existing patterns**: Review similar features before implementing new ones
 2. **Update documentation first**: Design changes before implementation
 3. **Maintain backward compatibility**: Don't break existing frontend when modifying messages

@@ -5,7 +5,7 @@
  */
 
 // Suppress console output during tests unless explicitly needed
-if (process.env.NODE_ENV === 'test' && !process.env.SHOW_LOGS) {
+if (process.env.NODE_ENV === "test" && !process.env.SHOW_LOGS) {
   global.console = {
     ...console,
     log: () => {},
@@ -25,7 +25,7 @@ global.expect.extend({
       message: () =>
         pass
           ? `Expected message not to have type "${messageType}"`
-          : `Expected message to have type "${messageType}", but got "${received.type}"`
+          : `Expected message to have type "${messageType}", but got "${received.type}"`,
     };
   },
 
@@ -39,7 +39,7 @@ global.expect.extend({
       message: () =>
         pass
           ? `Expected object not to match schema`
-          : `Expected object to match schema. Errors: ${errors.join(', ')}`
+          : `Expected object to match schema. Errors: ${errors.join(", ")}`,
     };
-  }
+  },
 });

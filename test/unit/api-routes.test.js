@@ -5,33 +5,35 @@
  * Comprehensive coverage of camera, intervalometer, network, and system routes.
  */
 
-import { jest } from '@jest/globals';
-import express from 'express';
-import request from 'supertest';
-import { createApiRouter } from '../../src/routes/api.js';
+import { jest } from "@jest/globals";
+import express from "express";
+import request from "supertest";
+import { createApiRouter } from "../../src/routes/api.js";
 
 // Mock IntervalometerSession class
-jest.mock('../../src/intervalometer/session.js', () => ({
-  IntervalometerSession: jest.fn().mockImplementation((getCameraController, options) => ({
-    id: 'session-123',
-    state: 'initialized',
-    options,
-    start: jest.fn(async function() {
-      this.state = 'running';
-    }),
-    stop: jest.fn(async function() {
-      this.state = 'stopped';
-    }),
-    cleanup: jest.fn(),
-    getStatus: jest.fn(() => ({
-      state: 'running',
-      progress: { shots: 0, total: parseInt(options.totalShots || 0) },
-      stats: { successful: 0, failed: 0 }
-    }))
-  }))
+jest.mock("../../src/intervalometer/session.js", () => ({
+  IntervalometerSession: jest
+    .fn()
+    .mockImplementation((getCameraController, options) => ({
+      id: "session-123",
+      state: "initialized",
+      options,
+      start: jest.fn(async function () {
+        this.state = "running";
+      }),
+      stop: jest.fn(async function () {
+        this.state = "stopped";
+      }),
+      cleanup: jest.fn(),
+      getStatus: jest.fn(() => ({
+        state: "running",
+        progress: { shots: 0, total: parseInt(options.totalShots || 0) },
+        stats: { successful: 0, failed: 0 },
+      })),
+    })),
 }));
 
-describe('API Routes Unit Tests', () => {
+describe("API Routes Unit Tests", () => {
   let app;
   let mockCameraController;
   let mockPowerManager;
@@ -49,32 +51,32 @@ describe('API Routes Unit Tests', () => {
     const mockControllerInstance = {
       getConnectionStatus: jest.fn(() => ({
         connected: true,
-        ip: '192.168.4.2',
-        port: '443',
-        model: 'EOS R50'
+        ip: "192.168.4.2",
+        port: "443",
+        model: "EOS R50",
       })),
       getCameraSettings: jest.fn(async () => ({
         iso: 100,
-        shutterSpeed: '1/60',
-        aperture: 'f/2.8',
-        imageQuality: 'RAW+JPEG'
+        shutterSpeed: "1/60",
+        aperture: "f/2.8",
+        imageQuality: "RAW+JPEG",
       })),
       getCameraBattery: jest.fn(async () => ({
         level: 85,
-        status: 'good'
+        status: "good",
       })),
       getDeviceInformation: jest.fn(async () => ({
-        model: 'EOS R50',
-        firmware: '1.0.0',
-        serialNumber: 'ABC123'
+        model: "EOS R50",
+        firmware: "1.0.0",
+        serialNumber: "ABC123",
       })),
       takePhoto: jest.fn(async () => ({ success: true })),
       manualReconnect: jest.fn(async () => true),
       updateConfiguration: jest.fn(async () => true),
       validateInterval: jest.fn(async (interval) => ({
         valid: interval >= 5,
-        error: interval < 5 ? 'Interval too short' : null,
-        recommendedMin: 5
+        error: interval < 5 ? "Interval too short" : null,
+        recommendedMin: 5,
       })),
       pauseInfoPolling: jest.fn(),
       resumeInfoPolling: jest.fn(),
@@ -83,8 +85,8 @@ describe('API Routes Unit Tests', () => {
       capabilities: {
         shutter: true,
         iso: true,
-        aperture: true
-      }
+        aperture: true,
+      },
     };
 
     mockCameraController = jest.fn(() => mockControllerInstance);
@@ -95,60 +97,60 @@ describe('API Routes Unit Tests', () => {
       getStatus: jest.fn(() => ({
         isRaspberryPi: true,
         uptime: 3600,
-        thermal: { temperature: 45.2 }
-      }))
+        thermal: { temperature: 45.2 },
+      })),
     };
 
     // Mock intervalometer state manager (defined before mockServer)
     mockIntervalometerStateManager = {
       createSession: jest.fn(async () => ({
-        id: 'session-123',
+        id: "session-123",
         start: jest.fn(async () => {}),
         getStatus: jest.fn(() => ({
-          state: 'running',
-          progress: { shots: 10, total: 100 }
-        }))
+          state: "running",
+          progress: { shots: 10, total: 100 },
+        })),
       })),
-      getSessionStatus: jest.fn(function() {
+      getSessionStatus: jest.fn(function () {
         // Check mockServer for active session
         if (mockServer && mockServer.activeIntervalometerSession) {
           return mockServer.activeIntervalometerSession.getStatus();
         }
         return {
-          state: 'stopped',
-          message: 'No active intervalometer session'
+          state: "stopped",
+          message: "No active intervalometer session",
         };
       }),
       getReports: jest.fn(async () => [
-        { id: 'report-1', title: 'Test Report 1' },
-        { id: 'report-2', title: 'Test Report 2' }
+        { id: "report-1", title: "Test Report 1" },
+        { id: "report-2", title: "Test Report 2" },
       ]),
       getReport: jest.fn(async (id) =>
-        id === 'report-1' ? { id: 'report-1', title: 'Test Report 1' } : null
+        id === "report-1" ? { id: "report-1", title: "Test Report 1" } : null,
       ),
       updateReportTitle: jest.fn(async (id, title) => ({
         id,
         title,
-        updated: new Date().toISOString()
+        updated: new Date().toISOString(),
       })),
       deleteReport: jest.fn(async () => true),
       getUnsavedSession: jest.fn(async () => null),
       saveSessionAsReport: jest.fn(async () => true),
       saveSessionReport: jest.fn(async () => ({
-        id: 'new-report',
-        title: 'Saved Session'
+        id: "new-report",
+        title: "Saved Session",
       })),
       discardSession: jest.fn(async () => true),
       getState: jest.fn(() => ({
         hasUnsavedSession: false,
-        currentSessionId: null
-      }))
+        currentSessionId: null,
+      })),
     };
 
     // Mock server
     mockServer = {
       activeIntervalometerSession: null,
-      intervalometerStateManager: mockIntervalometerStateManager
+      intervalometerStateManager: mockIntervalometerStateManager,
     };
 
     // Mock network state manager with serviceManager
@@ -157,53 +159,52 @@ describe('API Routes Unit Tests', () => {
         interfaces: {
           wlan0: {
             connected: true,
-            network: 'TestNetwork',
-            ip: '192.168.1.100'
-          }
-        }
+            network: "TestNetwork",
+            ip: "192.168.1.100",
+          },
+        },
       })),
       serviceManager: {
         scanWiFiNetworks: jest.fn(async () => [
-          { ssid: 'Network1', signal: 85, security: 'WPA2' },
-          { ssid: 'Network2', signal: 72, security: 'WPA3' }
+          { ssid: "Network1", signal: 85, security: "WPA2" },
+          { ssid: "Network2", signal: 72, security: "WPA3" },
         ]),
         getSavedNetworks: jest.fn(async () => [
-          { name: 'SavedNetwork1', uuid: 'uuid-1' },
-          { name: 'SavedNetwork2', uuid: 'uuid-2' }
+          { name: "SavedNetwork1", uuid: "uuid-1" },
+          { name: "SavedNetwork2", uuid: "uuid-2" },
         ]),
         connectToWiFi: jest.fn(async () => ({ success: true })),
         disconnectWiFi: jest.fn(async () => ({ success: true })),
         configureAccessPoint: jest.fn(async () => ({ success: true })),
         setWiFiCountry: jest.fn(async () => ({ success: true })),
-        getWiFiCountry: jest.fn(async () => ({ country: 'US' })),
-        getAvailableCountries: jest.fn(async () => ['US', 'GB', 'JP', 'DE']),
+        getWiFiCountry: jest.fn(async () => ({ country: "US" })),
+        getAvailableCountries: jest.fn(async () => ["US", "GB", "JP", "DE"]),
         enableWiFi: jest.fn(async () => ({ success: true })),
         disableWiFi: jest.fn(async () => ({ success: true })),
-        isWiFiEnabled: jest.fn(async () => ({ enabled: true }))
-      }
+        isWiFiEnabled: jest.fn(async () => ({ enabled: true })),
+      },
     };
 
     // Mock discovery manager
     mockDiscoveryManager = {
       getStatus: jest.fn(() => ({
         isDiscovering: true,
-        cameras: 1
+        cameras: 1,
       })),
       getDiscoveredCameras: jest.fn(() => [
-        { uuid: 'cam-1', ip: '192.168.4.2', model: 'EOS R50' }
+        { uuid: "cam-1", ip: "192.168.4.2", model: "EOS R50" },
       ]),
       searchForCameras: jest.fn(async () => ({ started: true })),
       setPrimaryCamera: jest.fn(async () => ({ success: true })),
       connectToCamera: jest.fn(async () => ({ success: true })),
       getCamera: jest.fn(() => ({
-        uuid: 'cam-1',
-        ip: '192.168.4.2',
-        model: 'EOS R50'
+        uuid: "cam-1",
+        ip: "192.168.4.2",
+        model: "EOS R50",
       })),
-      getLastKnownIP: jest.fn(() => ({ ip: '192.168.4.2' })),
-      clearConnectionHistory: jest.fn(async () => ({ success: true }))
+      getLastKnownIP: jest.fn(() => ({ ip: "192.168.4.2" })),
+      clearConnectionHistory: jest.fn(async () => ({ success: true })),
     };
-
 
     // Create router and mount it
     const apiRouter = createApiRouter(
@@ -212,546 +213,602 @@ describe('API Routes Unit Tests', () => {
       mockServer,
       mockNetworkStateManager,
       mockDiscoveryManager,
-      mockIntervalometerStateManager
+      mockIntervalometerStateManager,
     );
 
-    app.use('/api', apiRouter);
+    app.use("/api", apiRouter);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('Camera Routes', () => {
-    describe('GET /api/camera/status', () => {
-      test('returns camera status when connected', async () => {
+  describe("Camera Routes", () => {
+    describe("GET /api/camera/status", () => {
+      test("returns camera status when connected", async () => {
         const response = await request(app)
-          .get('/api/camera/status')
+          .get("/api/camera/status")
           .expect(200);
 
         expect(response.body).toEqual({
           connected: true,
-          ip: '192.168.4.2',
-          port: '443',
-          model: 'EOS R50'
+          ip: "192.168.4.2",
+          port: "443",
+          model: "EOS R50",
         });
 
         expect(mockCameraController).toHaveBeenCalled();
-        expect(mockCameraController.instance.getConnectionStatus).toHaveBeenCalled();
+        expect(
+          mockCameraController.instance.getConnectionStatus,
+        ).toHaveBeenCalled();
       });
 
-      test('returns not connected when no camera available', async () => {
+      test("returns not connected when no camera available", async () => {
         mockCameraController.mockReturnValue(null);
 
         const response = await request(app)
-          .get('/api/camera/status')
+          .get("/api/camera/status")
           .expect(200);
 
         expect(response.body).toEqual({
           connected: false,
           ip: null,
           port: null,
-          lastError: 'No camera available',
+          lastError: "No camera available",
           shutterEndpoint: null,
-          hasCapabilities: false
+          hasCapabilities: false,
         });
       });
 
-      test('handles camera status error', async () => {
-        mockCameraController.instance.getConnectionStatus.mockImplementation(() => {
-          throw new Error('Connection failed');
-        });
+      test("handles camera status error", async () => {
+        mockCameraController.instance.getConnectionStatus.mockImplementation(
+          () => {
+            throw new Error("Connection failed");
+          },
+        );
 
         const response = await request(app)
-          .get('/api/camera/status')
+          .get("/api/camera/status")
           .expect(500);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Failed to get camera status');
-        expect(response.body.error).toHaveProperty('code');
-        expect(response.body.error).toHaveProperty('component');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "Failed to get camera status",
+        );
+        expect(response.body.error).toHaveProperty("code");
+        expect(response.body.error).toHaveProperty("component");
       });
     });
 
-    describe('GET /api/camera/settings', () => {
-      test('returns camera settings', async () => {
+    describe("GET /api/camera/settings", () => {
+      test("returns camera settings", async () => {
         const response = await request(app)
-          .get('/api/camera/settings')
+          .get("/api/camera/settings")
           .expect(200);
 
         expect(response.body).toEqual({
           iso: 100,
-          shutterSpeed: '1/60',
-          aperture: 'f/2.8',
-          imageQuality: 'RAW+JPEG'
+          shutterSpeed: "1/60",
+          aperture: "f/2.8",
+          imageQuality: "RAW+JPEG",
         });
 
-        expect(mockCameraController.instance.getCameraSettings).toHaveBeenCalled();
+        expect(
+          mockCameraController.instance.getCameraSettings,
+        ).toHaveBeenCalled();
       });
 
-      test('returns 503 when no camera available', async () => {
+      test("returns 503 when no camera available", async () => {
         mockCameraController.mockReturnValue(null);
 
         const response = await request(app)
-          .get('/api/camera/settings')
+          .get("/api/camera/settings")
           .expect(503);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'No camera available');
-        expect(response.body.error).toHaveProperty('code');
-        expect(response.body.error).toHaveProperty('component');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "No camera available",
+        );
+        expect(response.body.error).toHaveProperty("code");
+        expect(response.body.error).toHaveProperty("component");
       });
 
-      test('handles camera settings error', async () => {
+      test("handles camera settings error", async () => {
         mockCameraController.instance.getCameraSettings.mockRejectedValue(
-          new Error('Camera communication failed')
+          new Error("Camera communication failed"),
         );
 
         const response = await request(app)
-          .get('/api/camera/settings')
+          .get("/api/camera/settings")
           .expect(500);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Camera communication failed');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "Camera communication failed",
+        );
       });
     });
 
-    describe('GET /api/camera/battery', () => {
-      test('returns camera battery status', async () => {
+    describe("GET /api/camera/battery", () => {
+      test("returns camera battery status", async () => {
         const response = await request(app)
-          .get('/api/camera/battery')
+          .get("/api/camera/battery")
           .expect(200);
 
         expect(response.body).toEqual({
           level: 85,
-          status: 'good'
+          status: "good",
         });
 
-        expect(mockCameraController.instance.getCameraBattery).toHaveBeenCalled();
+        expect(
+          mockCameraController.instance.getCameraBattery,
+        ).toHaveBeenCalled();
       });
 
-      test('returns 503 when no camera available', async () => {
+      test("returns 503 when no camera available", async () => {
         mockCameraController.mockReturnValue(null);
 
         const response = await request(app)
-          .get('/api/camera/battery')
+          .get("/api/camera/battery")
           .expect(503);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'No camera available');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "No camera available",
+        );
       });
     });
 
-    describe('POST /api/camera/photo', () => {
-      test('takes a photo successfully', async () => {
+    describe("POST /api/camera/photo", () => {
+      test("takes a photo successfully", async () => {
         const response = await request(app)
-          .post('/api/camera/photo')
+          .post("/api/camera/photo")
           .expect(200);
 
         expect(response.body).toMatchObject({
           success: true,
-          timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
+          timestamp: expect.stringMatching(
+            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+          ),
         });
 
         expect(mockCameraController.instance.takePhoto).toHaveBeenCalled();
       });
 
-      test('handles photo capture error', async () => {
+      test("handles photo capture error", async () => {
         mockCameraController.instance.takePhoto.mockRejectedValue(
-          new Error('Shutter stuck')
+          new Error("Shutter stuck"),
         );
 
         const response = await request(app)
-          .post('/api/camera/photo')
+          .post("/api/camera/photo")
           .expect(500);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Shutter stuck');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty("message", "Shutter stuck");
       });
     });
 
-    describe('POST /api/camera/configure', () => {
-      test('configures camera IP and port', async () => {
+    describe("POST /api/camera/configure", () => {
+      test("configures camera IP and port", async () => {
         const response = await request(app)
-          .post('/api/camera/configure')
-          .send({ ip: '192.168.1.200', port: '8080' })
+          .post("/api/camera/configure")
+          .send({ ip: "192.168.1.200", port: "8080" })
           .expect(200);
 
         expect(response.body).toEqual({
           success: true,
-          message: 'Camera configuration updated successfully',
-          configuration: { ip: '192.168.1.200', port: '8080' }
+          message: "Camera configuration updated successfully",
+          configuration: { ip: "192.168.1.200", port: "8080" },
         });
 
-        expect(mockCameraController.instance.updateConfiguration).toHaveBeenCalledWith(
-          '192.168.1.200',
-          '8080'
+        expect(
+          mockCameraController.instance.updateConfiguration,
+        ).toHaveBeenCalledWith("192.168.1.200", "8080");
+      });
+
+      test("validates IP address format", async () => {
+        const response = await request(app)
+          .post("/api/camera/configure")
+          .send({ ip: "invalid-ip" })
+          .expect(400);
+
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "Invalid IP address format",
         );
       });
 
-      test('validates IP address format', async () => {
+      test("validates port range", async () => {
         const response = await request(app)
-          .post('/api/camera/configure')
-          .send({ ip: 'invalid-ip' })
+          .post("/api/camera/configure")
+          .send({ ip: "192.168.1.200", port: "99999" })
           .expect(400);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Invalid IP address format');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "Port must be between 1 and 65535",
+        );
       });
 
-      test('validates port range', async () => {
+      test("requires IP address", async () => {
         const response = await request(app)
-          .post('/api/camera/configure')
-          .send({ ip: '192.168.1.200', port: '99999' })
+          .post("/api/camera/configure")
+          .send({ port: "8080" })
           .expect(400);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Port must be between 1 and 65535');
-      });
-
-      test('requires IP address', async () => {
-        const response = await request(app)
-          .post('/api/camera/configure')
-          .send({ port: '8080' })
-          .expect(400);
-
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'IP address is required');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "IP address is required",
+        );
       });
     });
 
     // validate-interval endpoint removed - validation now happens automatically during intervalometer start
   });
 
-  describe('Intervalometer Routes', () => {
-    describe('POST /api/intervalometer/start', () => {
-      test('starts intervalometer session', async () => {
+  describe("Intervalometer Routes", () => {
+    describe("POST /api/intervalometer/start", () => {
+      test("starts intervalometer session", async () => {
         // The route uses IntervalometerSession directly, not through state manager
         // So we need to set up the server's activeIntervalometerSession after creation
         const response = await request(app)
-          .post('/api/intervalometer/start')
-          .send({ interval: 30, shots: 100, stopCondition: 'stop-after' })
+          .post("/api/intervalometer/start")
+          .send({ interval: 30, shots: 100, stopCondition: "stop-after" })
           .expect(200);
 
         expect(response.body).toMatchObject({
           success: true,
-          message: 'Intervalometer started successfully'
+          message: "Intervalometer started successfully",
         });
 
         // The API should have created a session
         expect(mockServer.activeIntervalometerSession).toBeDefined();
       });
 
-      test('supports title parameter', async () => {
+      test("supports title parameter", async () => {
         const response = await request(app)
-          .post('/api/intervalometer/start')
-          .send({ interval: 30, shots: 100, stopCondition: 'stop-after', title: 'Test Session' })
+          .post("/api/intervalometer/start")
+          .send({
+            interval: 30,
+            shots: 100,
+            stopCondition: "stop-after",
+            title: "Test Session",
+          })
           .expect(200);
 
         expect(response.body).toMatchObject({
           success: true,
-          message: 'Intervalometer started successfully'
+          message: "Intervalometer started successfully",
         });
       });
 
-      test('prevents starting when session already running', async () => {
-        mockServer.activeIntervalometerSession = { state: 'running' };
+      test("prevents starting when session already running", async () => {
+        mockServer.activeIntervalometerSession = { state: "running" };
 
         const response = await request(app)
-          .post('/api/intervalometer/start')
-          .send({ interval: 30, shots: 100, stopCondition: 'stop-after' })
+          .post("/api/intervalometer/start")
+          .send({ interval: 30, shots: 100, stopCondition: "stop-after" })
           .expect(400);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Intervalometer is already running');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "Intervalometer is already running",
+        );
       });
 
-      test('validates interval parameter', async () => {
+      test("validates interval parameter", async () => {
         const response = await request(app)
-          .post('/api/intervalometer/start')
+          .post("/api/intervalometer/start")
           .send({ shots: 100 })
           .expect(400);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Invalid interval value');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "Invalid interval value",
+        );
       });
     });
 
-    describe('GET /api/intervalometer/status', () => {
-      test('returns status when session active', async () => {
+    describe("GET /api/intervalometer/status", () => {
+      test("returns status when session active", async () => {
         mockServer.activeIntervalometerSession = {
           getStatus: jest.fn(() => ({
-            state: 'running',
+            state: "running",
             progress: { shots: 25, total: 100 },
             stats: {
-              startTime: '2024-01-01T20:00:00.000Z',
+              startTime: "2024-01-01T20:00:00.000Z",
               shotsTaken: 25,
               shotsSuccessful: 24,
               shotsFailed: 1,
               currentShot: 26,
-              nextShotTime: '2024-01-01T20:12:30.000Z'
+              nextShotTime: "2024-01-01T20:12:30.000Z",
             },
             options: {
               interval: 30,
-              totalShots: 100
-            }
-          }))
+              totalShots: 100,
+            },
+          })),
         };
 
         const response = await request(app)
-          .get('/api/intervalometer/status')
+          .get("/api/intervalometer/status")
           .expect(200);
 
         expect(response.body).toMatchObject({
           running: true,
-          state: 'running',
+          state: "running",
           stats: {
             shotsTaken: 25,
             shotsSuccessful: 24,
-            shotsFailed: 1
+            shotsFailed: 1,
           },
           options: {
             interval: 30,
-            totalShots: 100
-          }
+            totalShots: 100,
+          },
         });
       });
 
-      test('returns inactive status when no session', async () => {
+      test("returns inactive status when no session", async () => {
         mockServer.activeIntervalometerSession = null;
 
         const response = await request(app)
-          .get('/api/intervalometer/status')
+          .get("/api/intervalometer/status")
           .expect(200);
 
         expect(response.body).toEqual({
           running: false,
-          state: 'stopped'
+          state: "stopped",
         });
       });
     });
   });
 
-  describe('Timelapse Report Routes', () => {
-    describe('GET /api/timelapse/reports', () => {
-      test('returns all timelapse reports', async () => {
+  describe("Timelapse Report Routes", () => {
+    describe("GET /api/timelapse/reports", () => {
+      test("returns all timelapse reports", async () => {
         const response = await request(app)
-          .get('/api/timelapse/reports')
+          .get("/api/timelapse/reports")
           .expect(200);
 
         expect(response.body).toEqual({
           reports: [
-            { id: 'report-1', title: 'Test Report 1' },
-            { id: 'report-2', title: 'Test Report 2' }
-          ]
+            { id: "report-1", title: "Test Report 1" },
+            { id: "report-2", title: "Test Report 2" },
+          ],
         });
 
         expect(mockIntervalometerStateManager.getReports).toHaveBeenCalled();
       });
 
-      test('handles reports error', async () => {
+      test("handles reports error", async () => {
         mockIntervalometerStateManager.getReports.mockRejectedValue(
-          new Error('Database error')
+          new Error("Database error"),
         );
 
         const response = await request(app)
-          .get('/api/timelapse/reports')
+          .get("/api/timelapse/reports")
           .expect(500);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Database error');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty("message", "Database error");
       });
     });
 
-    describe('GET /api/timelapse/reports/:id', () => {
-      test('returns specific report', async () => {
+    describe("GET /api/timelapse/reports/:id", () => {
+      test("returns specific report", async () => {
         const response = await request(app)
-          .get('/api/timelapse/reports/report-1')
+          .get("/api/timelapse/reports/report-1")
           .expect(200);
 
         expect(response.body).toEqual({
-          id: 'report-1',
-          title: 'Test Report 1'
+          id: "report-1",
+          title: "Test Report 1",
         });
 
-        expect(mockIntervalometerStateManager.getReport).toHaveBeenCalledWith('report-1');
-      });
-
-      test('returns 404 for non-existent report', async () => {
-        const response = await request(app)
-          .get('/api/timelapse/reports/nonexistent')
-          .expect(404);
-
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Report not found');
-      });
-    });
-
-    describe('PUT /api/timelapse/reports/:id/title', () => {
-      test('updates report title', async () => {
-        const response = await request(app)
-          .put('/api/timelapse/reports/report-1/title')
-          .send({ title: 'Updated Title' })
-          .expect(200);
-
-        expect(response.body).toMatchObject({
-          id: 'report-1',
-          title: 'Updated Title'
-        });
-
-        expect(mockIntervalometerStateManager.updateReportTitle).toHaveBeenCalledWith(
-          'report-1',
-          'Updated Title'
+        expect(mockIntervalometerStateManager.getReport).toHaveBeenCalledWith(
+          "report-1",
         );
       });
 
-      test('validates title parameter', async () => {
+      test("returns 404 for non-existent report", async () => {
         const response = await request(app)
-          .put('/api/timelapse/reports/report-1/title')
+          .get("/api/timelapse/reports/nonexistent")
+          .expect(404);
+
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "Report not found",
+        );
+      });
+    });
+
+    describe("PUT /api/timelapse/reports/:id/title", () => {
+      test("updates report title", async () => {
+        const response = await request(app)
+          .put("/api/timelapse/reports/report-1/title")
+          .send({ title: "Updated Title" })
+          .expect(200);
+
+        expect(response.body).toMatchObject({
+          id: "report-1",
+          title: "Updated Title",
+        });
+
+        expect(
+          mockIntervalometerStateManager.updateReportTitle,
+        ).toHaveBeenCalledWith("report-1", "Updated Title");
+      });
+
+      test("validates title parameter", async () => {
+        const response = await request(app)
+          .put("/api/timelapse/reports/report-1/title")
           .send({})
           .expect(400);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Title cannot be empty');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "Title cannot be empty",
+        );
       });
     });
   });
 
-  describe('Network Routes', () => {
-    describe('GET /api/network/status', () => {
-      test('returns network status', async () => {
+  describe("Network Routes", () => {
+    describe("GET /api/network/status", () => {
+      test("returns network status", async () => {
         const response = await request(app)
-          .get('/api/network/status')
+          .get("/api/network/status")
           .expect(200);
 
         expect(response.body).toEqual({
           interfaces: {
             wlan0: {
               connected: true,
-              network: 'TestNetwork',
-              ip: '192.168.1.100'
-            }
-          }
+              network: "TestNetwork",
+              ip: "192.168.1.100",
+            },
+          },
         });
 
         expect(mockNetworkStateManager.getNetworkStatus).toHaveBeenCalled();
       });
 
-      test('handles network status error', async () => {
+      test("handles network status error", async () => {
         mockNetworkStateManager.getNetworkStatus.mockRejectedValue(
-          new Error('Network error')
+          new Error("Network error"),
         );
 
         const response = await request(app)
-          .get('/api/network/status')
+          .get("/api/network/status")
           .expect(500);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Network error');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty("message", "Network error");
       });
     });
 
-    describe('GET /api/network/wifi/scan', () => {
-      test('scans for WiFi networks', async () => {
+    describe("GET /api/network/wifi/scan", () => {
+      test("scans for WiFi networks", async () => {
         const response = await request(app)
-          .get('/api/network/wifi/scan')
+          .get("/api/network/wifi/scan")
           .expect(200);
 
         expect(response.body).toEqual({
           networks: [
-            { ssid: 'Network1', signal: 85, security: 'WPA2' },
-            { ssid: 'Network2', signal: 72, security: 'WPA3' }
-          ]
+            { ssid: "Network1", signal: 85, security: "WPA2" },
+            { ssid: "Network2", signal: 72, security: "WPA3" },
+          ],
         });
 
-        expect(mockNetworkStateManager.serviceManager.scanWiFiNetworks).toHaveBeenCalled();
+        expect(
+          mockNetworkStateManager.serviceManager.scanWiFiNetworks,
+        ).toHaveBeenCalled();
       });
     });
 
-    describe('POST /api/network/wifi/connect', () => {
-      test('connects to WiFi network', async () => {
+    describe("POST /api/network/wifi/connect", () => {
+      test("connects to WiFi network", async () => {
         const response = await request(app)
-          .post('/api/network/wifi/connect')
-          .send({ ssid: 'TestNetwork', password: 'password123' })
+          .post("/api/network/wifi/connect")
+          .send({ ssid: "TestNetwork", password: "password123" })
           .expect(200);
 
         expect(response.body).toEqual({
-          success: true
+          success: true,
         });
 
-        expect(mockNetworkStateManager.serviceManager.connectToWiFi).toHaveBeenCalledWith(
-          'TestNetwork',
-          'password123',
-          undefined
-        );
+        expect(
+          mockNetworkStateManager.serviceManager.connectToWiFi,
+        ).toHaveBeenCalledWith("TestNetwork", "password123", undefined);
       });
 
-      test('validates SSID parameter', async () => {
+      test("validates SSID parameter", async () => {
         const response = await request(app)
-          .post('/api/network/wifi/connect')
-          .send({ password: 'password123' })
+          .post("/api/network/wifi/connect")
+          .send({ password: "password123" })
           .expect(400);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'SSID is required');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "SSID is required",
+        );
       });
     });
   });
 
-  describe('System Routes', () => {
-    describe('GET /api/system/power', () => {
-      test('returns power status', async () => {
+  describe("System Routes", () => {
+    describe("GET /api/system/power", () => {
+      test("returns power status", async () => {
         const response = await request(app)
-          .get('/api/system/power')
+          .get("/api/system/power")
           .expect(200);
 
         expect(response.body).toEqual({
           isRaspberryPi: true,
           uptime: 3600,
-          thermal: { temperature: 45.2 }
+          thermal: { temperature: 45.2 },
         });
 
         expect(mockPowerManager.getStatus).toHaveBeenCalled();
       });
 
-      test('handles power status error', async () => {
+      test("handles power status error", async () => {
         mockPowerManager.getStatus.mockImplementation(() => {
-          throw new Error('Power monitoring failed');
+          throw new Error("Power monitoring failed");
         });
 
         const response = await request(app)
-          .get('/api/system/power')
+          .get("/api/system/power")
           .expect(500);
 
-        expect(response.body).toHaveProperty('error');
-        expect(response.body).toHaveProperty('timestamp');
-        expect(response.body.error).toHaveProperty('message', 'Failed to get power status');
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "Failed to get power status",
+        );
       });
     });
 
-    describe('GET /api/system/status', () => {
-      test('returns system status', async () => {
+    describe("GET /api/system/status", () => {
+      test("returns system status", async () => {
         const response = await request(app)
-          .get('/api/system/status')
+          .get("/api/system/status")
           .expect(200);
 
         expect(response.body).toMatchObject({
-          timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/),
+          timestamp: expect.stringMatching(
+            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+          ),
           uptime: expect.any(Number),
           memory: expect.any(Object),
           platform: expect.any(String),
@@ -759,37 +816,37 @@ describe('API Routes Unit Tests', () => {
           power: {
             isRaspberryPi: true,
             uptime: 3600,
-            thermal: { temperature: 45.2 }
-          }
+            thermal: { temperature: 45.2 },
+          },
         });
       });
     });
   });
 
-  describe('Discovery Routes', () => {
-    describe('GET /api/discovery/status', () => {
-      test('returns discovery status', async () => {
+  describe("Discovery Routes", () => {
+    describe("GET /api/discovery/status", () => {
+      test("returns discovery status", async () => {
         const response = await request(app)
-          .get('/api/discovery/status')
+          .get("/api/discovery/status")
           .expect(200);
 
         expect(response.body).toEqual({
           isDiscovering: true,
-          cameras: 1
+          cameras: 1,
         });
 
         expect(mockDiscoveryManager.getStatus).toHaveBeenCalled();
       });
     });
 
-    describe('GET /api/discovery/cameras', () => {
-      test('returns discovered cameras', async () => {
+    describe("GET /api/discovery/cameras", () => {
+      test("returns discovered cameras", async () => {
         const response = await request(app)
-          .get('/api/discovery/cameras')
+          .get("/api/discovery/cameras")
           .expect(200);
 
         expect(response.body).toEqual([
-          { uuid: 'cam-1', ip: '192.168.4.2', model: 'EOS R50' }
+          { uuid: "cam-1", ip: "192.168.4.2", model: "EOS R50" },
         ]);
 
         expect(mockDiscoveryManager.getDiscoveredCameras).toHaveBeenCalled();

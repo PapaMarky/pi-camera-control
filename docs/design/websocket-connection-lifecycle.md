@@ -20,7 +20,7 @@ The WebSocket server is created alongside the Express HTTP server:
 // src/server.js:49-58
 const wss = new WebSocketServer({
   server: this.httpServer,
-  path: "/ws"
+  path: "/ws",
 });
 
 wss.on("connection", (ws, req) => {
@@ -31,6 +31,7 @@ wss.on("connection", (ws, req) => {
 ```
 
 **Server Configuration:**
+
 - **Path:** `/ws`
 - **Protocol:** WebSocket over HTTP (upgrades from HTTP connection)
 - **No Authentication:** Open to all clients on the network
@@ -67,6 +68,7 @@ sequenceDiagram
 ```
 
 **Welcome Message:**
+
 ```javascript
 // src/websocket/handler.js:248-261
 const welcomeMessage = {
@@ -92,16 +94,19 @@ ws.send(JSON.stringify(welcomeMessage));
 The system maintains two data structures for active connections:
 
 **1. Active Clients Set:**
+
 ```javascript
-const clients = new Set();  // Set of WebSocket instances
+const clients = new Set(); // Set of WebSocket instances
 ```
 
 **2. Client Info Map:**
+
 ```javascript
-const clientInfo = new Map();  // ws -> { ip, id }
+const clientInfo = new Map(); // ws -> { ip, id }
 ```
 
 **Benefits:**
+
 - Set for fast broadcast iteration
 - Map for metadata lookup
 - Automatic cleanup when connection closes
@@ -120,6 +125,7 @@ The system currently implements **no authentication or authorization**:
 - ✅ No API keys or tokens
 
 **Rationale:**
+
 - System designed for single-user, private network operation
 - Camera control is inherently local (camera's own WiFi or local network)
 - Physical access to network implies authorized user
@@ -130,6 +136,7 @@ The system currently implements **no authentication or authorization**:
 If multi-user or security requirements emerge:
 
 **Option 1: Simple Token Authentication**
+
 ```javascript
 // Hypothetical implementation
 ws.on("message", async (data) => {
@@ -157,6 +164,7 @@ ws.on("message", async (data) => {
 ```
 
 **Option 2: Role-Based Access**
+
 - Read-only observers (monitoring only)
 - Operators (full control)
 - Different tokens for different roles
@@ -200,6 +208,7 @@ sequenceDiagram
 ```
 
 **Message Format:**
+
 ```javascript
 // Client sends:
 {
@@ -225,6 +234,7 @@ sequenceDiagram
 ### Message Types
 
 **Client → Server (Commands):**
+
 - `take_photo` - Capture single photo
 - `start_intervalometer` - Start timelapse session
 - `stop_intervalometer` - Stop current session
@@ -235,6 +245,7 @@ sequenceDiagram
 - `get_unsaved_session` - Check for unsaved session
 
 **Server → Client (Events):**
+
 - `welcome` - Initial connection confirmation
 - `camera_status` - Camera status update
 - `photo_taken` - Photo captured successfully
@@ -264,6 +275,7 @@ function sendError(ws, message, details = null) {
 ```
 
 **Example Error:**
+
 ```json
 {
   "type": "error",
@@ -323,6 +335,7 @@ const broadcast = (message) => {
    - `time_sync_status`
 
 **Broadcast Frequency:**
+
 - Camera status: Every 30 seconds (polling interval)
 - Intervalometer updates: Every photo (variable based on interval)
 - Connection events: Immediate
@@ -337,7 +350,7 @@ Currently all clients receive all broadcasts. Future enhancement could implement
 function broadcastToRole(message, requiredRole) {
   clients.forEach((client) => {
     const info = clientInfo.get(client);
-    if (info.role === requiredRole || requiredRole === 'all') {
+    if (info.role === requiredRole || requiredRole === "all") {
       client.send(JSON.stringify(message));
     }
   });
@@ -357,12 +370,14 @@ The system does **NOT** implement explicit WebSocket heartbeat:
 - ❌ No connection health checks
 
 **Rationale:**
+
 - TCP keep-alive handles connection health at transport layer
 - Browser/Node.js WebSocket implementations handle connection drops
 - Close event fires reliably when connection dies
 - Simplified implementation for local network use
 
 **TCP Handling:**
+
 - OS-level TCP keep-alive packets
 - Browser automatically detects broken connections
 - `close` event fires on connection loss
@@ -378,6 +393,7 @@ if (client.readyState === WebSocket.OPEN) {
 ```
 
 **WebSocket Ready States:**
+
 - `CONNECTING (0)` - Connection being established
 - `OPEN (1)` - Connection open and ready
 - `CLOSING (2)` - Connection closing
@@ -413,6 +429,7 @@ sequenceDiagram
 ```
 
 **Close Codes:**
+
 - `1000` - Normal closure
 - `1001` - Going away (page navigation)
 - `1006` - Abnormal closure (no close frame)
@@ -436,6 +453,7 @@ ws.on("error", (error) => {
 ```
 
 **Error Scenarios:**
+
 - Network interruption
 - Protocol violations
 - Message parsing failures
@@ -453,6 +471,7 @@ When a client disconnects (normal or error):
 - ❌ Do NOT affect other clients
 
 **Important:**
+
 - Sessions continue running even with no connected clients
 - Camera remains connected
 - Clients can reconnect and resume monitoring
@@ -464,17 +483,20 @@ When a client disconnects (normal or error):
 ### Current Limits
 
 **No Hard Limits Implemented:**
+
 - Unlimited concurrent connections accepted
 - No rate limiting on messages
 - No per-client message queues
 - No connection throttling
 
 **Practical Limits:**
+
 - Memory: Each client uses ~few KB (Set entry + Map entry)
 - CPU: Broadcast to N clients is O(N) operation
 - Network: All clients receive all broadcasts
 
 **Expected Usage:**
+
 - 1-3 concurrent clients typical (phone, tablet, laptop)
 - Low message rate (status updates every 30s)
 - Broadcast size: ~1-5KB per message
@@ -485,6 +507,7 @@ When a client disconnects (normal or error):
 If supporting more clients becomes necessary:
 
 **Option 1: Connection Limit**
+
 ```javascript
 const MAX_CLIENTS = 10;
 
@@ -498,6 +521,7 @@ wss.on("connection", (ws, req) => {
 ```
 
 **Option 2: Rate Limiting**
+
 ```javascript
 const rateLimiter = new Map(); // clientId -> { count, resetTime }
 
@@ -510,7 +534,8 @@ function checkRateLimit(clientId) {
     return true;
   }
 
-  if (limit.count >= 100) { // 100 messages per minute
+  if (limit.count >= 100) {
+    // 100 messages per minute
     return false;
   }
 
@@ -520,6 +545,7 @@ function checkRateLimit(clientId) {
 ```
 
 **Option 3: Selective Updates**
+
 ```javascript
 // Send status only to clients who requested it recently
 const interestedClients = new Set();
@@ -534,7 +560,7 @@ ws.on("message", (data) => {
 
 // Broadcast only to interested clients
 function broadcastStatus(statusData) {
-  interestedClients.forEach(client => {
+  interestedClients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify(statusData));
     }
@@ -549,6 +575,7 @@ function broadcastStatus(statusData) {
 ### Server Does Not Track Client State
 
 **Important:** The server is stateless regarding client connections:
+
 - No session IDs stored server-side
 - No client preferences remembered
 - Each connection is independent
@@ -572,19 +599,22 @@ class WebSocketClient {
     this.ws = new WebSocket(this.url);
 
     this.ws.onopen = () => {
-      console.log('Connected');
+      console.log("Connected");
       this.reconnectDelay = 1000; // Reset delay
       this.requestInitialState();
     };
 
     this.ws.onclose = () => {
-      console.log('Disconnected, reconnecting...');
+      console.log("Disconnected, reconnecting...");
       setTimeout(() => this.connect(), this.reconnectDelay);
-      this.reconnectDelay = Math.min(this.reconnectDelay * 2, this.maxReconnectDelay);
+      this.reconnectDelay = Math.min(
+        this.reconnectDelay * 2,
+        this.maxReconnectDelay,
+      );
     };
 
     this.ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      console.error("WebSocket error:", error);
     };
 
     this.ws.onmessage = (event) => {
@@ -594,14 +624,15 @@ class WebSocketClient {
 
   requestInitialState() {
     // Re-request current state after reconnect
-    this.send({ type: 'get_camera_status' });
-    this.send({ type: 'get_intervalometer_status' });
-    this.send({ type: 'get_unsaved_session' });
+    this.send({ type: "get_camera_status" });
+    this.send({ type: "get_intervalometer_status" });
+    this.send({ type: "get_unsaved_session" });
   }
 }
 ```
 
 **Client Responsibilities:**
+
 - Detect disconnection
 - Implement exponential backoff reconnection
 - Re-request state after reconnect
@@ -614,12 +645,14 @@ class WebSocketClient {
 ### Current Security Model
 
 **Trust Assumptions:**
+
 - Local network is trusted
 - Physical access to network implies authorized user
 - No malicious clients on camera network
 - Camera itself has no security (open WiFi or WPA-PSK)
 
 **Attack Surface:**
+
 - Open WebSocket endpoint (no auth)
 - Clients can execute any camera operation
 - No rate limiting on commands
@@ -628,20 +661,24 @@ class WebSocketClient {
 ### Potential Vulnerabilities
 
 **1. Unauthorized Access:**
+
 - Anyone on network can control camera
 - Mitigation: Network isolation (camera AP or private network)
 
 **2. Denial of Service:**
+
 - Rapid connection attempts
 - Message flooding
 - Mitigation: Rate limiting, connection limits (not implemented)
 
 **3. Message Injection:**
+
 - Malformed JSON
 - Invalid message types
 - Mitigation: Input validation exists, JSON parsing in try/catch
 
 **4. Information Disclosure:**
+
 - Camera status visible to all clients
 - Session data broadcasted openly
 - Mitigation: Acceptable for single-user system
@@ -676,19 +713,19 @@ If security requirements increase:
 
 ### Key Characteristics
 
-| Aspect | Current Implementation |
-|--------|----------------------|
-| **Authentication** | None - Open access |
-| **Connection Tracking** | Set + Map (clients, clientInfo) |
-| **Welcome Message** | Yes - with client ID and commands list |
-| **Heartbeat** | No - relies on TCP |
-| **Message Format** | JSON with type/data structure |
-| **Error Handling** | Standardized error responses |
-| **Broadcasting** | All clients receive all events |
-| **Connection Limits** | None |
-| **Rate Limiting** | None |
-| **Security** | Trust local network |
-| **State Management** | Stateless server, client requests state |
+| Aspect                  | Current Implementation                  |
+| ----------------------- | --------------------------------------- |
+| **Authentication**      | None - Open access                      |
+| **Connection Tracking** | Set + Map (clients, clientInfo)         |
+| **Welcome Message**     | Yes - with client ID and commands list  |
+| **Heartbeat**           | No - relies on TCP                      |
+| **Message Format**      | JSON with type/data structure           |
+| **Error Handling**      | Standardized error responses            |
+| **Broadcasting**        | All clients receive all events          |
+| **Connection Limits**   | None                                    |
+| **Rate Limiting**       | None                                    |
+| **Security**            | Trust local network                     |
+| **State Management**    | Stateless server, client requests state |
 
 ### Lifecycle Summary
 
@@ -726,6 +763,7 @@ This design prioritizes simplicity and reliability for the single-user, local ne
 
 **Last Updated:** 2025-09-29
 **Implementation Files:**
+
 - `src/server.js` - WebSocket server setup
 - `src/websocket/handler.js` - Connection lifecycle and message handling
 - `src/utils/error-handlers.js` - Standardized error responses

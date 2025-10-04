@@ -7,22 +7,21 @@ class CameraControlApp {
   async initialize() {
     if (this.initialized) return;
 
-    console.log('Initializing Camera Control App...');
-    
+    console.log("Initializing Camera Control App...");
+
     // Update loading message to show connecting state
-    this.updateLoadingMessage('Connecting to server...', 'connecting');
-    
+    this.updateLoadingMessage("Connecting to server...", "connecting");
+
     try {
-      
       // Initialize UI components first (non-blocking)
       this.initializeUI();
 
       // Initialize camera manager BEFORE WebSocket connects so listeners are ready
-      this.updateLoadingMessage('Connecting...', 'connecting');
+      this.updateLoadingMessage("Connecting...", "connecting");
       await this.initializeCameraWithRetry();
 
       // Connect WebSocket AFTER listeners are registered
-      this.updateLoadingMessage('Connecting...', 'connecting');
+      this.updateLoadingMessage("Connecting...", "connecting");
       wsManager.connect();
 
       // Give WebSocket time to connect
@@ -45,21 +44,20 @@ class CameraControlApp {
       // Initialize time sync
       this.timeSync = new TimeSync(wsManager);
       window.timeSync = this.timeSync;
-      
+
       // Start periodic status updates (fallback if WebSocket fails)
       this.startStatusUpdates();
-      
+
       // Hide loading overlay after short delay
       await this.delay(500);
       this.hideLoadingOverlay();
-      
+
       this.initialized = true;
-      cameraManager.log('Application initialized successfully', 'success');
-      
+      cameraManager.log("Application initialized successfully", "success");
     } catch (error) {
-      console.error('Failed to initialize app:', error);
+      console.error("Failed to initialize app:", error);
       // Only show error after reasonable connection attempts
-      this.showErrorMessage('Connection failed. Retrying...');
+      this.showErrorMessage("Connection failed. Retrying...");
     }
   }
 
@@ -68,37 +66,40 @@ class CameraControlApp {
       // Try to initialize camera, but don't fail if camera is not ready
       await cameraManager.initialize();
     } catch (error) {
-      console.warn('Camera not immediately available:', error.message);
+      console.warn("Camera not immediately available:", error.message);
       // Don't throw error - let the app continue and retry later
-      cameraManager.log('Camera not ready, will retry automatically', 'warning');
+      cameraManager.log(
+        "Camera not ready, will retry automatically",
+        "warning",
+      );
     }
   }
 
-  updateLoadingMessage(message, type = 'connecting') {
-    const overlay = document.getElementById('loading-overlay');
-    const text = overlay?.querySelector('p');
-    const spinner = overlay?.querySelector('.loading-spinner');
-    
+  updateLoadingMessage(message, type = "connecting") {
+    const overlay = document.getElementById("loading-overlay");
+    const text = overlay?.querySelector("p");
+    const spinner = overlay?.querySelector(".loading-spinner");
+
     if (text) {
       text.textContent = message;
-      
+
       // Update color based on type
-      if (type === 'connecting') {
-        text.style.color = '#ffc107'; // Warning yellow
-      } else if (type === 'error') {
-        text.style.color = '#fd5e53'; // Error red
+      if (type === "connecting") {
+        text.style.color = "#ffc107"; // Warning yellow
+      } else if (type === "error") {
+        text.style.color = "#fd5e53"; // Error red
       } else {
-        text.style.color = 'white'; // Default
+        text.style.color = "white"; // Default
       }
     }
-    
-    if (spinner && type === 'error') {
-      spinner.style.display = 'none';
+
+    if (spinner && type === "error") {
+      spinner.style.display = "none";
     }
   }
 
   delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   startStatusUpdates() {
@@ -113,38 +114,38 @@ class CameraControlApp {
 
   async updateSystemStatus() {
     try {
-      const response = await fetch('/api/system/status');
+      const response = await fetch("/api/system/status");
       const systemData = await response.json();
-      
+
       // Create power data with system uptime
       const powerData = {
         ...systemData.power,
-        uptime: systemData.uptime
+        uptime: systemData.uptime,
       };
-      
+
       cameraManager.updatePowerStatus(powerData);
     } catch (error) {
-      console.warn('Failed to update system status:', error);
+      console.warn("Failed to update system status:", error);
     }
   }
 
   hideLoadingOverlay() {
-    const overlay = document.getElementById('loading-overlay');
+    const overlay = document.getElementById("loading-overlay");
     if (overlay) {
-      overlay.style.display = 'none';
+      overlay.style.display = "none";
     }
   }
 
   showErrorMessage(message) {
     // Update loading overlay to show error with retry indication
-    this.updateLoadingMessage(message, 'error');
-    
+    this.updateLoadingMessage(message, "error");
+
     // Hide after 3 seconds and let the app continue
     setTimeout(() => {
       this.hideLoadingOverlay();
       // Continue attempting to connect in background
       if (!this.initialized) {
-        cameraManager.log('Continuing in background...', 'info');
+        cameraManager.log("Continuing in background...", "info");
       }
     }, 3000);
   }
@@ -170,114 +171,118 @@ class CameraControlApp {
   }
 
   setupKeyboardShortcuts() {
-    document.addEventListener('keydown', (event) => {
+    document.addEventListener("keydown", (event) => {
       // Only handle shortcuts when not typing in inputs
-      if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+      if (
+        event.target.tagName === "INPUT" ||
+        event.target.tagName === "TEXTAREA"
+      ) {
         return;
       }
 
       switch (event.key.toLowerCase()) {
-        case ' ': // Spacebar - take photo
-        case 'enter':
+        case " ": // Spacebar - take photo
+        case "enter":
           event.preventDefault();
-          if (!document.getElementById('take-photo-btn').disabled) {
+          if (!document.getElementById("take-photo-btn").disabled) {
             cameraManager.takePhoto();
           }
           break;
-          
-        case 's': // S - get settings
-          if (!document.getElementById('get-settings-btn').disabled) {
+
+        case "s": // S - get settings
+          if (!document.getElementById("get-settings-btn").disabled) {
             cameraManager.getCameraSettings();
           }
           break;
 
-        case 'i': // I - start intervalometer
-          if (!document.getElementById('start-intervalometer-btn').disabled) {
+        case "i": // I - start intervalometer
+          if (!document.getElementById("start-intervalometer-btn").disabled) {
             cameraManager.startIntervalometer();
           }
           break;
-          
-        case 'escape': // Escape - close modals
-          const modal = document.getElementById('settings-modal');
-          if (modal && modal.style.display !== 'none') {
-            modal.style.display = 'none';
+
+        case "escape": // Escape - close modals
+          const modal = document.getElementById("settings-modal");
+          if (modal && modal.style.display !== "none") {
+            modal.style.display = "none";
           }
           break;
-          
       }
     });
   }
 
   setupVisualFeedback() {
     // Add click feedback to buttons
-    const buttons = document.querySelectorAll('button');
-    buttons.forEach(button => {
-      button.addEventListener('click', () => {
-        button.style.transform = 'scale(0.95)';
+    const buttons = document.querySelectorAll("button");
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        button.style.transform = "scale(0.95)";
         setTimeout(() => {
-          button.style.transform = '';
+          button.style.transform = "";
         }, 100);
       });
     });
 
     // Add focus indicators for keyboard navigation
-    const focusableElements = document.querySelectorAll('button, input, [tabindex]');
-    focusableElements.forEach(element => {
-      element.addEventListener('focus', () => {
-        element.classList.add('focused');
+    const focusableElements = document.querySelectorAll(
+      "button, input, [tabindex]",
+    );
+    focusableElements.forEach((element) => {
+      element.addEventListener("focus", () => {
+        element.classList.add("focused");
       });
-      
-      element.addEventListener('blur', () => {
-        element.classList.remove('focused');
+
+      element.addEventListener("blur", () => {
+        element.classList.remove("focused");
       });
     });
   }
 
   setupResponsiveBehavior() {
     // Handle orientation changes on mobile
-    window.addEventListener('orientationchange', () => {
+    window.addEventListener("orientationchange", () => {
       setTimeout(() => {
         // Trigger a resize to recalculate layouts
-        window.dispatchEvent(new Event('resize'));
+        window.dispatchEvent(new Event("resize"));
       }, 100);
     });
 
     // Handle viewport height changes (mobile browser address bars)
     const setVH = () => {
       const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
+      document.documentElement.style.setProperty("--vh", `${vh}px`);
     };
-    
+
     setVH();
-    window.addEventListener('resize', setVH);
-    window.addEventListener('orientationchange', () => setTimeout(setVH, 100));
+    window.addEventListener("resize", setVH);
+    window.addEventListener("orientationchange", () => setTimeout(setVH, 100));
   }
 
   initializeTooltips() {
-    const tooltipElements = document.querySelectorAll('[title]');
-    
-    tooltipElements.forEach(element => {
+    const tooltipElements = document.querySelectorAll("[title]");
+
+    tooltipElements.forEach((element) => {
       // Store original title
-      const title = element.getAttribute('title');
-      element.removeAttribute('title'); // Remove to prevent browser tooltip
-      element.setAttribute('data-tooltip', title);
-      
+      const title = element.getAttribute("title");
+      element.removeAttribute("title"); // Remove to prevent browser tooltip
+      element.setAttribute("data-tooltip", title);
+
       // Add tooltip behavior for touch devices
-      if ('ontouchstart' in window) {
-        element.addEventListener('touchstart', () => {
+      if ("ontouchstart" in window) {
+        element.addEventListener("touchstart", () => {
           this.showTooltip(element, title);
         });
-        
-        element.addEventListener('touchend', () => {
+
+        element.addEventListener("touchend", () => {
           this.hideTooltip();
         });
       } else {
         // Mouse hover for desktop
-        element.addEventListener('mouseenter', () => {
+        element.addEventListener("mouseenter", () => {
           this.showTooltip(element, title);
         });
-        
-        element.addEventListener('mouseleave', () => {
+
+        element.addEventListener("mouseleave", () => {
           this.hideTooltip();
         });
       }
@@ -287,34 +292,34 @@ class CameraControlApp {
   showTooltip(element, text) {
     // Remove existing tooltip
     this.hideTooltip();
-    
-    const tooltip = document.createElement('div');
-    tooltip.className = 'custom-tooltip';
+
+    const tooltip = document.createElement("div");
+    tooltip.className = "custom-tooltip";
     tooltip.textContent = text;
     document.body.appendChild(tooltip);
-    
+
     // Position tooltip
     const rect = element.getBoundingClientRect();
-    tooltip.style.position = 'fixed';
+    tooltip.style.position = "fixed";
     tooltip.style.top = `${rect.bottom + 8}px`;
     tooltip.style.left = `${rect.left + rect.width / 2}px`;
-    tooltip.style.transform = 'translateX(-50%)';
-    tooltip.style.background = 'var(--bg-card)';
-    tooltip.style.color = 'var(--text-primary)';
-    tooltip.style.padding = '0.5rem 0.75rem';
-    tooltip.style.borderRadius = '6px';
-    tooltip.style.fontSize = '0.875rem';
-    tooltip.style.boxShadow = 'var(--shadow)';
-    tooltip.style.zIndex = '10000';
-    tooltip.style.pointerEvents = 'none';
-    tooltip.style.opacity = '0';
-    tooltip.style.transition = 'opacity 0.2s';
-    
+    tooltip.style.transform = "translateX(-50%)";
+    tooltip.style.background = "var(--bg-card)";
+    tooltip.style.color = "var(--text-primary)";
+    tooltip.style.padding = "0.5rem 0.75rem";
+    tooltip.style.borderRadius = "6px";
+    tooltip.style.fontSize = "0.875rem";
+    tooltip.style.boxShadow = "var(--shadow)";
+    tooltip.style.zIndex = "10000";
+    tooltip.style.pointerEvents = "none";
+    tooltip.style.opacity = "0";
+    tooltip.style.transition = "opacity 0.2s";
+
     // Animate in
     requestAnimationFrame(() => {
-      tooltip.style.opacity = '1';
+      tooltip.style.opacity = "1";
     });
-    
+
     // Store reference for cleanup
     this.currentTooltip = tooltip;
   }
@@ -328,10 +333,10 @@ class CameraControlApp {
 
   initializePasswordToggles() {
     // Find all password toggle buttons
-    const toggleButtons = document.querySelectorAll('.password-toggle-btn');
+    const toggleButtons = document.querySelectorAll(".password-toggle-btn");
 
-    toggleButtons.forEach(button => {
-      button.addEventListener('click', (event) => {
+    toggleButtons.forEach((button) => {
+      button.addEventListener("click", (event) => {
         event.preventDefault();
         this.togglePasswordVisibility(button);
       });
@@ -339,42 +344,42 @@ class CameraControlApp {
   }
 
   togglePasswordVisibility(toggleButton) {
-    const targetId = toggleButton.getAttribute('data-target');
+    const targetId = toggleButton.getAttribute("data-target");
     const passwordInput = document.getElementById(targetId);
-    const toggleIcon = toggleButton.querySelector('.toggle-icon');
+    const toggleIcon = toggleButton.querySelector(".toggle-icon");
 
     if (!passwordInput || !toggleIcon) {
-      console.warn('Password toggle: target input or icon not found');
+      console.warn("Password toggle: target input or icon not found");
       return;
     }
 
-    const isPasswordVisible = passwordInput.type === 'text';
+    const isPasswordVisible = passwordInput.type === "text";
 
     if (isPasswordVisible) {
       // Hide password
-      passwordInput.type = 'password';
-      toggleIcon.textContent = '👁️';
-      toggleButton.classList.remove('password-visible');
-      toggleButton.setAttribute('title', 'Show password');
-      toggleButton.setAttribute('aria-label', 'Show password');
+      passwordInput.type = "password";
+      toggleIcon.textContent = "👁️";
+      toggleButton.classList.remove("password-visible");
+      toggleButton.setAttribute("title", "Show password");
+      toggleButton.setAttribute("aria-label", "Show password");
     } else {
       // Show password
-      passwordInput.type = 'text';
-      toggleIcon.textContent = '👁️‍🗨️';
-      toggleButton.classList.add('password-visible');
-      toggleButton.setAttribute('title', 'Hide password');
-      toggleButton.setAttribute('aria-label', 'Hide password');
+      passwordInput.type = "text";
+      toggleIcon.textContent = "👁️‍🗨️";
+      toggleButton.classList.add("password-visible");
+      toggleButton.setAttribute("title", "Hide password");
+      toggleButton.setAttribute("aria-label", "Hide password");
     }
   }
 
   registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', async () => {
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", async () => {
         try {
-          const registration = await navigator.serviceWorker.register('/sw.js');
-          console.log('Service Worker registered:', registration);
+          const registration = await navigator.serviceWorker.register("/sw.js");
+          console.log("Service Worker registered:", registration);
         } catch (error) {
-          console.log('Service Worker registration failed:', error);
+          console.log("Service Worker registration failed:", error);
         }
       });
     }
@@ -384,17 +389,17 @@ class CameraControlApp {
   handlePWAInstall() {
     let deferredPrompt;
 
-    window.addEventListener('beforeinstallprompt', (event) => {
+    window.addEventListener("beforeinstallprompt", (event) => {
       event.preventDefault();
       deferredPrompt = event;
-      
+
       // Show install button (could add this to UI)
-      console.log('PWA install available');
+      console.log("PWA install available");
     });
 
-    window.addEventListener('appinstalled', () => {
-      console.log('PWA installed successfully');
-      cameraManager.log('App installed successfully', 'success');
+    window.addEventListener("appinstalled", () => {
+      console.log("PWA installed successfully");
+      cameraManager.log("App installed successfully", "success");
     });
   }
 
@@ -402,93 +407,93 @@ class CameraControlApp {
   setupNetworkMonitoring() {
     const updateOnlineStatus = () => {
       if (navigator.onLine) {
-        cameraManager.log('Network connection restored', 'success');
+        cameraManager.log("Network connection restored", "success");
         // Attempt to reconnect WebSocket if needed
         if (!wsManager.connected) {
           wsManager.connect();
         }
       } else {
-        cameraManager.log('Network connection lost', 'warning');
+        cameraManager.log("Network connection lost", "warning");
       }
     };
 
-    window.addEventListener('online', updateOnlineStatus);
-    window.addEventListener('offline', updateOnlineStatus);
+    window.addEventListener("online", updateOnlineStatus);
+    window.addEventListener("offline", updateOnlineStatus);
   }
 
   // Toast notification system
-  showToast(message, type = 'info') {
+  showToast(message, type = "info") {
     // Remove existing toast
-    const existingToast = document.querySelector('.toast-notification');
+    const existingToast = document.querySelector(".toast-notification");
     if (existingToast) {
       existingToast.remove();
     }
 
     // Create toast element
-    const toast = document.createElement('div');
+    const toast = document.createElement("div");
     toast.className = `toast-notification toast-${type}`;
-    
+
     // Set icon based on type
     const icons = {
-      success: '✓',
-      error: '✗',
-      warning: '⚠',
-      info: 'ℹ'
+      success: "✓",
+      error: "✗",
+      warning: "⚠",
+      info: "ℹ",
     };
-    
+
     toast.innerHTML = `
       <span class="toast-icon">${icons[type] || icons.info}</span>
       <span class="toast-message">${message}</span>
     `;
-    
+
     // Style the toast
     Object.assign(toast.style, {
-      position: 'fixed',
-      top: '20px',
-      right: '20px',
-      padding: '12px 16px',
-      borderRadius: '8px',
-      color: 'white',
-      fontSize: '14px',
-      fontWeight: '500',
-      zIndex: '10001',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      minWidth: '200px',
-      maxWidth: '400px',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-      transform: 'translateX(100%)',
-      transition: 'transform 0.3s ease-out',
-      pointerEvents: 'auto'
+      position: "fixed",
+      top: "20px",
+      right: "20px",
+      padding: "12px 16px",
+      borderRadius: "8px",
+      color: "white",
+      fontSize: "14px",
+      fontWeight: "500",
+      zIndex: "10001",
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      minWidth: "200px",
+      maxWidth: "400px",
+      boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+      transform: "translateX(100%)",
+      transition: "transform 0.3s ease-out",
+      pointerEvents: "auto",
     });
-    
+
     // Set background color based on type
     const colors = {
-      success: '#28a745',
-      error: '#dc3545', 
-      warning: '#ffc107',
-      info: '#007bff'
+      success: "#28a745",
+      error: "#dc3545",
+      warning: "#ffc107",
+      info: "#007bff",
     };
     toast.style.backgroundColor = colors[type] || colors.info;
-    
+
     // Add to DOM and animate in
     document.body.appendChild(toast);
     requestAnimationFrame(() => {
-      toast.style.transform = 'translateX(0)';
+      toast.style.transform = "translateX(0)";
     });
-    
+
     // Auto-remove after 4 seconds
     setTimeout(() => {
       if (toast.parentNode) {
-        toast.style.transform = 'translateX(100%)';
+        toast.style.transform = "translateX(100%)";
         setTimeout(() => toast.remove(), 300);
       }
     }, 4000);
-    
+
     // Allow manual dismissal
-    toast.addEventListener('click', () => {
-      toast.style.transform = 'translateX(100%)';
+    toast.addEventListener("click", () => {
+      toast.style.transform = "translateX(100%)";
       setTimeout(() => toast.remove(), 300);
     });
   }
@@ -498,56 +503,62 @@ class CameraControlApp {
     if (this.statusUpdateInterval) {
       clearInterval(this.statusUpdateInterval);
     }
-    
+
     if (wsManager) {
       wsManager.disconnect();
     }
-    
+
     this.hideTooltip();
-    
+
     // Remove any toasts
-    const toasts = document.querySelectorAll('.toast-notification');
-    toasts.forEach(toast => toast.remove());
+    const toasts = document.querySelectorAll(".toast-notification");
+    toasts.forEach((toast) => toast.remove());
   }
 }
 
 // Initialize app when DOM is loaded
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener("DOMContentLoaded", async () => {
   window.app = new CameraControlApp();
   window.appInstance = window.app; // Also provide as appInstance for compatibility
-  
+
   try {
     await app.initialize();
   } catch (error) {
-    console.error('Failed to start application:', error);
+    console.error("Failed to start application:", error);
   }
 });
 
 // Cleanup on page unload
-window.addEventListener('beforeunload', () => {
+window.addEventListener("beforeunload", () => {
   if (window.app) {
     app.cleanup();
   }
 });
 
 // Handle back/forward navigation
-window.addEventListener('popstate', () => {
+window.addEventListener("popstate", () => {
   // Could implement routing here if needed for multiple pages
 });
 
 // Global error handler
-window.addEventListener('error', (event) => {
-  console.error('Global error:', event.error);
+window.addEventListener("error", (event) => {
+  console.error("Global error:", event.error);
   if (window.cameraManager) {
-    cameraManager.log(`Application error: ${event.error?.message || 'Unknown error'}`, 'error');
+    cameraManager.log(
+      `Application error: ${event.error?.message || "Unknown error"}`,
+      "error",
+    );
   }
 });
 
 // Handle unhandled promise rejections
-window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled promise rejection:', event.reason);
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("Unhandled promise rejection:", event.reason);
   if (window.cameraManager) {
-    cameraManager.log(`Promise rejection: ${event.reason?.message || 'Unknown error'}`, 'error');
+    cameraManager.log(
+      `Promise rejection: ${event.reason?.message || "Unknown error"}`,
+      "error",
+    );
   }
 });
 
@@ -559,6 +570,6 @@ window.debugApp = {
   status: () => ({
     initialized: window.app?.initialized,
     wsConnected: window.wsManager?.connected,
-    cameraConnected: window.cameraManager?.status?.connected
-  })
+    cameraConnected: window.cameraManager?.status?.connected,
+  }),
 };

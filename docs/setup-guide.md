@@ -5,12 +5,14 @@ This guide will transform a fresh Raspberry Pi OS installation into a turnkey ca
 ## Prerequisites
 
 ### Hardware Requirements
+
 - **Raspberry Pi Zero W, Zero 2W, or Pi 4** (tested on Zero W and Zero 2W)
 - **MicroSD card** (16GB+ recommended)
 - **Canon camera** with CCAPI support (tested with EOS R50)
 - **Power supply** appropriate for your Pi model
 
 ### Software Requirements
+
 - **Fresh Raspberry Pi OS Lite** (recommended) or Desktop
 - **SSH enabled** for remote setup
 - **Internet connection** during setup
@@ -192,6 +194,7 @@ channel=6
 ### Network Settings
 
 The system uses NetworkManager for WiFi client connections. Access via web interface:
+
 - Navigate to Network Settings
 - Use WiFi toggle to enable/disable WiFi client
 - Use Switch Network to connect to different WiFi networks

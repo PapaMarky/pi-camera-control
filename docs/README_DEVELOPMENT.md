@@ -5,17 +5,20 @@ This guide covers the development setup and usage for the Phase 2 Node.js backen
 ## Quick Start
 
 1. **Install dependencies**:
+
    ```bash
    npm install
    ```
 
 2. **Configure environment**:
+
    ```bash
    cp .env.example .env
    # Edit .env with your camera IP and settings
    ```
 
 3. **Start development server**:
+
    ```bash
    npm run dev
    ```
@@ -38,22 +41,26 @@ This guide covers the development setup and usage for the Phase 2 Node.js backen
 ### Key Features Implemented
 
 ✅ **Camera Connection & Control**:
+
 - Automatic CCAPI endpoint discovery
 - Robust connection handling with auto-reconnect
 - Photo capture with proper shutter sequence
 - Camera settings validation
 
 ✅ **Power Optimization**:
+
 - Raspberry Pi battery monitoring
 - Thermal monitoring and warnings
 - Power-aware operation modes
 
 ✅ **Real-time Communication**:
+
 - WebSocket server for live updates
 - Event broadcasting to connected clients
 - Bi-directional camera control
 
 ✅ **Connection Resilience**:
+
 - Automatic reconnection with exponential backoff
 - Connection monitoring and recovery
 - Graceful error handling
@@ -61,17 +68,20 @@ This guide covers the development setup and usage for the Phase 2 Node.js backen
 ## API Endpoints
 
 ### Camera Control
+
 - `GET /api/camera/status` - Get camera connection status
 - `GET /api/camera/settings` - Get current camera settings
 - `POST /api/camera/photo` - Take a single photo
 - `POST /api/camera/validate-interval` - Validate intervalometer settings
 
 ### System Status
+
 - `GET /health` - Server health check
 - `GET /api/system/power` - Power and battery status
 - `GET /api/system/status` - General system information
 
 ### Intervalometer (Partial Implementation)
+
 - `POST /api/intervalometer/start` - Start intervalometer session
 - `POST /api/intervalometer/stop` - Stop current session
 - `GET /api/intervalometer/status` - Get session status
@@ -81,6 +91,7 @@ This guide covers the development setup and usage for the Phase 2 Node.js backen
 Connect to `ws://localhost:3000` for real-time updates.
 
 ### Client → Server Messages
+
 ```javascript
 // Take a photo
 { type: 'take_photo' }
@@ -96,6 +107,7 @@ Connect to `ws://localhost:3000` for real-time updates.
 ```
 
 ### Server → Client Messages
+
 ```javascript
 // Status updates (every 10 seconds)
 { type: 'status_update', camera: {...}, power: {...} }
@@ -110,6 +122,7 @@ Connect to `ws://localhost:3000` for real-time updates.
 ## Configuration
 
 ### Environment Variables (.env)
+
 ```bash
 # Server
 PORT=3000
@@ -147,11 +160,13 @@ npm run format
 ## Testing Camera Connection
 
 1. **Basic connection test**:
+
    ```bash
    curl -k https://192.168.12.98:443/ccapi/
    ```
 
 2. **Server health check**:
+
    ```bash
    curl http://localhost:3000/health
    ```
@@ -164,11 +179,13 @@ npm run format
 ## Debugging
 
 ### Logs
+
 - Console output with timestamps and levels
 - File logging to `logs/` directory
 - Structured JSON logs for production
 
 ### Common Issues
+
 - **Camera not connecting**: Check IP, port, and camera CCAPI settings
 - **WebSocket errors**: Verify client connection handling
 - **Power monitoring fails**: Normal on non-Pi systems
@@ -184,6 +201,7 @@ npm run format
 ## Integration with Phase 1
 
 The Python PoC (`poc/interval.py`) remains available for:
+
 - Initial camera testing
 - Standalone intervalometer operation
 - Validation of CCAPI communication

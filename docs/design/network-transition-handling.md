@@ -9,17 +9,20 @@
 This document describes how the pi-camera-control system handles network transitions, including camera IP address changes and automatic reconnection.
 
 **Important Limitations:**
+
 - **User-initiated network switching during operations is NOT RECOMMENDED**
 - Network transitions may cause 1-2 photo loss during intervalometer sessions
 - This is a hobbyist tool - network changes are handled gracefully but not seamlessly
 - Emphasis on detecting and reporting issues, not hiding them with complex recovery
 
 **What IS Supported:**
+
 - Automatic camera IP change detection via mDNS
 - Automatic reconnection to primary camera on IP change
 - Session continuity with minimal disruption (1-2 photo loss typical)
 
 **What is NOT Supported:**
+
 - Seamless network switching during active shooting
 - Zero photo loss during network transitions
 - User deliberately switching networks mid-operation (not recommended)
@@ -58,12 +61,14 @@ sequenceDiagram
 ```
 
 **Discovery Frequency:**
+
 ```javascript
 // src/camera/discovery-manager.js
 const DISCOVERY_INTERVAL = 30000; // 30 seconds
 ```
 
 **Camera Identification:**
+
 - UUID (from mDNS TXT record)
 - Model name
 - Firmware version
@@ -80,6 +85,7 @@ this.lastKnownIPs = new Map(); // uuid -> ipAddress
 ```
 
 **IP Change Detection:**
+
 ```javascript
 // src/camera/state-manager.js:55-73
 handleIPChange(uuid, deviceInfo) {
@@ -159,24 +165,25 @@ sequenceDiagram
 ```
 
 **Implementation:**
+
 ```javascript
 // src/camera/state-manager.js:74-106
 if (uuid === this.primaryCameraUuid && this.primaryController) {
   logger.info(
-    `Primary camera IP changed, reconnecting from ${lastIP} to ${deviceInfo.ipAddress}...`
+    `Primary camera IP changed, reconnecting from ${lastIP} to ${deviceInfo.ipAddress}...`,
   );
   try {
     await this.reconnectPrimaryCamera(
       deviceInfo.ipAddress,
-      deviceInfo.port || "443"
+      deviceInfo.port || "443",
     );
     logger.info(
-      `Primary camera successfully reconnected to ${deviceInfo.ipAddress}`
+      `Primary camera successfully reconnected to ${deviceInfo.ipAddress}`,
     );
   } catch (error) {
     logger.error(
       `Failed to reconnect primary camera to new IP ${deviceInfo.ipAddress}:`,
-      error
+      error,
     );
     // Emit disconnection event so UI can show manual connect option
     this.emit("primaryCameraDisconnected", {
@@ -250,6 +257,7 @@ sequenceDiagram
 ```
 
 **Mitigation:**
+
 - mDNS re-discovery every 30 seconds catches changes quickly
 - Automatic reconnection for primary camera
 - No user intervention required (usually)
@@ -289,6 +297,7 @@ sequenceDiagram
 ```
 
 **Implementation:**
+
 ```javascript
 // src/camera/state-manager.js:115-158
 async reconnectPrimaryCamera(newIP, newPort = "443") {
@@ -338,6 +347,7 @@ async reconnectPrimaryCamera(newIP, newPort = "443") {
 ```
 
 **Reconnection Strategy:**
+
 - Create new controller instance (old IP no longer valid)
 - Initialize and verify connection
 - Replace old controller reference
@@ -399,18 +409,21 @@ sequenceDiagram
 ```
 
 **Behavior:**
+
 1. **Photo in progress**: May fail with network error
 2. **Failed photo**: Counted as failed shot
 3. **Session continues**: Next interval uses new controller
 4. **Automatic recovery**: New controller reconnected by time of next shot
 
 **Session Impact:**
+
 - Lost shots: Typically 1-2 photos during transition
 - Session continues: Interval timer not affected
 - Statistics updated: Failed shots logged
 - User notification: Error events broadcast
 
 **Code Reference:**
+
 ```javascript
 // Session doesn't know about IP changes
 // It calls controller.takePhoto() each interval
@@ -440,11 +453,13 @@ pauseConnectionMonitoring() {
 ```
 
 **Why Pause:**
+
 - Long exposures (30+ seconds) would trigger false disconnection
 - Photo timeout (30s) is longer than monitoring interval
 - Prevents duplicate error handling
 
 **Impact on Reconnection:**
+
 - IP change detection still works (via mDNS)
 - Reconnection still happens (via StateManager)
 - Only connection health checks are paused
@@ -460,7 +475,7 @@ Different operations have different timeout values:
 ```javascript
 // Connection/Discovery
 const response = await this.client.get(`${this.baseUrl}/ccapi/`, {
-  timeout: 10000  // 10 seconds (default)
+  timeout: 10000, // 10 seconds (default)
 });
 
 // Photo Operations
@@ -468,8 +483,8 @@ const response = await this.client.post(
   `${this.baseUrl}${this.shutterEndpoint}`,
   payload,
   {
-    timeout: 30000  // 30 seconds (long exposures)
-  }
+    timeout: 30000, // 30 seconds (long exposures)
+  },
 );
 
 // Shutter Release
@@ -477,12 +492,13 @@ const response = await this.client.post(
   `${this.baseUrl}${this.shutterEndpoint}`,
   payload,
   {
-    timeout: 15000  // 15 seconds
-  }
+    timeout: 15000, // 15 seconds
+  },
 );
 ```
 
 **Timeout Rationale:**
+
 - **10s default**: Adequate for status queries and discovery
 - **30s photo**: Handles long manual exposures (e.g., 20s exposure)
 - **15s release**: Shorter since release is quick operation
@@ -496,6 +512,7 @@ const response = await this.client.post(
 - ❌ No exponential backoff
 
 **Rationale:**
+
 1. **Intervalometer handles retries**: Next interval is natural retry
 2. **Avoid cascading failures**: Don't pile up retries during outage
 3. **User control**: Let user decide when to retry
@@ -516,6 +533,7 @@ const SERVICE_TYPE = "_ccapi._tcp.local";
 ```
 
 **Why this service type:**
+
 - Canon cameras advertise CCAPI availability via mDNS
 - Standard service name across Canon camera models
 - Allows discovery without knowing IP addresses
@@ -525,11 +543,13 @@ const SERVICE_TYPE = "_ccapi._tcp.local";
 mDNS provides:
 
 **Service Instance Name:**
+
 ```
 Canon EOS R50 (12:34:56:78:9A:BC)._ccapi._tcp.local
 ```
 
 **TXT Record Data:**
+
 ```javascript
 {
   uuid: "00000000-0000-1000-8000-123456789ABC",
@@ -540,6 +560,7 @@ Canon EOS R50 (12:34:56:78:9A:BC)._ccapi._tcp.local
 ```
 
 **Network Data:**
+
 - IP Address: 192.168.1.100
 - Port: 443 (HTTPS)
 - Hostname: camera.local
@@ -552,11 +573,13 @@ const DISCOVERY_INTERVAL = 30000; // 30 seconds
 ```
 
 **Trade-offs:**
+
 - **30s interval**: Good balance between responsiveness and network overhead
 - **Faster (10s)**: Would catch IP changes quicker but more network traffic
 - **Slower (60s)**: Less network overhead but slower IP change detection
 
 **IP Change Detection Latency:**
+
 - Best case: ~30 seconds (camera changes right after last scan)
 - Worst case: ~60 seconds (camera changes right after last scan, next scan in 30s)
 - Average: ~45 seconds
@@ -599,6 +622,7 @@ sequenceDiagram
 ```
 
 **Connection Verification:**
+
 ```javascript
 // src/network/service-manager.js
 // After nmcli connect, verify connection
@@ -615,6 +639,7 @@ if (verifyResult.connected && verifyResult.ssid === ssid) {
 ```
 
 **Client Impact:**
+
 - WebSocket connection drops (Pi IP changed)
 - Client must reconnect to Pi's new IP
 - UI should handle reconnection automatically
@@ -629,12 +654,14 @@ if (verifyResult.connected && verifyResult.ssid === ssid) {
 **Scenario:** Camera IP changes while long exposure in progress
 
 **Behavior:**
+
 - Current photo operation fails with timeout
 - Counted as failed shot
 - Reconnection happens
 - Next interval succeeds
 
 **User Impact:**
+
 - One lost photo
 - Session continues
 - No data loss
@@ -644,11 +671,13 @@ if (verifyResult.connected && verifyResult.ssid === ssid) {
 **Scenario:** Camera IP changes multiple times quickly (e.g., DHCP server misbehavior)
 
 **Behavior:**
+
 - Each change triggers reconnection
 - Last IP wins
 - Intermediate IPs may cause failed operations
 
 **Mitigation:**
+
 - mDNS discovery is authoritative
 - System always uses latest discovered IP
 - No stale IP caching
@@ -658,11 +687,13 @@ if (verifyResult.connected && verifyResult.ssid === ssid) {
 **Scenario:** Camera and Pi on different networks with no routing
 
 **Behavior:**
+
 - mDNS may not work across subnets
 - Camera not discovered
 - No connection possible
 
 **Solution:**
+
 - Both must be on same network
 - Use camera's AP mode
 - Or both connect to same WiFi
@@ -672,6 +703,7 @@ if (verifyResult.connected && verifyResult.ssid === ssid) {
 **Scenario:** Multiple cameras on network, one changes IP
 
 **Behavior:**
+
 - Only primary camera reconnects automatically
 - Non-primary cameras updated in discovered list
 - User can manually connect to any camera
@@ -681,6 +713,7 @@ if (verifyResult.connected && verifyResult.ssid === ssid) {
 **Scenario:** Auto-reconnection to new IP fails
 
 **Behavior:**
+
 ```javascript
 catch (error) {
   logger.error(
@@ -695,6 +728,7 @@ catch (error) {
 ```
 
 **User Action:**
+
 - UI shows "Camera Disconnected"
 - User can manually reconnect
 - Fallback to normal connection flow
@@ -723,14 +757,14 @@ The system **requires user action** for:
 
 ### Design Trade-offs
 
-| Decision | Rationale |
-|----------|-----------|
-| **30s mDNS interval** | Balance between responsiveness and network overhead |
-| **Automatic primary reconnection** | User expects camera to "just work" for unintentional IP changes |
-| **No automatic Pi network handling** | Pi IP change affects WebSocket, requires client-side handling |
-| **No retry loops** | Intervalometer provides natural retry cadence |
-| **Single reconnection attempt** | Avoid cascading failures during network issues |
-| **User-initiated switches discouraged** | Deliberate network changes during operations not supported |
+| Decision                                | Rationale                                                       |
+| --------------------------------------- | --------------------------------------------------------------- |
+| **30s mDNS interval**                   | Balance between responsiveness and network overhead             |
+| **Automatic primary reconnection**      | User expects camera to "just work" for unintentional IP changes |
+| **No automatic Pi network handling**    | Pi IP change affects WebSocket, requires client-side handling   |
+| **No retry loops**                      | Intervalometer provides natural retry cadence                   |
+| **Single reconnection attempt**         | Avoid cascading failures during network issues                  |
+| **User-initiated switches discouraged** | Deliberate network changes during operations not supported      |
 
 ### Key Characteristics
 
@@ -746,6 +780,7 @@ The system **requires user action** for:
 
 **Last Updated:** 2025-09-29
 **Implementation Files:**
+
 - `src/camera/discovery-manager.js` - mDNS camera discovery
 - `src/camera/state-manager.js` - IP change detection and reconnection
 - `src/camera/controller.js` - Connection management and timeouts

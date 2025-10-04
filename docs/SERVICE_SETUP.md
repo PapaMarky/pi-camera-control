@@ -9,12 +9,15 @@ This guide explains how to set up the Pi Camera Control application as a systemd
 - Root access (sudo privileges)
 
 ### Required System Packages
+
 The following system packages must be installed for full functionality:
+
 ```bash
 sudo apt install -y hostapd dnsmasq network-manager wireless-tools iw rfkill
 ```
 
 These packages enable:
+
 - **hostapd**: Access Point functionality
 - **dnsmasq**: DHCP and DNS services
 - **network-manager**: Advanced WiFi management
@@ -25,6 +28,7 @@ These packages enable:
 ## Quick Setup
 
 1. **Deploy the project** to `/home/pi/pi-camera-control/`:
+
    ```bash
    # Clone or copy project files to the Pi
    git clone https://github.com/PapaMarky/pi-camera-control.git /home/pi/pi-camera-control
@@ -32,11 +36,13 @@ These packages enable:
    ```
 
 2. **Install Node.js dependencies**:
+
    ```bash
    npm install --production
    ```
 
 3. **Configure environment** (optional):
+
    ```bash
    cp .env.example .env
    # Edit .env with your camera settings if needed
@@ -52,11 +58,13 @@ The service will now start automatically on boot and restart if it crashes.
 ## Manual Service Management
 
 ### Check Service Status
+
 ```bash
 sudo systemctl status pi-camera-control
 ```
 
 ### Start/Stop/Restart Service
+
 ```bash
 sudo systemctl start pi-camera-control
 sudo systemctl stop pi-camera-control
@@ -64,6 +72,7 @@ sudo systemctl restart pi-camera-control
 ```
 
 ### View Service Logs
+
 ```bash
 # Follow live logs
 sudo journalctl -u pi-camera-control -f
@@ -76,6 +85,7 @@ sudo journalctl -u pi-camera-control --since "1 hour ago"
 ```
 
 ### Enable/Disable Auto-start
+
 ```bash
 # Enable auto-start on boot (default after installation)
 sudo systemctl enable pi-camera-control
@@ -120,11 +130,13 @@ To modify the service configuration:
 ### Service Won't Start
 
 1. **Check service logs**:
+
    ```bash
    sudo journalctl -u pi-camera-control -n 20
    ```
 
 2. **Test manual startup**:
+
    ```bash
    cd /home/pi/pi-camera-control
    node src/server.js
@@ -148,6 +160,7 @@ To modify the service configuration:
 The service runs as root to allow network configuration changes. If you encounter permission issues:
 
 1. Verify the service is running as root:
+
    ```bash
    sudo systemctl show pi-camera-control | grep "^User="
    ```
@@ -161,11 +174,13 @@ The service runs as root to allow network configuration changes. If you encounte
 ## Security Considerations
 
 The service runs as root due to requirements for:
+
 - Network interface configuration
 - Access point management
 - System power management
 
 In production, consider:
+
 - Restricting network access to the service
 - Regular security updates
 - Monitoring service logs for unusual activity

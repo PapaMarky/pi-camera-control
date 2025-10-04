@@ -5,6 +5,7 @@ This document describes the current NetworkManager-based approach for WiFi manag
 ## Overview
 
 The Canon Camera Controller provides flexible network operation:
+
 - **Development Mode**: Connect to home WiFi (internet access) while serving camera AP
 - **Field Mode**: Access point only (battery optimized for off-grid operation)
 - **Dynamic WiFi Switching**: Real-time network switching via web interface
@@ -12,6 +13,7 @@ The Canon Camera Controller provides flexible network operation:
 ## Current Architecture
 
 The system uses **NetworkManager** for WiFi operations, not manual wpa_supplicant configuration:
+
 - **WiFi Scanning**: `nmcli dev wifi list` with real-time signal strength
 - **WiFi Connection**: `nmcli dev wifi connect` with automatic profile management
 - **Status Detection**: NetworkManager active connection monitoring
@@ -31,17 +33,20 @@ sudo apt install hostapd dnsmasq network-manager
 NetworkManager manages WiFi connections automatically. The system requires:
 
 **NetworkManager Service**:
+
 ```bash
 sudo systemctl enable NetworkManager
 sudo systemctl start NetworkManager
 ```
 
 **Access Point Interface**: Created automatically when hostapd starts
+
 - Interface: `ap0` (virtual interface)
 - IP Address: `192.168.4.1/24`
 - SSID: `PiCameraController`
 
 **WiFi Client Interface**:
+
 - Interface: `wlan0` (managed by NetworkManager)
 - Connections: Managed via `nmcli` commands and web interface
 - Profiles: Stored in NetworkManager configuration
@@ -72,6 +77,7 @@ rsn_pairwise=CCMP
 The `ap0` interface (virtual WiFi interface for access point) must be created before hostapd starts. This is handled by a dedicated systemd service:
 
 **create-ap-interface.service** (`/etc/systemd/system/create-ap-interface.service`):
+
 ```ini
 [Unit]
 Description=Create ap0 interface for hostapd
@@ -91,6 +97,7 @@ WantedBy=multi-user.target
 ```
 
 This service:
+
 - Creates the `ap0` virtual interface using `iw dev wlan0 interface add ap0 type __ap`
 - Assigns IP address `192.168.4.1/24` to the interface
 - Brings the interface up
@@ -98,6 +105,7 @@ This service:
 - Only creates interface if it doesn't already exist
 
 Enable the service:
+
 ```bash
 sudo systemctl enable create-ap-interface.service
 ```
@@ -105,6 +113,7 @@ sudo systemctl enable create-ap-interface.service
 ### 5. DHCP Server Configuration
 
 Add to `/etc/dnsmasq.conf`:
+
 ```bash
 # Listen only on access point interface
 interface=ap0
@@ -117,6 +126,7 @@ no-dhcp-interface=wlan0
 ### 5. WiFi Client Configuration
 
 Create `/etc/wpa_supplicant/wpa_supplicant.conf` for development mode:
+
 ```bash
 country=US
 ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
@@ -130,7 +140,7 @@ network={
 }
 
 network={
-    ssid="YourDevelopmentWiFi" 
+    ssid="YourDevelopmentWiFi"
     psk="your_dev_wifi_password"
     id_str="development"
 }
@@ -143,11 +153,13 @@ network={
 The system provides a web-based interface for WiFi management:
 
 **WiFi Network Scanning**:
+
 - Accessible via "Switch Network" button in web interface
 - Shows available networks with signal strength percentages
 - Real-time scanning with NetworkManager integration
 
 **Network Connection**:
+
 - Select network from scan results
 - Enter password if required (secured networks)
 - Automatic connection profile creation and management
@@ -156,11 +168,13 @@ The system provides a web-based interface for WiFi management:
 ### REST API Endpoints
 
 **Scan for WiFi Networks**:
+
 ```bash
 curl http://pi-ip:3000/api/network/wifi/scan
 ```
 
 **Connect to WiFi Network**:
+
 ```bash
 curl -X POST http://pi-ip:3000/api/network/wifi/connect \
   -H "Content-Type: application/json" \
@@ -168,11 +182,13 @@ curl -X POST http://pi-ip:3000/api/network/wifi/connect \
 ```
 
 **Get Current Network Status**:
+
 ```bash
 curl http://pi-ip:3000/api/network/status
 ```
 
 **Get Saved WiFi Networks**:
+
 ```bash
 curl http://pi-ip:3000/api/network/wifi/saved
 ```
@@ -180,6 +196,7 @@ curl http://pi-ip:3000/api/network/wifi/saved
 ### Mode Switching via API
 
 **Switch Network Mode**:
+
 ```bash
 # Switch to development mode (AP + WiFi client)
 curl -X POST http://pi-ip:3000/api/network/mode \
@@ -241,11 +258,13 @@ async getWiFiStatus() {
 ### System Components
 
 **NetworkStateManager**: High-level network mode management
+
 - Mode detection and switching (field/development)
 - Interface state monitoring
 - Service coordination
 
 **NetworkServiceManager**: Low-level NetworkManager operations
+
 - WiFi scanning and connection
 - Signal strength monitoring
 - Connection verification
@@ -253,6 +272,7 @@ async getWiFiStatus() {
 ### Real-time Updates
 
 **WebSocket Integration**:
+
 - Live network status updates
 - Connection state changes
 - Signal strength monitoring
@@ -261,13 +281,15 @@ async getWiFiStatus() {
 ## Network Topology
 
 ### Field Mode
+
 ```
 Camera ──WiFi──> Pi Zero W (192.168.4.1)
                      │
 iPhone/MacBook ──WiFi──┘
 ```
 
-### Development Mode  
+### Development Mode
+
 ```
 Internet ──WiFi──> Pi Zero W ──WiFi──> Camera
                      │    (192.168.4.1)
@@ -279,27 +301,32 @@ iPhone/MacBook ──WiFi──┘
 ### Common Issues
 
 **WiFi Switching Fails**:
+
 - Check if NetworkManager is running: `systemctl status NetworkManager`
 - Verify nmcli accessibility: `nmcli general status`
 - Force WiFi rescan: `sudo nmcli dev wifi rescan`
 
 **Access Point Interface Missing (ap0)**:
+
 - Check if create-ap-interface service is enabled: `systemctl is-enabled create-ap-interface`
 - Check service status: `systemctl status create-ap-interface`
 - Manually create interface: `sudo iw dev wlan0 interface add ap0 type __ap`
 - Check interface exists: `ip link show ap0`
 
 **Network Not Found**:
+
 - Ensure network is in range: `nmcli dev wifi list`
 - Check signal strength and security type
 - Verify SSID spelling and case sensitivity
 
 **Connection Fails**:
+
 - Verify password correctness
 - Check for existing connection profiles: `nmcli con show`
 - Remove conflicting profiles: `nmcli con delete "SSID"`
 
 **Status Not Updating**:
+
 - Check pi-camera-control service logs
 - Verify WebSocket connection in browser console
 - Restart service: `sudo systemctl restart pi-camera-control`
@@ -358,6 +385,7 @@ curl http://localhost:3000/api/network/wifi/scan
 ## Battery Optimization
 
 For extended field operation:
+
 - Use `field` mode to disable client WiFi
 - Consider reducing AP broadcast interval
 - Monitor power consumption with both modes
@@ -368,12 +396,14 @@ For extended field operation:
 ### NetworkManager vs wpa_supplicant
 
 **Previous Approach** (Manual Configuration):
+
 - Required manual wpa_supplicant configuration files
 - Manual service management and mode switching scripts
 - Static configuration files for network profiles
 - Command-line only network management
 
 **Current Approach** (NetworkManager Integration):
+
 - Automatic WiFi management via NetworkManager
 - Dynamic network switching through web interface
 - Real-time network scanning and connection
@@ -383,6 +413,7 @@ For extended field operation:
 ### Why NetworkManager?
 
 **Benefits**:
+
 - **Simplified Management**: No manual configuration file editing
 - **Dynamic Connection**: Real-time WiFi switching without service restarts
 - **Better Persistence**: Connection profiles survive reboots automatically
@@ -390,6 +421,7 @@ For extended field operation:
 - **Robust Error Handling**: Built-in connection retry and fallback mechanisms
 
 **System Requirements**:
+
 - NetworkManager service must be active
 - Pi Camera Control service runs as root (for network management permissions)
 - Access Point (hostapd/dnsmasq) runs independently alongside NetworkManager
@@ -397,6 +429,7 @@ For extended field operation:
 ### Migration Notes
 
 If upgrading from manual wpa_supplicant configuration:
+
 1. **NetworkManager Installation**: Ensure NetworkManager is installed and running
 2. **Service Conflicts**: Disable manual wpa_supplicant services
 3. **Profile Migration**: Existing network profiles will be detected automatically

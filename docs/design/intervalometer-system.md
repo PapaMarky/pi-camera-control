@@ -9,27 +9,35 @@ The intervalometer system provides sophisticated timelapse photography capabilit
 ### Core Components
 
 #### 1. IntervalometerStateManager (`src/intervalometer/state-manager.js`)
+
 **Role**: Centralized session and report management
+
 - Session lifecycle coordination
 - Report persistence and retrieval
 - User decision workflow management
 - Event broadcasting for UI updates
 
 #### 2. TimelapseSession (`src/intervalometer/timelapse-session.js`)
+
 **Role**: Individual session execution engine
+
 - Photo capture scheduling and execution
 - State machine for session lifecycle
 - Error handling and recovery
 - Statistics tracking and reporting
 
 #### 3. IntervalometerSession (`src/intervalometer/session.js`)
+
 **Role**: Legacy compatibility layer
+
 - Maintains existing API contracts
 - Delegates to new TimelapseSession
 - Ensures zero breaking changes during migration
 
 #### 4. ReportManager (`src/intervalometer/report-manager.js`)
+
 **Role**: Report persistence and management
+
 - JSON file-based storage
 - Report CRUD operations
 - Session to report conversion
@@ -78,78 +86,83 @@ stateDiagram-v2
 ### Session Creation and Configuration
 
 #### Basic Session Options
+
 ```javascript
 // From TimelapseSession constructor
 const defaultOptions = {
-    interval: 10,           // Seconds between photos
-    totalShots: null,       // Unlimited if null
-    stopTime: null,         // Stop at specific time
-    title: null,            // Session title (auto-generated if null)
-    timeout: 30000          // Photo operation timeout
+  interval: 10, // Seconds between photos
+  totalShots: null, // Unlimited if null
+  stopTime: null, // Stop at specific time
+  title: null, // Session title (auto-generated if null)
+  timeout: 30000, // Photo operation timeout
 };
 ```
 
 #### Enhanced Session Options
+
 ```javascript
 // Enhanced configuration for advanced usage
 const enhancedOptions = {
-    ...defaultOptions,
-    title: "Night Sky Timelapse",
-    metadata: {
-        location: "Mt. Wilson Observatory",
-        weather: "Clear skies",
-        equipment: "Canon EOS R50 + 24-70mm"
-    },
-    notifications: {
-        interval: 10,        // Notify every N photos
-        errors: true,        // Notify on errors
-        completion: true     // Notify on completion
-    }
+  ...defaultOptions,
+  title: "Night Sky Timelapse",
+  metadata: {
+    location: "Mt. Wilson Observatory",
+    weather: "Clear skies",
+    equipment: "Canon EOS R50 + 24-70mm",
+  },
+  notifications: {
+    interval: 10, // Notify every N photos
+    errors: true, // Notify on errors
+    completion: true, // Notify on completion
+  },
 };
 ```
 
 ### Session State Tracking
 
 #### Session Statistics
+
 ```javascript
 // From TimelapseSession state management
 this.stats = {
-    startTime: null,
-    endTime: null,
-    shotsTaken: 0,
-    shotsSuccessful: 0,
-    shotsFailed: 0,
-    currentShot: 0,
-    totalShots: options.totalShots,
-    interval: options.interval,
-    errors: [],
-    lastPhotoTime: null,
-    nextPhotoTime: null,
-    estimatedEndTime: null
+  startTime: null,
+  endTime: null,
+  shotsTaken: 0,
+  shotsSuccessful: 0,
+  shotsFailed: 0,
+  currentShot: 0,
+  totalShots: options.totalShots,
+  interval: options.interval,
+  errors: [],
+  lastPhotoTime: null,
+  nextPhotoTime: null,
+  estimatedEndTime: null,
 };
 ```
 
 #### Real-time State Updates
+
 ```javascript
 // Event emission for UI updates
-this.emit('started', {
-    sessionId: this.id,
-    title: this.title,
-    startTime: this.stats.startTime,
-    options: this.options
+this.emit("started", {
+  sessionId: this.id,
+  title: this.title,
+  startTime: this.stats.startTime,
+  options: this.options,
 });
 
-this.emit('photo_taken', {
-    sessionId: this.id,
-    shotNumber: this.stats.currentShot,
-    success: true,
-    timestamp: new Date().toISOString()
+this.emit("photo_taken", {
+  sessionId: this.id,
+  shotNumber: this.stats.currentShot,
+  success: true,
+  timestamp: new Date().toISOString(),
 });
 ```
 
 ## Photo Capture Process
 
 ### Capture Sequence
+
 1. **Pre-capture**: Pause connection monitoring
 2. **Shutter Release**: Ensure no stuck shutter
 3. **Focus Attempt**: Manual focus first, autofocus fallback
@@ -188,12 +201,14 @@ async takePhoto() {
 ### Error Handling and Recovery
 
 #### Photo Operation Errors
+
 1. **Camera Unavailable**: Session pauses, waits for reconnection
 2. **Shutter Stuck**: Automatic release attempt
 3. **Timeout**: Extended timeout for long exposures
 4. **Critical Failure**: Session error state with user notification
 
 #### Recovery Strategies
+
 ```javascript
 // From TimelapseSession error handling
 async handlePhotoError(error) {
@@ -222,6 +237,7 @@ async handlePhotoError(error) {
 ## Timing and Scheduling
 
 ### Interval Validation
+
 ```javascript
 // From CameraController validation
 async validateInterval(intervalSeconds) {
@@ -240,6 +256,7 @@ async validateInterval(intervalSeconds) {
 ```
 
 ### Scheduling Engine
+
 ```javascript
 // From TimelapseSession scheduling
 scheduleNextPhoto() {
@@ -256,6 +273,7 @@ scheduleNextPhoto() {
 ```
 
 ### Stop Conditions
+
 1. **Shot Limit**: Reached configured total shots
 2. **Time Limit**: Reached specified stop time
 3. **Manual Stop**: User-initiated stop
@@ -264,6 +282,7 @@ scheduleNextPhoto() {
 ## User Decision Workflow
 
 ### Session Completion States
+
 After a session ends (completed, stopped, or error), it enters an "awaiting decision" state where the user must choose to save or discard the session.
 
 ```mermaid
@@ -276,6 +295,7 @@ graph LR
 ```
 
 ### Enhanced Session Management Implementation
+
 The system implements sophisticated session state management with user decision workflows:
 
 ```javascript
@@ -285,7 +305,7 @@ this.sessionState = {
   hasActiveSession: false,
   currentSessionId: null,
   lastSessionId: null,
-  lastUpdate: null
+  lastUpdate: null,
 };
 
 // Unsaved session for cross-reboot recovery
@@ -293,51 +313,56 @@ this.unsavedSession = null;
 ```
 
 ### Session Completion Workflow
+
 When sessions complete, stop, or encounter errors, they require user decisions:
 
 ```javascript
 // From src/websocket/handler.js:79-86
 // Session completed event handling
-session.on('completed', (completionData) => {
-  logger.info('Session completed event received, broadcasting:', completionData);
-  broadcastEvent('intervalometer_completed', completionData);
+session.on("completed", (completionData) => {
+  logger.info(
+    "Session completed event received, broadcasting:",
+    completionData,
+  );
+  broadcastEvent("intervalometer_completed", completionData);
   // Broadcast that there's an unsaved session needing user decision
-  broadcastEvent('timelapse_session_needs_decision', {
+  broadcastEvent("timelapse_session_needs_decision", {
     sessionId: completionData.sessionId,
     title: completionData.title,
     stats: completionData.stats,
-    reason: 'completed'
+    reason: "completed",
   });
 });
 
 // Session stopped event handling
-session.on('stopped', (stopData) => {
-  logger.info('Session stopped event received, broadcasting:', stopData);
-  broadcastEvent('intervalometer_stopped', stopData);
+session.on("stopped", (stopData) => {
+  logger.info("Session stopped event received, broadcasting:", stopData);
+  broadcastEvent("intervalometer_stopped", stopData);
   // Broadcast that there's an unsaved session needing user decision
-  broadcastEvent('timelapse_session_needs_decision', {
+  broadcastEvent("timelapse_session_needs_decision", {
     sessionId: stopData.sessionId,
     title: stopData.title,
     stats: stopData.stats,
-    reason: 'stopped'
+    reason: "stopped",
   });
 });
 
 // Session error event handling
-session.on('error', (errorData) => {
-  logger.info('Session error event received, broadcasting:', errorData);
-  broadcastEvent('intervalometer_error', errorData);
+session.on("error", (errorData) => {
+  logger.info("Session error event received, broadcasting:", errorData);
+  broadcastEvent("intervalometer_error", errorData);
   // Broadcast that there's an unsaved session needing user decision
-  broadcastEvent('timelapse_session_needs_decision', {
+  broadcastEvent("timelapse_session_needs_decision", {
     sessionId: errorData.sessionId,
     title: errorData.title,
     stats: errorData.stats,
-    reason: 'error'
+    reason: "error",
   });
 });
 ```
 
 ### Decision Workflow Events
+
 The system maintains session data and prompts users for save/discard decisions:
 
 ```javascript
@@ -367,6 +392,7 @@ session.on('completed', (completionData) => {
 ```
 
 ### User Decision Actions
+
 Users can save sessions as reports or discard them entirely:
 
 ```javascript
@@ -437,6 +463,7 @@ async discardSession(sessionId) {
 ```
 
 ### WebSocket Decision Handlers
+
 Real-time WebSocket handlers for user decision actions:
 
 ```javascript
@@ -447,21 +474,24 @@ const handleSaveSessionAsReport = async (ws, data) => {
     const { sessionId, title } = data;
 
     if (!sessionId) {
-      return sendError(ws, 'Session ID is required');
+      return sendError(ws, "Session ID is required");
     }
 
-    const savedReport = await intervalometerStateManager.saveSessionReport(sessionId, title);
-    sendResponse(ws, 'session_saved', {
+    const savedReport = await intervalometerStateManager.saveSessionReport(
+      sessionId,
+      title,
+    );
+    sendResponse(ws, "session_saved", {
       sessionId,
       reportId: savedReport.id,
       title: savedReport.title,
-      message: 'Session saved as report successfully'
+      message: "Session saved as report successfully",
     });
 
     // Broadcast the save action to all clients
-    broadcastTimelapseEvent('report_saved', { report: savedReport });
+    broadcastTimelapseEvent("report_saved", { report: savedReport });
   } catch (error) {
-    logger.error('Failed to save session as report via WebSocket:', error);
+    logger.error("Failed to save session as report via WebSocket:", error);
     sendError(ws, `Failed to save session as report: ${error.message}`);
   }
 };
@@ -473,19 +503,19 @@ const handleDiscardSession = async (ws, data) => {
     const { sessionId } = data;
 
     if (!sessionId) {
-      return sendError(ws, 'Session ID is required');
+      return sendError(ws, "Session ID is required");
     }
 
     await intervalometerStateManager.discardSession(sessionId);
-    sendResponse(ws, 'session_discarded', {
+    sendResponse(ws, "session_discarded", {
       sessionId,
-      message: 'Session discarded successfully'
+      message: "Session discarded successfully",
     });
 
     // Broadcast the discard action to all clients
-    broadcastTimelapseEvent('session_discarded', { sessionId });
+    broadcastTimelapseEvent("session_discarded", { sessionId });
   } catch (error) {
-    logger.error('Failed to discard session via WebSocket:', error);
+    logger.error("Failed to discard session via WebSocket:", error);
     sendError(ws, `Failed to discard session: ${error.message}`);
   }
 };
@@ -494,6 +524,7 @@ const handleDiscardSession = async (ws, data) => {
 ## Unsaved Session Recovery Across Reboots
 
 ### Cross-Reboot Session Persistence
+
 The system preserves session data across system reboots to prevent data loss:
 
 ```javascript
@@ -503,6 +534,7 @@ await this.checkForUnsavedSession();
 ```
 
 ### Session Recovery Implementation
+
 ```javascript
 // From src/intervalometer/state-manager.js:313-335
 // Check for unsaved session from previous run
@@ -535,6 +567,7 @@ async checkForUnsavedSession() {
 ```
 
 ### Unsaved Session Storage
+
 ```javascript
 // From src/intervalometer/state-manager.js:337-347
 // Save unsaved session to disk for cross-reboot recovery
@@ -562,6 +595,7 @@ async clearUnsavedSession() {
 ```
 
 ### Session Recovery Workflow
+
 1. **System Startup**: Check for unsaved session file on initialization
 2. **Session Found**: Load session data and emit `unsavedSessionFound` event
 3. **UI Notification**: WebSocket broadcasts decision prompt to connected clients
@@ -569,6 +603,7 @@ async clearUnsavedSession() {
 5. **Cleanup**: Remove unsaved session file after user decision
 
 ### Recovery File Management
+
 Unsaved sessions are stored in persistent storage managed by the `TimelapseReportManager`:
 
 - **Storage Location**: Reports directory with special `.unsaved` extension
@@ -579,45 +614,47 @@ Unsaved sessions are stored in persistent storage managed by the `TimelapseRepor
 ## Report Management and Persistence
 
 ### Report Structure
+
 ```javascript
 // Report data format
 const reportStructure = {
-    id: 'report-uuid',
-    title: 'Night Sky Timelapse',
-    createdAt: '2024-01-01T20:00:00.000Z',
-    sessionData: {
-        id: 'session-uuid',
-        startTime: '2024-01-01T20:00:00.000Z',
-        endTime: '2024-01-01T23:30:00.000Z',
-        duration: 12600, // seconds
-        stats: {
-            shotsTaken: 420,
-            shotsSuccessful: 418,
-            shotsFailed: 2,
-            successRate: 99.5
-        },
-        options: {
-            interval: 30,
-            totalShots: 420
-        },
-        errors: [
-            {
-                timestamp: '2024-01-01T22:15:30.000Z',
-                error: 'Camera timeout',
-                shotNumber: 150
-            }
-        ]
+  id: "report-uuid",
+  title: "Night Sky Timelapse",
+  createdAt: "2024-01-01T20:00:00.000Z",
+  sessionData: {
+    id: "session-uuid",
+    startTime: "2024-01-01T20:00:00.000Z",
+    endTime: "2024-01-01T23:30:00.000Z",
+    duration: 12600, // seconds
+    stats: {
+      shotsTaken: 420,
+      shotsSuccessful: 418,
+      shotsFailed: 2,
+      successRate: 99.5,
     },
-    metadata: {
-        totalPhotos: 418,
-        duration: '3h 30m',
-        averageInterval: 30.2,
-        location: 'Mt. Wilson Observatory'
-    }
+    options: {
+      interval: 30,
+      totalShots: 420,
+    },
+    errors: [
+      {
+        timestamp: "2024-01-01T22:15:30.000Z",
+        error: "Camera timeout",
+        shotNumber: 150,
+      },
+    ],
+  },
+  metadata: {
+    totalPhotos: 418,
+    duration: "3h 30m",
+    averageInterval: 30.2,
+    location: "Mt. Wilson Observatory",
+  },
 };
 ```
 
 ### File-based Persistence
+
 ```javascript
 // From ReportManager persistence
 async saveReport(report) {
@@ -633,6 +670,7 @@ async saveReport(report) {
 ```
 
 ### Report Operations
+
 - **List Reports**: Get all saved reports with metadata
 - **Get Report**: Retrieve specific report by ID
 - **Update Title**: Modify report title
@@ -642,33 +680,35 @@ async saveReport(report) {
 ## Legacy Compatibility
 
 ### IntervalometerSession Wrapper
+
 The legacy `IntervalometerSession` class maintains the existing API while delegating to the new `TimelapseSession`:
 
 ```javascript
 // From IntervalometerSession compatibility layer
 export class IntervalometerSession extends EventEmitter {
-    constructor(getCameraController, options = {}) {
-        super();
+  constructor(getCameraController, options = {}) {
+    super();
 
-        // Create underlying timelapse session
-        this.timelapseSession = new TimelapseSession(getCameraController, options);
+    // Create underlying timelapse session
+    this.timelapseSession = new TimelapseSession(getCameraController, options);
 
-        // Forward all events for compatibility
-        this.bindTimelapseEvents();
-    }
+    // Forward all events for compatibility
+    this.bindTimelapseEvents();
+  }
 
-    // Delegate methods to underlying session
-    async start() {
-        return await this.timelapseSession.start();
-    }
+  // Delegate methods to underlying session
+  async start() {
+    return await this.timelapseSession.start();
+  }
 
-    getStatus() {
-        return this.timelapseSession.getStatus();
-    }
+  getStatus() {
+    return this.timelapseSession.getStatus();
+  }
 }
 ```
 
 ### API Compatibility
+
 - **Legacy Endpoints**: `/api/intervalometer/*` maintained
 - **Enhanced Endpoints**: `/api/intervalometer/start-with-title` added
 - **Event Names**: Existing event names preserved
@@ -677,47 +717,51 @@ export class IntervalometerSession extends EventEmitter {
 ## Event-Driven Integration
 
 ### Session Events
+
 ```javascript
 // TimelapseSession events
-session.emit('started', sessionData);
-session.emit('photo_taken', photoData);
-session.emit('photo_failed', errorData);
-session.emit('completed', completionData);
-session.emit('stopped', stopData);
-session.emit('error', errorData);
+session.emit("started", sessionData);
+session.emit("photo_taken", photoData);
+session.emit("photo_failed", errorData);
+session.emit("completed", completionData);
+session.emit("stopped", stopData);
+session.emit("error", errorData);
 ```
 
 ### State Manager Events
+
 ```javascript
 // IntervalometerStateManager events
-this.emit('sessionStarted', data);
-this.emit('sessionCompleted', data);
-this.emit('sessionStopped', data);
-this.emit('sessionError', data);
-this.emit('reportSaved', data);
-this.emit('reportSaveFailed', data);
-this.emit('reportDeleted', data);
-this.emit('sessionDiscarded', data);
-this.emit('unsavedSessionFound', data); // Fired on startup recovery
+this.emit("sessionStarted", data);
+this.emit("sessionCompleted", data);
+this.emit("sessionStopped", data);
+this.emit("sessionError", data);
+this.emit("reportSaved", data);
+this.emit("reportSaveFailed", data);
+this.emit("reportDeleted", data);
+this.emit("sessionDiscarded", data);
+this.emit("unsavedSessionFound", data); // Fired on startup recovery
 ```
 
 ### WebSocket Broadcasting
+
 ```javascript
 // Real-time event broadcasting to UI
-broadcastTimelapseEvent('session_started', sessionData);
-broadcastTimelapseEvent('photo_taken', photoData);
-broadcastTimelapseEvent('session_completed', completionData);
-broadcastTimelapseEvent('timelapse_session_needs_decision', {
+broadcastTimelapseEvent("session_started", sessionData);
+broadcastTimelapseEvent("photo_taken", photoData);
+broadcastTimelapseEvent("session_completed", completionData);
+broadcastTimelapseEvent("timelapse_session_needs_decision", {
   sessionId: sessionId,
   title: title,
   stats: stats,
-  reason: 'completed|stopped|error'
+  reason: "completed|stopped|error",
 });
-broadcastTimelapseEvent('report_saved', { report: savedReport });
-broadcastTimelapseEvent('session_discarded', { sessionId });
+broadcastTimelapseEvent("report_saved", { report: savedReport });
+broadcastTimelapseEvent("session_discarded", { sessionId });
 ```
 
 ### WebSocket Command Handlers
+
 ```javascript
 // User decision WebSocket commands
 case 'save_session_as_report':
@@ -736,18 +780,21 @@ case 'get_unsaved_session':
 ## Performance Optimizations
 
 ### Memory Management
+
 - **Session Cleanup**: Automatic cleanup after save/discard
 - **Event Unbinding**: Proper cleanup of event listeners
 - **Timer Management**: Clear timeouts on session end
 - **Photo Data**: Minimal photo metadata storage
 
 ### Timing Precision
+
 - **High-Resolution Timers**: Use `process.hrtime()` for precision
 - **Drift Compensation**: Adjust scheduling for execution delays
 - **Timeout Management**: Configurable timeouts per operation
 - **Resource Throttling**: Limit concurrent photo operations
 
 ### Storage Efficiency
+
 - **JSON Compression**: Compact report storage
 - **Metadata Optimization**: Store only essential data
 - **File Organization**: Organized directory structure
@@ -756,53 +803,58 @@ case 'get_unsaved_session':
 ## Error Scenarios and Recovery
 
 ### Common Error Patterns
+
 1. **Camera Disconnection**: Session pauses, resumes on reconnection
 2. **Network Issues**: Retry with exponential backoff
 3. **Storage Full**: Graceful degradation with warnings
 4. **Power Issues**: Session state preservation across restarts
 
 ### Recovery Mechanisms
+
 - **Session Resumption**: Resume interrupted sessions
 - **State Persistence**: Critical state saved to disk
 - **Automatic Retry**: Configurable retry attempts
 - **Graceful Degradation**: Continue with reduced functionality
 
 ### User Notification
+
 ```javascript
 // Error notification via WebSocket
-broadcastTimelapseEvent('session_error', {
-    sessionId: session.id,
-    title: session.title,
-    error: error.message,
-    canRecover: session.canRecover(),
-    recommendedAction: session.getRecoveryAction()
+broadcastTimelapseEvent("session_error", {
+  sessionId: session.id,
+  title: session.title,
+  error: error.message,
+  canRecover: session.canRecover(),
+  recommendedAction: session.getRecoveryAction(),
 });
 ```
 
 ## Configuration and Customization
 
 ### Session Configuration
+
 ```javascript
 // Configurable session parameters
 const sessionConfig = {
-    // Timing
-    interval: 30,                    // Seconds between photos
-    totalShots: null,                // Shot limit (null = unlimited)
-    stopTime: "06:00",              // Stop time (HH:MM format)
+  // Timing
+  interval: 30, // Seconds between photos
+  totalShots: null, // Shot limit (null = unlimited)
+  stopTime: "06:00", // Stop time (HH:MM format)
 
-    // Behavior
-    continueOnError: true,           // Continue session on photo errors
-    maxConsecutiveErrors: 5,         // Abort after N consecutive errors
-    photoTimeout: 30000,             // Photo operation timeout (ms)
+  // Behavior
+  continueOnError: true, // Continue session on photo errors
+  maxConsecutiveErrors: 5, // Abort after N consecutive errors
+  photoTimeout: 30000, // Photo operation timeout (ms)
 
-    // Metadata
-    title: "Custom Timelapse",       // Session title
-    description: "Long description", // Session description
-    tags: ["night", "sky", "stars"]  // Searchable tags
+  // Metadata
+  title: "Custom Timelapse", // Session title
+  description: "Long description", // Session description
+  tags: ["night", "sky", "stars"], // Searchable tags
 };
 ```
 
 ### System Configuration
+
 - **Storage Location**: Configurable report storage directory
 - **Retention Policy**: Automatic cleanup of old reports
 - **Notification Settings**: Email/webhook notifications

@@ -7,6 +7,7 @@ The WiFi Country Management feature allows users to change the regulatory domain
 ## ✅ Implementation Status: COMPLETED
 
 ### Frontend Implementation
+
 - ✅ **Country Display**: Shows current WiFi country in Network Settings
 - ✅ **Country Selection UI**: Modal with searchable country list
 - ✅ **Popular Countries**: US and JP highlighted for quick access
@@ -14,6 +15,7 @@ The WiFi Country Management feature allows users to change the regulatory domain
 - ✅ **User Confirmation**: Warning dialog explaining regulatory impact
 
 ### Backend Implementation
+
 - ✅ **API Endpoints**: Complete REST API for country management
 - ✅ **Multiple Methods**: Uses `iw`, `raspi-config`, and `wpa_supplicant.conf`
 - ✅ **NetworkManager Integration**: Automatic service restart
@@ -21,6 +23,7 @@ The WiFi Country Management feature allows users to change the regulatory domain
 - ✅ **WebSocket Broadcasting**: Real-time status updates
 
 ### System Integration
+
 - ✅ **Setup Scripts**: Updated with wireless tools requirements
 - ✅ **Service Dependencies**: `iw`, `wireless-tools`, `rfkill` packages
 - ✅ **Documentation**: Complete API and usage documentation
@@ -28,11 +31,13 @@ The WiFi Country Management feature allows users to change the regulatory domain
 ## User Interface
 
 ### Network Settings Display
+
 - **Current Country**: Shows code and name (e.g., "US - United States")
 - **Regulatory Domain**: Shows 2-letter country code
 - **Change Country Button**: Opens country selection modal
 
 ### Country Selection Modal
+
 - **Popular Countries**: US and JP displayed prominently
 - **Full Country List**: All supported ISO 3166-1 alpha-2 codes
 - **Search/Filter**: Easy country selection
@@ -41,12 +46,14 @@ The WiFi Country Management feature allows users to change the regulatory domain
 ## API Endpoints
 
 ### Get Current Country
+
 ```bash
 GET /api/network/wifi/country
 # Response: {"country": "US"}
 ```
 
 ### Set WiFi Country
+
 ```bash
 POST /api/network/wifi/country
 Content-Type: application/json
@@ -55,6 +62,7 @@ Content-Type: application/json
 ```
 
 ### Get Available Countries
+
 ```bash
 GET /api/network/wifi/countries
 # Response: {"countries": [{"code": "US", "name": "United States"}, ...]}
@@ -63,6 +71,7 @@ GET /api/network/wifi/countries
 ## Technical Implementation
 
 ### Country Setting Process
+
 1. **Immediate Effect**: `iw reg set` for instant regulatory change
 2. **Persistent Config**: `raspi-config` for boot persistence
 3. **Legacy Support**: Updates `wpa_supplicant.conf`
@@ -72,11 +81,13 @@ GET /api/network/wifi/countries
 ### Regulatory Differences
 
 **US vs Japan Key Differences:**
+
 - **Power Limits**: US allows 30 dBm, Japan limits to 10 dBm (100x difference)
 - **Channels**: Japan allows channel 14 (illegal in US)
 - **Range Impact**: Significant reduction in WiFi range when using Japan settings
 
 ### Validation & Error Handling
+
 - **Format Validation**: Ensures 2-letter ISO country codes
 - **Supported Countries**: Validates against built-in country list
 - **System Errors**: Graceful handling of command failures
@@ -85,6 +96,7 @@ GET /api/network/wifi/countries
 ## Usage Examples
 
 ### For International Travel
+
 1. **Before Travel**: Check current country setting
 2. **At Destination**: Open Network Settings → Change Country
 3. **Select Country**: Choose destination country (e.g., JP for Japan)
@@ -92,6 +104,7 @@ GET /api/network/wifi/countries
 5. **Automatic Apply**: System restarts network services
 
 ### API Testing
+
 ```bash
 # Check current setting
 curl http://picontrol-002.local:3000/api/network/wifi/country
