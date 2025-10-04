@@ -108,10 +108,36 @@ Captures a test photo with EXIF metadata extraction. Temporarily overrides camer
 2. Sets quality to smallest available (e.g., small_fine)
 3. Triggers shutter with autofocus
 4. Waits for photo completion via CCAPI event polling
-5. Downloads photo from camera
-6. Restores original quality settings
-7. Extracts EXIF metadata (ISO, shutter speed, aperture, etc.)
-8. Saves photo with timestamped filename: `YYYYMMDD_HHMMSS_<original>.jpg`
+5. Retrieves file size via CCAPI `kind=info` endpoint for progress tracking
+6. Downloads photo from camera with progress events via WebSocket
+7. Restores original quality settings
+8. Extracts EXIF metadata (ISO, shutter speed, aperture, etc.)
+9. Saves photo with timestamped filename: `YYYYMMDD_HHMMSS_<original>.jpg`
+
+**Download Progress Events:**
+
+During photo download, the server broadcasts `test_photo_download_progress` WebSocket events:
+
+```json
+{
+  "type": "event",
+  "eventType": "test_photo_download_progress",
+  "timestamp": "2025-10-04T12:00:00.000Z",
+  "data": {
+    "percentage": 45,
+    "loaded": 2359296,
+    "total": 5242880,
+    "photoId": 1
+  }
+}
+```
+
+**Progress Event Fields:**
+
+- `percentage`: Download progress percentage (0-100)
+- `loaded`: Bytes downloaded so far
+- `total`: Total file size in bytes
+- `photoId`: ID of the photo being downloaded
 
 **Response:**
 
@@ -1303,3 +1329,37 @@ Broadcast when a timelapse session is discarded:
   }
 }
 ```
+
+### Test Photo Events
+
+#### Download Progress Event
+
+Broadcast during test photo download to show real-time progress:
+
+```json
+{
+  "type": "event",
+  "eventType": "test_photo_download_progress",
+  "timestamp": "2025-10-04T12:00:00.000Z",
+  "data": {
+    "percentage": 45,
+    "loaded": 2359296,
+    "total": 5242880,
+    "photoId": 1
+  }
+}
+```
+
+**Fields:**
+
+- `percentage`: Download progress percentage (0-100)
+- `loaded`: Bytes downloaded so far
+- `total`: Total file size in bytes (from CCAPI `kind=info` endpoint)
+- `photoId`: ID of the photo being downloaded
+
+**Implementation Notes:**
+
+- File size is retrieved via `GET {photoPath}?kind=info` before download
+- If file size retrieval fails, download continues but progress shows bytes only
+- Download timeout increased to 60s for large RAW files
+- Progress events use Axios `onDownloadProgress` handler

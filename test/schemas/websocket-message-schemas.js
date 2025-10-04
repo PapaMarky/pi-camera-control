@@ -295,6 +295,14 @@ const EventSchemas = {
     sessionId: "string",
     message: "string?",
   },
+
+  // Test Photo Events
+  test_photo_download_progress: {
+    percentage: "number",
+    loaded: "number",
+    total: "number",
+    photoId: "number",
+  },
 };
 
 export { MessageSchemas, EventSchemas };

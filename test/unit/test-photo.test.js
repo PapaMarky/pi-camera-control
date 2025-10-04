@@ -30,6 +30,7 @@ describe("TestPhotoService", () => {
   let TestPhotoService;
   let testPhotoService;
   let mockCameraController;
+  let mockWsHandler;
 
   beforeAll(async () => {
     // Dynamic import to allow mocking
@@ -51,8 +52,16 @@ describe("TestPhotoService", () => {
       connected: true,
     };
 
-    // Create fresh instance with getter function
-    testPhotoService = new TestPhotoService(() => mockCameraController);
+    // Mock WebSocket handler
+    mockWsHandler = {
+      broadcast: jest.fn(),
+    };
+
+    // Create fresh instance with getter function and wsHandler
+    testPhotoService = new TestPhotoService(
+      () => mockCameraController,
+      mockWsHandler,
+    );
   });
 
   describe("Constructor", () => {
@@ -95,6 +104,12 @@ describe("TestPhotoService", () => {
       mockWaitForPhotoComplete.mockResolvedValueOnce(
         "/DCIM/100CANON/IMG_0001.JPG",
       );
+
+      // Mock file size retrieval (kind=info)
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: 12345 },
+      });
 
       // Mock download photo
       const mockImageData = Buffer.from("fake-jpeg-data");
@@ -140,10 +155,13 @@ describe("TestPhotoService", () => {
         60000,
       );
 
-      // Verify photo was downloaded
+      // Verify photo was downloaded with new 60s timeout
       expect(mockCameraController.client.get).toHaveBeenCalledWith(
         `${mockCameraController.baseUrl}/DCIM/100CANON/IMG_0001.JPG`,
-        { responseType: "arraybuffer", timeout: 30000 },
+        expect.objectContaining({
+          responseType: "arraybuffer",
+          timeout: 60000,
+        }),
       );
 
       // Verify quality was restored (ver110 endpoint)
@@ -193,6 +211,12 @@ describe("TestPhotoService", () => {
       mockWaitForPhotoComplete.mockResolvedValueOnce(
         "/DCIM/100CANON/IMG_0001.JPG",
       );
+      // Mock file size retrieval
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: 12345 },
+      });
+      // Mock download
       mockCameraController.client.get.mockResolvedValueOnce({
         status: 200,
         data: Buffer.from("fake-jpeg-data"),
@@ -226,6 +250,12 @@ describe("TestPhotoService", () => {
       mockWaitForPhotoComplete.mockResolvedValueOnce(
         "/DCIM/100CANON/IMG_0001.JPG",
       );
+
+      // Mock file size retrieval success
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: 12345 },
+      });
 
       // Mock download failure
       mockCameraController.client.get.mockRejectedValueOnce(
@@ -302,6 +332,12 @@ describe("TestPhotoService", () => {
         mockWaitForPhotoComplete.mockResolvedValueOnce(
           "/DCIM/100CANON/IMG_0001.JPG",
         );
+        // Mock file size retrieval
+        mockCameraController.client.get.mockResolvedValueOnce({
+          status: 200,
+          data: { filesize: 12345 },
+        });
+        // Mock download
         mockCameraController.client.get.mockResolvedValueOnce({
           status: 200,
           data: Buffer.from("fake-jpeg-data"),
@@ -381,6 +417,12 @@ describe("TestPhotoService", () => {
         });
       });
 
+      // Mock file size retrieval
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: 12345 },
+      });
+
       // Mock download photo
       mockCameraController.client.get.mockResolvedValueOnce({
         status: 200,
@@ -412,6 +454,237 @@ describe("TestPhotoService", () => {
       // Processing time should be approximately the delay we set, not including download
       const totalElapsed = Date.now() - shutterPressTime;
       expect(result.processingTimeMs).toBeLessThan(totalElapsed);
+    });
+
+    test("should retrieve file size before download for progress tracking", async () => {
+      // Setup mocks for successful capture
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          stillimagequality: {
+            value: { jpeg: "large_fine", raw: "off" },
+            ability: { jpeg: ["large_fine", "small_fine"], raw: ["off"] },
+          },
+        },
+      });
+      mockCameraController.client.put.mockResolvedValue({ status: 200 });
+      mockCameraController.client.post.mockResolvedValueOnce({ status: 200 });
+      mockWaitForPhotoComplete.mockResolvedValueOnce(
+        "/DCIM/100CANON/IMG_0001.JPG",
+      );
+
+      // Mock kind=info endpoint to return file size
+      const fileSize = 5242880; // 5MB
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          filesize: fileSize,
+          name: "IMG_0001.JPG",
+        },
+      });
+
+      // Mock photo download
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: Buffer.from("fake-jpeg-data"),
+      });
+
+      mockExifr.parse.mockResolvedValueOnce({ ISO: 6400 });
+
+      await testPhotoService.capturePhoto();
+
+      // Verify kind=info was called before download
+      expect(mockCameraController.client.get).toHaveBeenCalledWith(
+        `${mockCameraController.baseUrl}/DCIM/100CANON/IMG_0001.JPG?kind=info`,
+        { timeout: 5000 },
+      );
+    });
+
+    test("should emit download progress events via WebSocket", async () => {
+      // Setup mocks
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          stillimagequality: {
+            value: { jpeg: "large_fine", raw: "off" },
+            ability: { jpeg: ["large_fine", "small_fine"], raw: ["off"] },
+          },
+        },
+      });
+      mockCameraController.client.put.mockResolvedValue({ status: 200 });
+      mockCameraController.client.post.mockResolvedValueOnce({ status: 200 });
+      mockWaitForPhotoComplete.mockResolvedValueOnce(
+        "/DCIM/100CANON/IMG_0001.JPG",
+      );
+
+      // Mock file size
+      const fileSize = 5242880; // 5MB
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: fileSize },
+      });
+
+      // Mock photo download with progress events
+      mockCameraController.client.get.mockImplementationOnce((url, config) => {
+        // Simulate progress events
+        if (config.onDownloadProgress) {
+          config.onDownloadProgress({ loaded: 2621440, total: fileSize }); // 50%
+          config.onDownloadProgress({ loaded: 5242880, total: fileSize }); // 100%
+        }
+        return Promise.resolve({
+          status: 200,
+          data: Buffer.from("fake-jpeg-data"),
+        });
+      });
+
+      mockExifr.parse.mockResolvedValueOnce({ ISO: 6400 });
+
+      await testPhotoService.capturePhoto();
+
+      // Verify WebSocket progress events were broadcast
+      expect(mockWsHandler.broadcast).toHaveBeenCalledWith(
+        "test_photo_download_progress",
+        expect.objectContaining({
+          percentage: 50,
+          loaded: 2621440,
+          total: fileSize,
+          photoId: 1,
+        }),
+      );
+
+      expect(mockWsHandler.broadcast).toHaveBeenCalledWith(
+        "test_photo_download_progress",
+        expect.objectContaining({
+          percentage: 100,
+          loaded: 5242880,
+          total: fileSize,
+          photoId: 1,
+        }),
+      );
+    });
+
+    test("should continue download if file size retrieval fails", async () => {
+      // Setup mocks
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          stillimagequality: {
+            value: { jpeg: "large_fine", raw: "off" },
+            ability: { jpeg: ["large_fine", "small_fine"], raw: ["off"] },
+          },
+        },
+      });
+      mockCameraController.client.put.mockResolvedValue({ status: 200 });
+      mockCameraController.client.post.mockResolvedValueOnce({ status: 200 });
+      mockWaitForPhotoComplete.mockResolvedValueOnce(
+        "/DCIM/100CANON/IMG_0001.JPG",
+      );
+
+      // Mock kind=info failure
+      mockCameraController.client.get.mockRejectedValueOnce(
+        new Error("Info endpoint failed"),
+      );
+
+      // Mock photo download still succeeds
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: Buffer.from("fake-jpeg-data"),
+      });
+
+      mockExifr.parse.mockResolvedValueOnce({ ISO: 6400 });
+
+      const result = await testPhotoService.capturePhoto();
+
+      // Should succeed despite info failure
+      expect(result.id).toBe(1);
+    });
+
+    test("should handle progress without total size (bytes-only mode)", async () => {
+      // Setup mocks
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          stillimagequality: {
+            value: { jpeg: "large_fine", raw: "off" },
+            ability: { jpeg: ["large_fine", "small_fine"], raw: ["off"] },
+          },
+        },
+      });
+      mockCameraController.client.put.mockResolvedValue({ status: 200 });
+      mockCameraController.client.post.mockResolvedValueOnce({ status: 200 });
+      mockWaitForPhotoComplete.mockResolvedValueOnce(
+        "/DCIM/100CANON/IMG_0001.JPG",
+      );
+
+      // No file size available (info endpoint failed)
+      mockCameraController.client.get.mockRejectedValueOnce(
+        new Error("Info failed"),
+      );
+
+      // Mock photo download with progress events (no total)
+      mockCameraController.client.get.mockImplementationOnce((url, config) => {
+        if (config.onDownloadProgress) {
+          // Axios may not provide 'total' if Content-Length header is missing
+          config.onDownloadProgress({ loaded: 2621440, total: 0 });
+        }
+        return Promise.resolve({
+          status: 200,
+          data: Buffer.from("fake-jpeg-data"),
+        });
+      });
+
+      mockExifr.parse.mockResolvedValueOnce({ ISO: 6400 });
+
+      await testPhotoService.capturePhoto();
+
+      // Should not emit progress event when total is 0
+      expect(mockWsHandler.broadcast).not.toHaveBeenCalledWith(
+        "test_photo_download_progress",
+        expect.anything(),
+      );
+    });
+
+    test("should increase download timeout to 60s for large RAW files", async () => {
+      // Setup mocks
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          stillimagequality: {
+            value: { jpeg: "large_fine", raw: "off" },
+            ability: { jpeg: ["large_fine", "small_fine"], raw: ["off"] },
+          },
+        },
+      });
+      mockCameraController.client.put.mockResolvedValue({ status: 200 });
+      mockCameraController.client.post.mockResolvedValueOnce({ status: 200 });
+      mockWaitForPhotoComplete.mockResolvedValueOnce(
+        "/DCIM/100CANON/IMG_0001.JPG",
+      );
+
+      // Mock file size
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: 5242880 },
+      });
+
+      // Mock photo download
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: Buffer.from("fake-jpeg-data"),
+      });
+
+      mockExifr.parse.mockResolvedValueOnce({ ISO: 6400 });
+
+      await testPhotoService.capturePhoto();
+
+      // Verify timeout was increased to 60s
+      expect(mockCameraController.client.get).toHaveBeenCalledWith(
+        expect.stringContaining("/DCIM/100CANON/IMG_0001.JPG"),
+        expect.objectContaining({
+          timeout: 60000, // 60 seconds
+          responseType: "arraybuffer",
+        }),
+      );
     });
   });
 

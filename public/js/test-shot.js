@@ -498,29 +498,36 @@ class TestShotUI {
       const originalText = btn.querySelector(".btn-text").textContent;
       btn.querySelector(".btn-text").textContent = "Taking photo...";
 
-      // Update to "Downloading..." after 1.5s (after shutter fires)
-      const downloadTextTimeout = setTimeout(() => {
-        btn.querySelector(".btn-text").textContent = "Downloading...";
-      }, 1500);
+      // Listen for download progress events
+      const progressHandler = (data) => {
+        console.log("TestShotUI: Download progress event received:", data);
+        btn.querySelector(".btn-text").textContent =
+          `Downloading (${data.percentage}%)`;
+      };
 
-      // Call API
-      const response = await fetch("/api/camera/photos/test", {
-        method: "POST",
-      });
+      this.wsManager.on("test_photo_download_progress", progressHandler);
 
-      clearTimeout(downloadTextTimeout);
+      try {
+        // Call API
+        const response = await fetch("/api/camera/photos/test", {
+          method: "POST",
+        });
 
-      if (!response.ok) {
-        const errorMessage = await this.extractErrorMessage(response);
-        throw new Error(errorMessage);
+        if (!response.ok) {
+          const errorMessage = await this.extractErrorMessage(response);
+          throw new Error(errorMessage);
+        }
+
+        const photo = await response.json();
+        console.log("TestShotUI: Test photo captured:", photo);
+
+        // Add to test photos list
+        this.testPhotos.push(photo);
+        this.renderTestPhotoGallery();
+      } finally {
+        // Clean up progress listener
+        this.wsManager.off("test_photo_download_progress", progressHandler);
       }
-
-      const photo = await response.json();
-      console.log("TestShotUI: Test photo captured:", photo);
-
-      // Add to test photos list
-      this.testPhotos.push(photo);
-      this.renderTestPhotoGallery();
     } catch (error) {
       console.error("TestShotUI: Test photo capture failed:", error);
       alert(`Failed to capture test photo: ${error.message}`);

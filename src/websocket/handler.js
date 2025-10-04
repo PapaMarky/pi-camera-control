@@ -1315,6 +1315,7 @@ export function createWebSocketHandler(
 
   // Attach cleanup and broadcast functions to the handler for access from server
   handleConnection.cleanup = cleanup;
+  handleConnection.broadcast = broadcastEvent; // Generic event broadcaster
   handleConnection.broadcastStatus = broadcastStatus;
   handleConnection.broadcastDiscoveryEvent = broadcastDiscoveryEvent;
   handleConnection.broadcastTimelapseEvent = broadcastTimelapseEvent;

@@ -254,6 +254,21 @@ describe("WebSocket Message Schema Validation", () => {
       const errors = validateSchema(event, EventSchemas.session_discarded);
       expect(errors).toEqual([]);
     });
+
+    test("test_photo_download_progress event has consistent fields", () => {
+      const event = {
+        percentage: 45,
+        loaded: 2359296,
+        total: 5242880,
+        photoId: 1,
+      };
+
+      const errors = validateSchema(
+        event,
+        EventSchemas.test_photo_download_progress,
+      );
+      expect(errors).toEqual([]);
+    });
   });
 
   describe("Error Response Consistency", () => {
