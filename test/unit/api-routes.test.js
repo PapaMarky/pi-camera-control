@@ -367,6 +367,157 @@ describe("API Routes Unit Tests", () => {
       });
     });
 
+    describe("GET /api/camera/storage", () => {
+      beforeEach(() => {
+        // Add getStorageInfo mock to camera controller
+        mockCameraController.instance.getStorageInfo = jest.fn(async () => ({
+          mounted: true,
+          name: "SD1",
+          totalBytes: 64424509440,
+          freeBytes: 32212254720,
+          usedBytes: 32212254720,
+          totalMB: 61440,
+          freeMB: 30720,
+          usedMB: 30720,
+          percentUsed: 50,
+          contentCount: 1234,
+          accessMode: "readwrite",
+        }));
+      });
+
+      test("returns storage info when camera available", async () => {
+        const response = await request(app)
+          .get("/api/camera/storage")
+          .expect(200);
+
+        expect(response.body).toEqual({
+          mounted: true,
+          name: "SD1",
+          totalBytes: 64424509440,
+          freeBytes: 32212254720,
+          usedBytes: 32212254720,
+          totalMB: 61440,
+          freeMB: 30720,
+          usedMB: 30720,
+          percentUsed: 50,
+          contentCount: 1234,
+          accessMode: "readwrite",
+        });
+
+        expect(mockCameraController.instance.getStorageInfo).toHaveBeenCalled();
+      });
+
+      test("returns 503 when no camera available", async () => {
+        mockCameraController.mockReturnValue(null);
+
+        const response = await request(app)
+          .get("/api/camera/storage")
+          .expect(503);
+
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "No camera available",
+        );
+        expect(response.body.error).toHaveProperty("code");
+        expect(response.body.error).toHaveProperty("component");
+      });
+
+      test("returns 500 when getStorageInfo throws error", async () => {
+        mockCameraController.instance.getStorageInfo.mockRejectedValue(
+          new Error("Camera communication failed"),
+        );
+
+        const response = await request(app)
+          .get("/api/camera/storage")
+          .expect(500);
+
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "Camera communication failed",
+        );
+        expect(response.body.error).toHaveProperty("code");
+        expect(response.body.error).toHaveProperty("component");
+      });
+
+      test("response format matches schema for mounted SD card", async () => {
+        const response = await request(app)
+          .get("/api/camera/storage")
+          .expect(200);
+
+        // Verify all required fields are present
+        expect(response.body).toHaveProperty("mounted");
+        expect(response.body).toHaveProperty("name");
+        expect(response.body).toHaveProperty("totalBytes");
+        expect(response.body).toHaveProperty("freeBytes");
+        expect(response.body).toHaveProperty("usedBytes");
+        expect(response.body).toHaveProperty("totalMB");
+        expect(response.body).toHaveProperty("freeMB");
+        expect(response.body).toHaveProperty("usedMB");
+        expect(response.body).toHaveProperty("percentUsed");
+        expect(response.body).toHaveProperty("contentCount");
+        expect(response.body).toHaveProperty("accessMode");
+
+        // Verify field types
+        expect(typeof response.body.mounted).toBe("boolean");
+        expect(typeof response.body.name).toBe("string");
+        expect(typeof response.body.totalBytes).toBe("number");
+        expect(typeof response.body.freeBytes).toBe("number");
+        expect(typeof response.body.usedBytes).toBe("number");
+        expect(typeof response.body.totalMB).toBe("number");
+        expect(typeof response.body.freeMB).toBe("number");
+        expect(typeof response.body.usedMB).toBe("number");
+        expect(typeof response.body.percentUsed).toBe("number");
+        expect(typeof response.body.contentCount).toBe("number");
+        expect(typeof response.body.accessMode).toBe("string");
+      });
+
+      test("response format matches schema for no SD card", async () => {
+        mockCameraController.instance.getStorageInfo.mockResolvedValue({
+          mounted: false,
+          name: null,
+          totalBytes: 0,
+          freeBytes: 0,
+          usedBytes: 0,
+          totalMB: 0,
+          freeMB: 0,
+          usedMB: 0,
+          percentUsed: 0,
+          contentCount: 0,
+          accessMode: null,
+        });
+
+        const response = await request(app)
+          .get("/api/camera/storage")
+          .expect(200);
+
+        expect(response.body.mounted).toBe(false);
+        expect(response.body.name).toBeNull();
+        expect(response.body.accessMode).toBeNull();
+        expect(response.body.totalBytes).toBe(0);
+        expect(response.body.percentUsed).toBe(0);
+      });
+
+      test("handles camera not connected error", async () => {
+        mockCameraController.instance.getStorageInfo.mockRejectedValue(
+          new Error("Camera not connected"),
+        );
+
+        const response = await request(app)
+          .get("/api/camera/storage")
+          .expect(500);
+
+        expect(response.body).toHaveProperty("error");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "Camera not connected",
+        );
+      });
+    });
+
     describe("POST /api/camera/photo", () => {
       test("takes a photo successfully", async () => {
         const response = await request(app)

@@ -513,13 +513,8 @@ class CameraManager {
 
     if (storageStatus) {
       storageStatus.style.display = "flex";
-      const storageLevelHeader = document.getElementById(
-        "storage-level-header",
-      );
-      if (storageLevelHeader) {
-        // TODO: Get actual storage info from camera
-        storageLevelHeader.textContent = "8GB";
-      }
+      // Storage level is updated via WebSocket status updates
+      // See updateStorageStatus() method
     }
 
     // Only show timer if timelapse is running
@@ -1173,6 +1168,7 @@ class CameraManager {
     let cameraData = null;
     let powerData = null;
     let networkData = null;
+    let storageData = null;
 
     if (data && typeof data === "object") {
       console.log(
@@ -1189,15 +1185,17 @@ class CameraManager {
         console.log("No network data in message. Full data:", data);
       }
 
-      // Welcome messages and status updates both have camera/power/network properties
-      if (data.camera || data.power || data.network) {
+      // Welcome messages and status updates both have camera/power/network/storage properties
+      if (data.camera || data.power || data.network || data.storage) {
         cameraData = data.camera;
         powerData = data.power;
         networkData = data.network;
+        storageData = data.storage;
         console.log("Extracted data:", {
           cameraData: !!cameraData,
           powerData: !!powerData,
           networkData: !!networkData,
+          storageData: !!storageData,
         });
       }
       // Or if data IS the camera data directly
@@ -1219,6 +1217,9 @@ class CameraManager {
     if (powerData) {
       this.updatePowerStatus(powerData);
     }
+
+    // Update storage status (always call to handle null/undefined and update placeholder)
+    this.updateStorageStatus(storageData);
 
     // Update network status if we have network data
     if (networkData && window.networkUI) {
@@ -1361,6 +1362,31 @@ class CameraManager {
     } else {
       warningsElement.textContent = "";
     }
+  }
+
+  updateStorageStatus(storageData) {
+    console.log("Storage data received:", storageData);
+
+    const storageLevelHeader = document.getElementById("storage-level-header");
+    if (!storageLevelHeader) return;
+
+    // Handle case where storage data is unavailable (camera not connected or error)
+    if (!storageData) {
+      storageLevelHeader.textContent = "-";
+      return;
+    }
+
+    // Handle case where no SD card is mounted
+    if (!storageData.mounted) {
+      storageLevelHeader.textContent = "No SD";
+      return;
+    }
+
+    // Format storage display showing available space (round to whole GB)
+    const freeGB = Math.round(storageData.freeMB / 1024);
+
+    // Show free space
+    storageLevelHeader.textContent = `${freeGB}G`;
   }
 
   updateUI() {

@@ -150,6 +150,33 @@ export function createApiRouter(
     }
   });
 
+  // Camera SD card storage information
+  router.get("/camera/storage", async (req, res) => {
+    try {
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "getStorageInfo",
+          }),
+        );
+      }
+      const storage = await currentController.getStorageInfo();
+      res.json(storage);
+    } catch (error) {
+      logger.error("Failed to get storage info:", error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "getStorageInfo",
+        }),
+      );
+    }
+  });
+
   // Get camera datetime with timezone and DST information
   router.get("/camera/datetime", async (req, res) => {
     try {

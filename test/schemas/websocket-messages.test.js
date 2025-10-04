@@ -112,6 +112,47 @@ describe("WebSocket Message Schema Validation", () => {
             wlan0: { connected: true },
           },
         },
+        storage: {
+          mounted: true,
+          totalMB: 32000,
+          freeMB: 8000,
+          usedMB: 24000,
+          percentUsed: 75,
+        },
+      };
+
+      const errors = validateSchema(
+        statusUpdate,
+        MessageSchemas.serverMessages.status_update,
+      );
+      expect(errors).toEqual([]);
+    });
+
+    test("status_update message with no SD card follows schema", () => {
+      const statusUpdate = {
+        type: "status_update",
+        timestamp: new Date().toISOString(),
+        camera: {
+          connected: true,
+          ip: "192.168.4.2",
+        },
+        discovery: {
+          isDiscovering: true,
+          cameras: 1,
+        },
+        power: {
+          battery: { capacity: 85 },
+          thermal: { temperature: 45.2 },
+          uptime: 3600,
+        },
+        network: {
+          interfaces: {
+            wlan0: { connected: true },
+          },
+        },
+        storage: {
+          mounted: false,
+        },
       };
 
       const errors = validateSchema(

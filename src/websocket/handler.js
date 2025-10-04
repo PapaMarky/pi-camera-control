@@ -82,38 +82,13 @@ export function createWebSocketHandler(
 
     // Get network status if networkManager is available
     let networkStatus = null;
-    console.log(
-      "BROADCAST: networkManager available:",
-      !!networkManager,
-      "forceRefresh:",
-      forceRefresh,
-    );
     if (networkManager) {
       try {
         networkStatus = await networkManager.getNetworkStatus(forceRefresh);
-        console.log(
-          "BROADCAST: getNetworkStatus result:",
-          networkStatus ? "SUCCESS" : "NULL",
-        );
-        if (
-          networkStatus &&
-          networkStatus.interfaces &&
-          networkStatus.interfaces.wlan0
-        ) {
-          console.log("BROADCAST: wlan0 data:", {
-            network: networkStatus.interfaces.wlan0.network,
-            connected: networkStatus.interfaces.wlan0.connected,
-            active: networkStatus.interfaces.wlan0.active,
-          });
-        } else {
-          console.log("BROADCAST: No wlan0 data in result");
-        }
       } catch (error) {
-        console.log("BROADCAST: Error getting network status:", error.message);
         logger.error("Failed to get network status for broadcast:", error);
       }
     } else {
-      console.log("BROADCAST: NetworkManager not available");
       logger.error("NetworkManager not available for broadcast");
     }
 
@@ -133,6 +108,25 @@ export function createWebSocketHandler(
       }
     }
 
+    // Get storage info if camera is connected
+    let storageStatus = null;
+    if (currentCameraController && currentCameraController.connected) {
+      try {
+        const storageInfo = await currentCameraController.getStorageInfo();
+        // Only include the fields needed by frontend
+        storageStatus = {
+          mounted: storageInfo.mounted,
+          totalMB: storageInfo.totalMB,
+          freeMB: storageInfo.freeMB,
+          usedMB: storageInfo.usedMB,
+          percentUsed: storageInfo.percentUsed,
+        };
+      } catch (error) {
+        logger.debug("Failed to get storage info for broadcast:", error);
+        // Don't set storageStatus if we fail - frontend will handle null
+      }
+    }
+
     const status = {
       type: "status_update",
       timestamp: new Date().toISOString(),
@@ -143,15 +137,11 @@ export function createWebSocketHandler(
         uptime: process.uptime(), // Add system uptime to power data
       },
       network: networkStatus,
+      storage: storageStatus,
       intervalometer: server.activeIntervalometerSession
         ? server.activeIntervalometerSession.getStatus()
         : null,
     };
-
-    logger.debug(
-      "Broadcasting status with network:",
-      networkStatus ? "PRESENT" : "NULL",
-    );
 
     const message = JSON.stringify(status);
     const deadClients = new Set();
@@ -241,14 +231,35 @@ export function createWebSocketHandler(
         logger.warn("NetworkManager not available for welcome message");
       }
 
+      // Get storage info if camera is connected
+      let storageStatus = null;
+      const currentCameraController = cameraController();
+      if (currentCameraController && currentCameraController.connected) {
+        try {
+          const storageInfo = await currentCameraController.getStorageInfo();
+          // Only include the fields needed by frontend
+          storageStatus = {
+            mounted: storageInfo.mounted,
+            totalMB: storageInfo.totalMB,
+            freeMB: storageInfo.freeMB,
+            usedMB: storageInfo.usedMB,
+            percentUsed: storageInfo.percentUsed,
+          };
+        } catch (error) {
+          logger.debug("Failed to get storage info for welcome:", error);
+          // Don't set storageStatus if we fail - frontend will handle null
+        }
+      }
+
       const initialStatus = {
         type: "welcome",
         timestamp: new Date().toISOString(),
-        camera: cameraController()
-          ? cameraController().getConnectionStatus()
+        camera: currentCameraController
+          ? currentCameraController.getConnectionStatus()
           : { connected: false, error: "No camera available" },
         power: powerManager.getStatus(),
         network: networkStatus,
+        storage: storageStatus,
         intervalometer: server.activeIntervalometerSession
           ? server.activeIntervalometerSession.getStatus()
           : null,

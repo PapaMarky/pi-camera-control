@@ -422,6 +422,106 @@ export class CameraController {
   }
 
   /**
+   * Get SD card storage information
+   *
+   * CCAPI Reference: 4.4.1 - Storage information
+   * Endpoint: GET /ccapi/ver110/devicestatus/storage
+   * Response: { storagelist: Array<StorageInfo> }
+   *
+   * StorageInfo fields:
+   * - name: string (e.g., "card1")
+   * - path: string (e.g., "/ccapi/ver110/contents/card1")
+   * - accesscapability: "readwrite" | "readonly"
+   * - maxsize: number (total capacity in bytes)
+   * - spacesize: number (available free space in bytes)
+   * - contentsnumber: number (total files on card)
+   *
+   * @returns {Promise<Object>} Storage information with calculated used space
+   * @throws {Error} If camera not connected
+   */
+  async getStorageInfo() {
+    if (!this.connected) {
+      throw new Error("Camera not connected");
+    }
+
+    try {
+      const response = await this.client.get(
+        `${this.baseUrl}/ccapi/ver110/devicestatus/storage`,
+      );
+
+      if (!response.data || !response.data.storagelist) {
+        throw new Error("Invalid storage response from camera");
+      }
+
+      const storageList = response.data.storagelist;
+
+      // Handle no SD card case
+      if (storageList.length === 0) {
+        return {
+          mounted: false,
+          name: null,
+          totalBytes: 0,
+          freeBytes: 0,
+          usedBytes: 0,
+          totalMB: 0,
+          freeMB: 0,
+          usedMB: 0,
+          percentUsed: 0,
+          contentCount: 0,
+          accessMode: null,
+        };
+      }
+
+      // EOS R50 has single card slot, use first storage
+      const storage = storageList[0];
+      const usedBytes = storage.maxsize - storage.spacesize;
+      const totalMB = Math.round(storage.maxsize / (1024 * 1024));
+      const freeMB = Math.round(storage.spacesize / (1024 * 1024));
+      const usedMB = Math.round(usedBytes / (1024 * 1024));
+      const percentUsed = Math.round((usedBytes / storage.maxsize) * 100);
+
+      return {
+        mounted: true,
+        name: storage.name,
+        totalBytes: storage.maxsize,
+        freeBytes: storage.spacesize,
+        usedBytes: usedBytes,
+        totalMB: totalMB,
+        freeMB: freeMB,
+        usedMB: usedMB,
+        percentUsed: percentUsed,
+        contentCount: storage.contentsnumber,
+        accessMode: storage.accesscapability,
+      };
+    } catch (error) {
+      // Extract Canon API error details
+      const statusCode = error.response?.status || "unknown";
+      const apiMessage = error.response?.data?.message || error.message;
+
+      logger.error(
+        `Failed to get storage info - Status: ${statusCode}, API Message: "${apiMessage}"`,
+      );
+
+      // Handle network errors
+      if (
+        error.code === "EHOSTUNREACH" ||
+        error.code === "ECONNREFUSED" ||
+        error.code === "ETIMEDOUT"
+      ) {
+        logger.warn("Camera network error detected during storage check");
+        this.handleDisconnection(error);
+      }
+
+      const cleanError = new Error(
+        apiMessage || "Failed to get storage information",
+      );
+      cleanError.status = statusCode;
+      cleanError.statusText = error.response?.statusText;
+      throw cleanError;
+    }
+  }
+
+  /**
    * Take a photo using the camera's shutter control
    *
    * Uses discovered shutter endpoint (either regular or manual).
