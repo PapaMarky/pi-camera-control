@@ -121,6 +121,8 @@ Captures a test photo with EXIF metadata extraction. Temporarily overrides camer
   "url": "/api/camera/photos/test/1",
   "filename": "20251002_193000_IMG_0001.JPG",
   "timestamp": "2025-10-02T19:30:00.000Z",
+  "cameraPath": "100CANON/IMG_0001.JPG",
+  "processingTimeMs": 2340,
   "exif": {
     "ISO": 6400,
     "ShutterSpeed": "30",
@@ -133,6 +135,10 @@ Captures a test photo with EXIF metadata extraction. Temporarily overrides camer
   "size": 1234567
 }
 ```
+
+**Field Descriptions:**
+
+- `processingTimeMs`: Time in milliseconds from shutter button press to `addedcontents` event received. This measures camera processing time (exposure + internal processing) and excludes download time. Useful for determining appropriate timelapse intervals.
 
 **Error Responses:**
 
@@ -158,6 +164,8 @@ Returns list of all captured test photos.
       "url": "/api/camera/photos/test/1",
       "filename": "20251002_193000_IMG_0001.JPG",
       "timestamp": "2025-10-02T19:30:00.000Z",
+      "cameraPath": "100CANON/IMG_0001.JPG",
+      "processingTimeMs": 2340,
       "exif": {
         "ISO": 6400,
         "ShutterSpeed": "30",
@@ -166,6 +174,7 @@ Returns list of all captured test photos.
         "DateTimeOriginal": "2025-10-02T19:30:00.000Z",
         "Model": "Canon EOS R50"
       },
+      "filepath": "/data/test-shots/photos/20251002_193000_IMG_0001.JPG",
       "size": 1234567
     }
   ]

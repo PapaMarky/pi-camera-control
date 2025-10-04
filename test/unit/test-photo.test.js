@@ -159,6 +159,7 @@ describe("TestPhotoService", () => {
         url: expect.stringContaining("/api/camera/photos/test/1"),
         filename: expect.stringMatching(/^\d{8}_\d{6}_IMG_0001\.JPG$/),
         timestamp: expect.any(String),
+        processingTimeMs: expect.any(Number),
         exif: {
           ISO: 6400,
           ShutterSpeed: "30",
@@ -168,6 +169,9 @@ describe("TestPhotoService", () => {
           Model: "Canon EOS R50",
         },
       });
+
+      // Verify processingTimeMs is a non-negative number (mocks can resolve instantly with 0ms)
+      expect(result.processingTimeMs).toBeGreaterThanOrEqual(0);
 
       // Verify filename uses EXIF timestamp
       expect(result.filename).toMatch(/^20251002_123000_IMG_0001\.JPG$/);
@@ -345,6 +349,69 @@ describe("TestPhotoService", () => {
       await expect(testPhotoService.capturePhoto()).rejects.toThrow(
         "Camera busy (503) - please wait a moment before trying again",
       );
+    });
+
+    test("should measure processingTimeMs accurately (shutter press to addedcontents event)", async () => {
+      // Setup mocks for successful capture
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          stillimagequality: {
+            value: { jpeg: "large_fine", raw: "off" },
+            ability: { jpeg: ["large_fine", "small_fine"], raw: ["off"] },
+          },
+        },
+      });
+      mockCameraController.client.put.mockResolvedValue({ status: 200 });
+
+      // Mock shutter button press - capture timestamp when this is called
+      let shutterPressTime;
+      mockCameraController.client.post.mockImplementation(() => {
+        shutterPressTime = Date.now();
+        return Promise.resolve({ status: 200, data: {} });
+      });
+
+      // Mock event polling with 1500ms delay to simulate camera processing
+      const processingDelay = 1500;
+      mockWaitForPhotoComplete.mockImplementation(() => {
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            resolve("/DCIM/100CANON/IMG_0001.JPG");
+          }, processingDelay);
+        });
+      });
+
+      // Mock download photo
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: Buffer.from("fake-jpeg-data"),
+      });
+
+      // Mock EXIF extraction
+      mockExifr.parse.mockResolvedValueOnce({
+        ISO: 6400,
+        DateTimeOriginal: new Date("2025-10-02T12:30:00"),
+      });
+
+      const result = await testPhotoService.capturePhoto();
+
+      // Verify processingTimeMs is present
+      expect(result.processingTimeMs).toBeDefined();
+      expect(typeof result.processingTimeMs).toBe("number");
+
+      // Verify processingTimeMs is approximately correct (within 100ms of expected)
+      // This accounts for test execution overhead
+      expect(result.processingTimeMs).toBeGreaterThanOrEqual(
+        processingDelay - 100,
+      );
+      expect(result.processingTimeMs).toBeLessThanOrEqual(
+        processingDelay + 200,
+      );
+
+      // Verify download time is NOT included (download happens after processing completes)
+      // Processing time should be approximately the delay we set, not including download
+      const totalElapsed = Date.now() - shutterPressTime;
+      expect(result.processingTimeMs).toBeLessThan(totalElapsed);
     });
   });
 

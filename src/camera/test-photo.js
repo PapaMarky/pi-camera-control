@@ -186,6 +186,9 @@ export class TestPhotoService {
         PHOTO_TIMEOUT_MS,
       );
 
+      // Capture timestamp RIGHT BEFORE shutter button press
+      const shutterStartTime = Date.now();
+
       logger.debug("Pressing shutter button");
       await controller.client.post(
         `${controller.baseUrl}/ccapi/ver100/shooting/control/shutterbutton`,
@@ -195,7 +198,14 @@ export class TestPhotoService {
       logger.debug("Waiting for photo completion event");
       const photoPath = await photoCompletionPromise;
 
-      logger.info("Photo completion event received", { photoPath });
+      // Capture timestamp RIGHT AFTER addedcontents event received
+      const processingEndTime = Date.now();
+      const processingTimeMs = processingEndTime - shutterStartTime;
+
+      logger.info("Photo completion event received", {
+        photoPath,
+        processingTimeMs,
+      });
 
       // Step 7: Download photo from CCAPI with retry for camera busy
       // Camera may need time to finalize file after reporting it's ready
@@ -281,6 +291,7 @@ export class TestPhotoService {
         filename,
         timestamp,
         cameraPath, // Original path on camera
+        processingTimeMs, // Time from shutterbutton press to addedcontents event
         exif: {
           ISO: exif?.ISO,
           ExposureTime: exif?.ExposureTime,
@@ -300,6 +311,7 @@ export class TestPhotoService {
         photoId,
         filename,
         size: photoData.length,
+        processingTimeMs: `${processingTimeMs}ms`,
         elapsed: `${elapsed}ms`,
       });
 

@@ -563,6 +563,25 @@ class TestShotUI {
   }
 
   /**
+   * Format processing time for display
+   * @param {number} ms - Processing time in milliseconds
+   * @returns {string|null} Formatted time (e.g., "2.3s" or "450ms") or null if invalid
+   */
+  formatProcessingTime(ms) {
+    if (ms === undefined || ms === null || ms < 0) {
+      return null;
+    }
+
+    if (ms >= 1000) {
+      // Display as seconds with 1 decimal place
+      return `${(ms / 1000).toFixed(1)}s`;
+    } else {
+      // Display as milliseconds
+      return `${Math.round(ms)}ms`;
+    }
+  }
+
+  /**
    * Render the test photo gallery
    */
   renderTestPhotoGallery() {
@@ -592,6 +611,14 @@ class TestShotUI {
         const exif = photo.exif || {};
         const exifDisplay = this.formatExif(exif);
 
+        // Format processing time for display
+        const processingTime = this.formatProcessingTime(
+          photo.processingTimeMs,
+        );
+        const processingTimeDisplay = processingTime
+          ? ` (${processingTime})`
+          : "";
+
         return `
         <div class="test-photo-card" style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
           <img src="${photo.url}/file"
@@ -602,7 +629,7 @@ class TestShotUI {
           <!-- EXIF Metadata -->
           <div class="exif-metadata" data-exif style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0,0,0,0.05); border-radius: 4px; font-size: 0.875rem;">
             <div style="font-weight: 600; margin-bottom: 0.5rem;">Details</div>
-            ${photo.cameraPath ? `<div style="margin-bottom: 0.5rem;"><strong>${photo.cameraPath}</strong></div>` : ""}
+            ${photo.cameraPath ? `<div style="margin-bottom: 0.5rem;"><strong>${photo.cameraPath}${processingTimeDisplay}</strong></div>` : ""}
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem;">
               ${exifDisplay}
             </div>
