@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 // import cron from 'node-cron'; // Unused import - TODO: implement scheduling features
 import { logger } from "../utils/logger.js";
 import { toFilenameFormat } from "../utils/datetime.js";
+import { waitForPhotoComplete } from "../utils/event-polling.js";
 
 /**
  * Enhanced Timelapse Session Class
@@ -61,6 +62,11 @@ export class TimelapseSession extends EventEmitter {
       shotsFailed: 0,
       currentShot: 0,
       errors: [],
+      overtimeShots: 0, // Count of shots exceeding interval
+      totalOvertimeSeconds: 0, // Cumulative overtime
+      maxOvertimeSeconds: 0, // Worst case overtime
+      lastShotDuration: 0, // Duration of most recent shot in seconds
+      totalShotDurationSeconds: 0, // Total time spent on all successful shots
     };
 
     // Session control
@@ -219,6 +225,11 @@ export class TimelapseSession extends EventEmitter {
       shotsFailed: 0,
       currentShot: 0,
       errors: [],
+      overtimeShots: 0,
+      totalOvertimeSeconds: 0,
+      maxOvertimeSeconds: 0,
+      lastShotDuration: 0,
+      totalShotDurationSeconds: 0,
     };
 
     // Recalculate totalShots based on actual start time if using stopTime
@@ -420,7 +431,7 @@ export class TimelapseSession extends EventEmitter {
   }
 
   /**
-   * Take a single shot
+   * Take a single shot with event polling integration
    */
   async takeShot() {
     if (this.shouldStop || this.state !== "running") {
@@ -435,12 +446,68 @@ export class TimelapseSession extends EventEmitter {
       title: this.title,
     });
 
+    const shotStartTime = Date.now();
+
     try {
       const cameraController = await this.getCurrentCameraController();
-      await cameraController.takePhoto();
 
+      // Start event polling BEFORE pressing shutter (race condition prevention)
+      // Calculate timeout: interval + 30s margin for long exposures
+      const timeoutMs = (this.options.interval + 30) * 1000;
+
+      // Start event polling and take photo concurrently
+      // Event polling will wait for addedcontents event
+      const [filePath] = await Promise.all([
+        waitForPhotoComplete(cameraController, timeoutMs),
+        cameraController.takePhoto(),
+      ]);
+
+      // Calculate shot duration
+      const shotEndTime = Date.now();
+      const shotDuration = (shotEndTime - shotStartTime) / 1000; // Convert to seconds
+
+      // Update stats
       this.stats.shotsTaken++;
       this.stats.shotsSuccessful++;
+      this.stats.lastShotDuration = shotDuration;
+      this.stats.totalShotDurationSeconds += shotDuration;
+
+      // Detect overtime
+      if (shotDuration > this.options.interval) {
+        const overtime = shotDuration - this.options.interval;
+        this.stats.overtimeShots++;
+        this.stats.totalOvertimeSeconds += overtime;
+
+        // Update max overtime if this is the worst case
+        if (overtime > this.stats.maxOvertimeSeconds) {
+          this.stats.maxOvertimeSeconds = overtime;
+        }
+
+        // Log warning about overtime
+        logger.warn(
+          `Shot ${shotNumber} took ${shotDuration.toFixed(1)}s (${overtime.toFixed(1)}s over ${this.options.interval}s interval)`,
+          {
+            sessionId: this.id,
+            title: this.title,
+            shotNumber,
+            interval: this.options.interval,
+            shotDuration,
+            overtime,
+          },
+        );
+
+        // Emit photo_overtime event
+        this.emit("photo_overtime", {
+          sessionId: this.id,
+          title: this.title,
+          shotNumber,
+          interval: this.options.interval,
+          shotDuration,
+          overtime,
+          filePath,
+          message: `Shot ${shotNumber} took ${shotDuration.toFixed(1)}s (${overtime.toFixed(1)}s over ${this.options.interval}s interval)`,
+        });
+      }
 
       // Immediately update nextShotTime for the UI
       // After shot N, the next shot (N+1) will be at startTime + (N * interval)
@@ -454,6 +521,7 @@ export class TimelapseSession extends EventEmitter {
         title: this.title,
         shotNumber,
         totalTaken: this.stats.shotsTaken,
+        duration: shotDuration.toFixed(1),
       });
 
       const photoData = {
@@ -462,6 +530,8 @@ export class TimelapseSession extends EventEmitter {
         shotNumber,
         success: true,
         timestamp: new Date().toISOString(),
+        filePath,
+        duration: shotDuration,
         stats: { ...this.stats },
       };
 
@@ -601,6 +671,11 @@ export class TimelapseSession extends EventEmitter {
         ? this.stats.shotsSuccessful / this.stats.shotsTaken
         : 1;
 
+    const averageShotDuration =
+      this.stats.shotsSuccessful > 0
+        ? this.stats.totalShotDurationSeconds / this.stats.shotsSuccessful
+        : 0;
+
     return {
       // Session identity
       sessionId: this.id,
@@ -622,6 +697,7 @@ export class TimelapseSession extends EventEmitter {
       estimatedEndTime,
       nextShotTime: this.nextShotTime,
       successRate,
+      averageShotDuration,
     };
   }
 

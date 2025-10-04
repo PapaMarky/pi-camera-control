@@ -143,6 +143,9 @@ export function createWebSocketHandler(
         uptime: process.uptime(), // Add system uptime to power data
       },
       network: networkStatus,
+      intervalometer: server.activeIntervalometerSession
+        ? server.activeIntervalometerSession.getStatus()
+        : null,
     };
 
     logger.debug(
@@ -818,6 +821,17 @@ export function createWebSocketHandler(
         logger.info("Photo failed event received, broadcasting:", errorData);
         broadcastEvent("intervalometer_error", errorData);
       });
+
+      server.activeIntervalometerSession.on(
+        "photo_overtime",
+        (overtimeData) => {
+          logger.warn(
+            "Photo overtime event received, broadcasting:",
+            overtimeData,
+          );
+          broadcastTimelapseEvent("photo_overtime", overtimeData);
+        },
+      );
 
       server.activeIntervalometerSession.on("completed", (completionData) => {
         logger.info(

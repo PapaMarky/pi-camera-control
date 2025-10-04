@@ -640,6 +640,66 @@
                   <span class="stat-label">Next Shot:</span>
                   <span id="next-shot-countdown">-</span>
                 </div>
+                <div
+                  class="stat-item overtime-indicator"
+                  id="overtime-stats"
+                  style="display: none"
+                  role="status"
+                  aria-live="polite"
+                  aria-label="Overtime shots count"
+                >
+                  <span class="stat-label">Overtime Shots:</span>
+                  <span
+                    id="overtime-count"
+                    aria-label="Number of shots that exceeded the interval"
+                    >0</span
+                  >
+                </div>
+                <div
+                  class="stat-item overtime-indicator"
+                  id="max-overtime-stats"
+                  style="display: none"
+                  role="status"
+                  aria-live="polite"
+                  aria-label="Maximum overtime duration"
+                >
+                  <span class="stat-label">Max Overtime:</span>
+                  <span
+                    id="max-overtime"
+                    aria-label="Longest time a shot exceeded the interval"
+                    >0s</span
+                  >
+                </div>
+                <div
+                  class="stat-item"
+                  id="last-shot-duration-stats"
+                  style="display: none"
+                  role="status"
+                  aria-live="polite"
+                  aria-label="Last shot duration"
+                >
+                  <span class="stat-label">Last Shot:</span>
+                  <span
+                    id="last-shot-duration"
+                    aria-label="Duration of the most recent shot"
+                    >0s</span
+                  >
+                </div>
+                <div
+                  class="stat-item"
+                  id="avg-shot-duration-stats"
+                  style="display: none"
+                  role="status"
+                  aria-live="polite"
+                  aria-label="Average shot duration"
+                >
+                  <span class="stat-label">Avg Time/Shot:</span>
+                  <span
+                    id="avg-shot-duration"
+                    aria-label="Average time per shot in the session"
+                    >0s</span
+                  >
+                </div>
               </div>
 
               <div class="progress-bar">

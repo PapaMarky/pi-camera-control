@@ -11,12 +11,15 @@ The Pi Camera Control system provides a comprehensive REST API and WebSocket int
 ### Camera Control
 
 #### Get Camera Status
+
 ```http
 GET /api/camera/status
 ```
+
 Returns current camera connection status and basic information.
 
 **Response:**
+
 ```json
 {
   "connected": true,
@@ -29,12 +32,15 @@ Returns current camera connection status and basic information.
 ```
 
 #### Get Camera Settings
+
 ```http
 GET /api/camera/settings
 ```
+
 Retrieves current camera settings via CCAPI.
 
 **Response:**
+
 ```json
 {
   "av": { "value": "5.6", "available": ["1.4", "2.8", "5.6", "8.0"] },
@@ -44,12 +50,15 @@ Retrieves current camera settings via CCAPI.
 ```
 
 #### Get Camera Battery
+
 ```http
 GET /api/camera/battery
 ```
+
 Returns camera battery status and information.
 
 **Response:**
+
 ```json
 {
   "batterylist": [
@@ -67,12 +76,15 @@ Returns camera battery status and information.
 **Note:** Format matches Canon CCAPI v1.40 specification. The `level` field is returned as a string, not a number. Additional fields include `position` (camera location), `kind` (battery type), and standard `quality` values ("bad", "normal", "good", "unknown").
 
 #### Take Photo
+
 ```http
 POST /api/camera/photo
 ```
+
 Triggers single photo capture.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -83,12 +95,15 @@ Triggers single photo capture.
 #### Test Photo Capture
 
 ##### Capture Test Photo
+
 ```http
 POST /api/camera/photos/test
 ```
+
 Captures a test photo with EXIF metadata extraction. Temporarily overrides camera quality to smallest setting for faster capture, then restores original settings.
 
 **Workflow:**
+
 1. Saves current quality settings
 2. Sets quality to smallest available (e.g., small_fine)
 3. Triggers shutter with autofocus
@@ -99,6 +114,7 @@ Captures a test photo with EXIF metadata extraction. Temporarily overrides camer
 8. Saves photo with timestamped filename: `YYYYMMDD_HHMMSS_<original>.jpg`
 
 **Response:**
+
 ```json
 {
   "id": 1,
@@ -119,17 +135,21 @@ Captures a test photo with EXIF metadata extraction. Temporarily overrides camer
 ```
 
 **Error Responses:**
+
 - `503 CAMERA_OFFLINE` - Camera not connected
 - `500 PHOTO_FAILED` - Capture failed (timeout, camera busy, etc.)
 - `500 PHOTO_FAILED` - Photo capture already in progress
 
 ##### List Test Photos
+
 ```http
 GET /api/camera/photos/test
 ```
+
 Returns list of all captured test photos.
 
 **Response:**
+
 ```json
 {
   "photos": [
@@ -153,36 +173,45 @@ Returns list of all captured test photos.
 ```
 
 ##### Get Test Photo Metadata
+
 ```http
 GET /api/camera/photos/test/:id
 ```
+
 Returns metadata for a specific test photo.
 
 **Response:** Same as capture response
 
 **Error Responses:**
+
 - `400 INVALID_PARAMETER` - Invalid photo ID
 - `404 SESSION_NOT_FOUND` - Photo not found
 
 ##### Download Test Photo File
+
 ```http
 GET /api/camera/photos/test/:id/file
 ```
+
 Serves the actual JPEG image file.
 
 **Response:** Binary JPEG data with appropriate Content-Type header
 
 **Error Responses:**
+
 - `400 INVALID_PARAMETER` - Invalid photo ID
 - `404 SESSION_NOT_FOUND` - Photo or file not found
 
 ##### Delete Test Photo
+
 ```http
 DELETE /api/camera/photos/test/:id
 ```
+
 Deletes a test photo and its file from disk.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -192,16 +221,20 @@ Deletes a test photo and its file from disk.
 ```
 
 **Error Responses:**
+
 - `400 INVALID_PARAMETER` - Invalid photo ID
 - `404 SESSION_NOT_FOUND` - Photo not found
 
 #### Manual Reconnect
+
 ```http
 POST /api/camera/reconnect
 ```
+
 Triggers manual camera reconnection attempt.
 
 #### Configure Camera
+
 ```http
 POST /api/camera/configure
 Content-Type: application/json
@@ -211,17 +244,21 @@ Content-Type: application/json
   "port": "443"
 }
 ```
+
 Updates camera IP and port configuration.
 
 #### Debug Endpoints
+
 ```http
 GET /api/camera/debug/endpoints
 ```
+
 Returns available CCAPI endpoints for debugging.
 
 ### Intervalometer Control
 
 #### Start Intervalometer
+
 ```http
 POST /api/intervalometer/start
 Content-Type: application/json
@@ -236,6 +273,7 @@ Content-Type: application/json
 ```
 
 **Parameters:**
+
 - `interval` (number, required): Seconds between shots, must be ≥ 5
 - `stopCondition` (string, required): Determines when the session stops
   - `"unlimited"`: Run until manually stopped
@@ -246,6 +284,7 @@ Content-Type: application/json
 - `title` (string, optional): Custom session title. Auto-generated if omitted.
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -262,6 +301,7 @@ Content-Type: application/json
 ```
 
 **Response (Error):**
+
 ```json
 {
   "error": {
@@ -278,16 +318,19 @@ Content-Type: application/json
 ```
 
 #### Stop Intervalometer
+
 ```http
 POST /api/intervalometer/stop
 ```
 
 #### Get Intervalometer Status
+
 ```http
 GET /api/intervalometer/status
 ```
 
 **Response:**
+
 ```json
 {
   "running": true,
@@ -298,16 +341,41 @@ GET /api/intervalometer/status
     "shotsSuccessful": 24,
     "shotsFailed": 1,
     "currentShot": 26,
-    "nextShotTime": "2024-01-01T20:12:30.000Z"
+    "nextShotTime": "2024-01-01T20:12:30.000Z",
+    "overtimeShots": 3,
+    "totalOvertimeSeconds": 45.7,
+    "maxOvertimeSeconds": 18.2,
+    "lastShotDuration": 48.3,
+    "totalShotDurationSeconds": 1152.4
   },
   "options": {
     "interval": 30,
     "totalShots": 100
-  }
+  },
+  "averageShotDuration": 48.0
 }
 ```
 
+**Stats Fields:**
+
+- `startTime` - ISO timestamp when session started
+- `shotsTaken` - Total shots attempted
+- `shotsSuccessful` - Successful captures
+- `shotsFailed` - Failed captures
+- `currentShot` - Current shot number
+- `nextShotTime` - ISO timestamp for next scheduled shot
+- `overtimeShots` - Count of photos exceeding interval duration
+- `totalOvertimeSeconds` - Cumulative overtime across all shots
+- `maxOvertimeSeconds` - Worst case overtime from any single shot
+- `lastShotDuration` - Duration of most recent shot in seconds
+- `totalShotDurationSeconds` - Sum of all shot durations (used to calculate average)
+
+**Additional Response Fields:**
+
+- `averageShotDuration` - Average duration per shot in seconds (totalShotDurationSeconds / shotsSuccessful)
+
 **Response when inactive:**
+
 ```json
 {
   "running": false,
@@ -320,16 +388,19 @@ GET /api/intervalometer/status
 ### Timelapse Reports Management
 
 #### Get All Reports
+
 ```http
 GET /api/timelapse/reports
 ```
 
 #### Get Specific Report
+
 ```http
 GET /api/timelapse/reports/:id
 ```
 
 #### Update Report Title
+
 ```http
 PUT /api/timelapse/reports/:id/title
 Content-Type: application/json
@@ -340,11 +411,13 @@ Content-Type: application/json
 ```
 
 #### Delete Report
+
 ```http
 DELETE /api/timelapse/reports/:id
 ```
 
 #### Save Session as Report
+
 ```http
 POST /api/timelapse/sessions/:id/save
 Content-Type: application/json
@@ -355,6 +428,7 @@ Content-Type: application/json
 ```
 
 #### Discard Session
+
 ```http
 POST /api/timelapse/sessions/:id/discard
 ```
@@ -362,11 +436,13 @@ POST /api/timelapse/sessions/:id/discard
 ### Network Management
 
 #### Get Network Status
+
 ```http
 GET /api/network/status
 ```
 
 **Response:**
+
 ```json
 {
   "interfaces": {
@@ -391,6 +467,7 @@ GET /api/network/status
 ```
 
 #### WiFi Operations
+
 ```http
 GET /api/network/wifi/scan?refresh=true
 POST /api/network/wifi/connect
@@ -402,6 +479,7 @@ GET /api/network/wifi/enabled
 ```
 
 #### Access Point Configuration
+
 ```http
 POST /api/network/accesspoint/configure
 Content-Type: application/json
@@ -415,6 +493,7 @@ Content-Type: application/json
 ```
 
 #### WiFi Country Management
+
 ```http
 GET /api/network/wifi/country
 POST /api/network/wifi/country
@@ -424,26 +503,31 @@ GET /api/network/wifi/countries
 ### Camera Discovery
 
 #### Get Discovery Status
+
 ```http
 GET /api/discovery/status
 ```
 
 #### Get Discovered Cameras
+
 ```http
 GET /api/discovery/cameras
 ```
 
 #### Manual Camera Scan
+
 ```http
 POST /api/discovery/scan
 ```
 
 #### Set Primary Camera
+
 ```http
 POST /api/discovery/primary/:uuid
 ```
 
 #### Connect to IP
+
 ```http
 POST /api/discovery/connect
 Content-Type: application/json
@@ -457,12 +541,15 @@ Content-Type: application/json
 ### System Management
 
 #### System Time
+
 ```http
 GET /api/system/time
 ```
+
 Returns current system time and timezone.
 
 **Response:**
+
 ```json
 {
   "timestamp": "2024-01-01T12:00:00.000Z",
@@ -480,17 +567,21 @@ Content-Type: application/json
   "timezone": "America/Los_Angeles"
 }
 ```
+
 Sets system time manually.
 
 ### Time Synchronization
 
 #### Get Time Sync Status
+
 ```http
 GET /api/timesync/status
 ```
+
 Returns current time synchronization status.
 
 **Response:**
+
 ```json
 {
   "isSynchronized": true,
@@ -502,12 +593,15 @@ Returns current time synchronization status.
 ```
 
 #### Sync Camera Time
+
 ```http
 POST /api/timesync/camera
 ```
+
 Synchronizes camera time with system time.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -518,11 +612,13 @@ Synchronizes camera time with system time.
 ```
 
 #### Power Status
+
 ```http
 GET /api/system/power
 ```
 
 **Response:**
+
 ```json
 {
   "isRaspberryPi": true,
@@ -541,16 +637,19 @@ GET /api/system/power
 ```
 
 #### System Status
+
 ```http
 GET /api/system/status
 ```
 
 ### Health Check
+
 ```http
 GET /health
 ```
 
 **Response:**
+
 ```json
 {
   "status": "ok",
@@ -643,6 +742,7 @@ graph LR
 #### Client to Server Messages
 
 ##### Take Photo
+
 ```json
 {
   "type": "take_photo",
@@ -651,6 +751,7 @@ graph LR
 ```
 
 ##### Start Intervalometer
+
 ```json
 {
   "type": "start_intervalometer_with_title",
@@ -664,6 +765,7 @@ graph LR
 ```
 
 ##### Network Operations
+
 ```json
 {
   "type": "network_connect",
@@ -675,6 +777,7 @@ graph LR
 ```
 
 ##### Status Request
+
 ```json
 {
   "type": "get_status",
@@ -685,6 +788,7 @@ graph LR
 #### Server to Client Messages
 
 ##### Welcome Message
+
 ```json
 {
   "type": "welcome",
@@ -722,6 +826,7 @@ graph LR
 ```
 
 ##### Status Updates (Periodic)
+
 ```json
 {
   "type": "status_update",
@@ -751,6 +856,7 @@ graph LR
 ```
 
 ##### Event Notifications
+
 ```json
 {
   "type": "event",
@@ -764,6 +870,7 @@ graph LR
 ```
 
 ##### Discovery Events
+
 ```json
 {
   "type": "discovery_event",
@@ -778,6 +885,7 @@ graph LR
 ```
 
 ##### Network Events
+
 ```json
 {
   "type": "network_event",
@@ -790,6 +898,7 @@ graph LR
 ```
 
 ##### Timelapse Events
+
 ```json
 {
   "type": "timelapse_event",
@@ -803,7 +912,48 @@ graph LR
 }
 ```
 
+##### Photo Overtime Event
+
+Emitted when a photo takes longer than the configured interval (e.g., long exposures exceeding interval time).
+
+```json
+{
+  "type": "timelapse_event",
+  "eventType": "photo_overtime",
+  "timestamp": "2024-01-01T12:00:00.000Z",
+  "data": {
+    "sessionId": "session-uuid",
+    "title": "Night Sky Timelapse",
+    "shotNumber": 25,
+    "interval": 60,
+    "shotDuration": 85.3,
+    "overtime": 25.3,
+    "filePath": "/ccapi/ver110/contents/sd/100CANON/IMG_0025.JPG",
+    "message": "Shot 25 took 85.3s (25.3s over 60s interval)"
+  }
+}
+```
+
+**Fields:**
+
+- `sessionId` - UUID of the timelapse session
+- `title` - User-provided or auto-generated session title
+- `shotNumber` - Sequential shot number in session (1-based)
+- `interval` - Configured interval in seconds
+- `shotDuration` - Actual time to complete photo in seconds
+- `overtime` - Seconds over the configured interval
+- `filePath` - CCAPI path to captured image file
+- `message` - Human-readable description
+
+**Use Cases:**
+
+- Warn user when long exposures exceed interval
+- Track sessions that may have timing issues
+- Help diagnose interval configuration problems
+- Session continues running - overtime is informational only
+
 ##### Error Messages
+
 ```json
 {
   "type": "error",
@@ -817,16 +967,19 @@ graph LR
 ### WebSocket Client Message Types
 
 #### Camera Operations
+
 - `take_photo` - Trigger single photo
 - `get_camera_settings` - Request camera settings
 - `validate_interval` - Validate intervalometer settings
 
 #### Intervalometer Operations
+
 - `start_intervalometer` - Legacy intervalometer start
 - `start_intervalometer_with_title` - Enhanced with title support
 - `stop_intervalometer` - Stop active session
 
 #### Network Operations
+
 - `network_scan` - Scan for WiFi networks
 - `network_connect` - Connect to WiFi network
 - `network_disconnect` - Disconnect from WiFi
@@ -834,6 +987,7 @@ graph LR
 - `wifi_disable` - Disable WiFi interface
 
 #### Timelapse Management
+
 - `get_timelapse_reports` - List all reports
 - `get_timelapse_report` - Get specific report
 - `update_report_title` - Update report title
@@ -843,23 +997,27 @@ graph LR
 - `get_unsaved_session` - Check for unsaved sessions
 
 #### Time Synchronization
+
 - `time-sync-response` - Client time sync response
 - `gps-response` - GPS data from client
 - `manual-time-sync` - Manual time setting
 - `get-time-sync-status` - Request sync status
 
 #### Status and Control
+
 - `get_status` - Request current status
 - `ping` - Connection test
 
 ### Periodic Broadcasting
 
 #### Status Updates
+
 - **Frequency**: Every 10 seconds
 - **Content**: Complete system status
 - **Recipients**: All connected clients
 
 #### Event Broadcasting
+
 - **Triggers**: State changes, user actions, system events
 - **Types**: Discovery, network, timelapse, camera events
 - **Real-time**: Immediate propagation to all clients
@@ -867,6 +1025,7 @@ graph LR
 ### Connection Management
 
 #### Client Tracking
+
 ```javascript
 // From src/websocket/handler.js:4-5
 const clients = new Set();
@@ -874,6 +1033,7 @@ const clients = new Set();
 ```
 
 #### Connection Lifecycle
+
 1. **Connection**: Welcome message with initial status
 2. **Active**: Bidirectional message exchange
 3. **Monitoring**: Periodic status broadcasts
@@ -882,12 +1042,14 @@ const clients = new Set();
 ### Error Handling
 
 #### Client Errors
+
 - Invalid message format
 - Missing required parameters
 - Operation failures
 - Service unavailable
 
 #### Server Responses
+
 - Consistent error message format
 - HTTP-style status codes in responses
 - Detailed error descriptions
@@ -896,18 +1058,21 @@ const clients = new Set();
 ### Performance Considerations
 
 #### Message Optimization
+
 - JSON compression via middleware
 - Efficient serialization
 - Minimal payload sizes
 - Batched status updates
 
 #### Connection Efficiency
+
 - WebSocket keep-alive
 - Automatic reconnection support
 - Client connection limits
 - Memory cleanup for dead connections
 
 #### Real-time Performance
+
 - 10-second status broadcast interval
 - Immediate event propagation
 - Optimized event filtering
@@ -916,18 +1081,21 @@ const clients = new Set();
 ## Authentication and Security
 
 ### Network Security
+
 - Local network access only
 - No internet exposure by default
 - CORS configured for development
 - Helmet.js security headers
 
 ### WebSocket Security
+
 - Origin validation (configurable)
 - Message size limits
 - Rate limiting considerations
 - Connection timeout management
 
 ### Camera Communication
+
 - HTTPS for Canon CCAPI
 - Self-signed certificate acceptance
 - SSL verification disabled for cameras
@@ -936,12 +1104,14 @@ const clients = new Set();
 ## Rate Limiting and Throttling
 
 ### API Rate Limits
+
 - No explicit rate limiting currently
 - WebSocket connection limits
 - JSON payload size limits (10MB)
 - Timeout controls per operation
 
 ### Resource Protection
+
 - Camera operation serialization
 - Network operation queuing
 - Concurrent request management
@@ -952,6 +1122,7 @@ const clients = new Set();
 **Note**: The system currently uses multiple error response patterns. This is a known issue that needs standardization.
 
 ### Pattern 1: Standard Error Response
+
 ```json
 {
   "error": "Error description",
@@ -961,6 +1132,7 @@ const clients = new Set();
 ```
 
 ### Pattern 2: WebSocket Error Format
+
 ```json
 {
   "type": "error",
@@ -972,6 +1144,7 @@ const clients = new Set();
 ```
 
 ### Pattern 3: Operation Result Format
+
 ```json
 {
   "type": "operation_result",
@@ -982,6 +1155,7 @@ const clients = new Set();
 ```
 
 ### Pattern 4: Event-based Error
+
 ```json
 {
   "type": "event",
@@ -996,6 +1170,7 @@ const clients = new Set();
 ## Additional WebSocket Event Types
 
 ### Time Synchronization Events
+
 ```json
 {
   "type": "event",
@@ -1023,6 +1198,7 @@ const clients = new Set();
 ```
 
 ### Camera IP Change Events
+
 ```json
 {
   "type": "discovery_event",
@@ -1037,6 +1213,7 @@ const clients = new Set();
 ```
 
 ### Session Management Events
+
 ```json
 {
   "type": "timelapse_event",
@@ -1062,6 +1239,7 @@ const clients = new Set();
 ```
 
 #### Session Saved Event
+
 Broadcast when a timelapse session is saved as a report:
 
 ```json
@@ -1084,6 +1262,7 @@ Broadcast when a timelapse session is saved as a report:
 ```
 
 #### Session Discarded Event
+
 Broadcast when a timelapse session is discarded:
 
 ```json
@@ -1099,6 +1278,7 @@ Broadcast when a timelapse session is discarded:
 ```
 
 ### Activity Log Messages
+
 ```json
 {
   "type": "activity_log",
