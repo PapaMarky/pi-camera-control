@@ -17,11 +17,13 @@ This document describes the error recovery mechanisms implemented in the pi-came
 The system detects camera connection loss through network error codes:
 
 **Error Codes Monitored:**
+
 - `EHOSTUNREACH` - Camera network unreachable
 - `ECONNREFUSED` - Camera refused connection
 - `ETIMEDOUT` - Request to camera timed out
 
 **Detection Points:**
+
 - `getCameraSettings()` - src/camera/controller.js:202-207
 - `getDeviceInformation()` - src/camera/controller.js:247-252
 - `getCameraBattery()` - src/camera/controller.js:318-327
@@ -82,6 +84,7 @@ handleDisconnection(error) {
 ```
 
 **No Automatic Reconnection:**
+
 - System does NOT attempt automatic reconnection
 - User must manually reconnect via UI
 - This prevents repeated failed connection attempts
@@ -120,7 +123,9 @@ sequenceDiagram
 ```javascript
 // src/websocket/handler.js:290-302
 ws.on("close", (code, reason) => {
-  logger.info(`WebSocket client disconnected: ${clientId} (${code}: ${reason})`);
+  logger.info(
+    `WebSocket client disconnected: ${clientId} (${code}: ${reason})`,
+  );
   clients.delete(ws);
 
   // Clean up time sync tracking
@@ -133,12 +138,14 @@ ws.on("close", (code, reason) => {
 ```
 
 **Cleanup Steps:**
+
 1. Remove from active clients Set
 2. Clean up time sync tracking
 3. Remove from clientInfo Map
 4. Connection resources released
 
 **No Session Impact:**
+
 - Intervalometer sessions continue running
 - Camera remains connected
 - Status broadcasts continue (no clients to receive them)
@@ -151,6 +158,7 @@ ws.on("close", (code, reason) => {
 ### Session Error States
 
 Sessions can encounter errors during:
+
 - Photo capture failures
 - Camera communication timeouts
 - Long exposure interruptions
@@ -209,6 +217,7 @@ this.unsavedSession = {
 ```
 
 **Error Recovery Strategy:**
+
 1. **Non-Fatal Errors:** Session continues, errors logged in stats
 2. **Fatal Errors:** Session stops, marked as unsaved
 3. **Cross-Reboot Recovery:** Unsaved session detected on startup
@@ -219,6 +228,7 @@ this.unsavedSession = {
 ## 4. Session Interruption Recovery (System Crash/Reboot)
 
 **Note:** While session data IS persisted to disk, **catastrophic failure recovery is not a primary feature** of this hobbyist tool. The persistence mechanism exists to avoid data loss, but:
+
 - No automatic session resume
 - Requires user decision (save or discard)
 - Not extensively tested for all failure modes
@@ -269,16 +279,19 @@ sequenceDiagram
 ```
 
 **File Location:**
+
 ```
 data/timelapse-reports/unsaved-session.json
 ```
 
 **When Sessions Are Marked Unsaved:**
+
 1. Session stops (user-initiated stop)
 2. Session completes (normal completion)
 3. Session encounters error
 
 **Persistence Guarantees:**
+
 - ✅ Session metadata persisted (ID, title, timestamps)
 - ✅ Statistics persisted (shots taken, successful, failed)
 - ✅ Options persisted (interval, duration, etc.)
@@ -286,6 +299,7 @@ data/timelapse-reports/unsaved-session.json
 - ❌ In-progress shot NOT persisted (if crash during long exposure)
 
 **Recovery Limitations:**
+
 - If system crashes during photo capture, that photo may be incomplete
 - Photo count reflects completed photos only
 - Camera SD card has actual photos (may be more than logged count)
@@ -334,12 +348,14 @@ sequenceDiagram
 ```
 
 **Retry Strategy:**
+
 - No immediate retry within same shot
 - Next interval attempt is natural retry
 - Failed shots counted in statistics
 - Session continues (does not auto-stop on failures)
 
 **Connection Monitoring Pause:**
+
 ```javascript
 // src/camera/controller.js:584-594
 pauseConnectionMonitoring() {
@@ -356,6 +372,7 @@ resumeConnectionMonitoring() {
 ```
 
 **Why Pause Monitoring:**
+
 - Long exposures (30+ seconds) would trigger false disconnection
 - Photo operations have their own timeouts (30s for press, 15s for release)
 - Prevents duplicate error handling
@@ -369,16 +386,19 @@ resumeConnectionMonitoring() {
 The system handles documented Canon CCAPI error responses:
 
 **400 Bad Request:**
+
 ```json
 {
   "message": "Invalid parameter"
 }
 ```
+
 - Indicates malformed request
 - Logged with full error details
 - Operation fails, error returned to client
 
 **503 Service Unavailable:**
+
 ```json
 {
   "message": "Device busy"
@@ -386,6 +406,7 @@ The system handles documented Canon CCAPI error responses:
 ```
 
 **Common 503 Messages:**
+
 - "Device busy" - Camera temporarily unavailable
 - "During shooting or recording" - Photo in progress
 - "Mode not supported" - Wrong camera mode
@@ -393,6 +414,7 @@ The system handles documented Canon CCAPI error responses:
 - "Can not write to card" - SD card error
 
 **Error Logging:**
+
 ```javascript
 // src/camera/controller.js:361-373
 const statusCode = error.response?.status || "unknown";
@@ -400,7 +422,7 @@ const apiMessage = error.response?.data?.message || error.message;
 const endpoint = this.shutterEndpoint;
 
 logger.error(
-  `Shutter press failed - Status: ${statusCode}, API Message: "${apiMessage}", Endpoint: ${endpoint}`
+  `Shutter press failed - Status: ${statusCode}, API Message: "${apiMessage}", Endpoint: ${endpoint}`,
 );
 
 // Log full response data for debugging if available
@@ -414,6 +436,7 @@ if (error.response?.data) {
 ## 7. What Does NOT Exist
 
 **No Stuck Shutter Recovery:**
+
 - There is NO automatic stuck shutter detection
 - There is NO stuck shutter release mechanism
 - The code comment "Release any stuck shutter first" is misleading
@@ -423,11 +446,13 @@ if (error.response?.data) {
 - This ensures clean state, but is not "recovery"
 
 **No Automatic Camera Reconnection:**
+
 - System does not retry failed connections
 - User must manually reconnect via UI
 - This is intentional design decision
 
 **No Session Auto-Resume:**
+
 - Unsaved sessions require user decision
 - System does not automatically resume interrupted sessions
 - User must explicitly choose to save or discard
@@ -438,14 +463,14 @@ if (error.response?.data) {
 
 ### Recovery Mechanisms That Exist
 
-| Error Type | Detection | Recovery Strategy | User Action Required |
-|------------|-----------|-------------------|---------------------|
-| Camera connection loss | Network errors (ETIMEDOUT, etc.) | Mark disconnected, notify clients | Yes - Manual reconnect |
-| WebSocket client disconnect | Socket close/error events | Clean up resources, continue operation | No - Client can reconnect anytime |
-| Photo capture failure | Camera API errors | Log failure, continue session | No - Automatic retry next interval |
-| Session interruption | Crash/reboot | Persist to disk, detect on startup | Yes - Save or discard decision |
-| Network during operation | Timeout during photo | Count as failed shot, retry next interval | No - Automatic handling |
-| Canon API errors | 400/503 responses | Log with details, fail operation gracefully | Depends on error type |
+| Error Type                  | Detection                        | Recovery Strategy                           | User Action Required               |
+| --------------------------- | -------------------------------- | ------------------------------------------- | ---------------------------------- |
+| Camera connection loss      | Network errors (ETIMEDOUT, etc.) | Mark disconnected, notify clients           | Yes - Manual reconnect             |
+| WebSocket client disconnect | Socket close/error events        | Clean up resources, continue operation      | No - Client can reconnect anytime  |
+| Photo capture failure       | Camera API errors                | Log failure, continue session               | No - Automatic retry next interval |
+| Session interruption        | Crash/reboot                     | Persist to disk, detect on startup          | Yes - Save or discard decision     |
+| Network during operation    | Timeout during photo             | Count as failed shot, retry next interval   | No - Automatic handling            |
+| Canon API errors            | 400/503 responses                | Log with details, fail operation gracefully | Depends on error type              |
 
 ### Recovery Mechanisms That Don't Exist
 
@@ -458,6 +483,7 @@ if (error.response?.data) {
 ### Design Philosophy
 
 The system follows a **"fail gracefully, recover manually"** philosophy:
+
 - Errors are logged comprehensively
 - State is preserved when possible
 - Users are notified clearly
@@ -465,6 +491,7 @@ The system follows a **"fail gracefully, recover manually"** philosophy:
 - User retains control over recovery actions
 
 This approach prioritizes:
+
 1. **Data integrity** - Don't lose session data
 2. **User awareness** - Clear error messaging
 3. **System stability** - No retry loops or automatic reconnection storms
@@ -474,6 +501,7 @@ This approach prioritizes:
 
 **Last Updated:** 2025-09-29
 **Implementation Files:**
+
 - `src/camera/controller.js` - Camera connection error handling
 - `src/websocket/handler.js` - WebSocket lifecycle and cleanup
 - `src/intervalometer/state-manager.js` - Session persistence and recovery

@@ -18,17 +18,17 @@ class TimeSync {
    */
   registerHandlers() {
     // Listen for time sync requests
-    this.ws.on('time-sync-request', (data) => {
+    this.ws.on("time-sync-request", (data) => {
       this.handleTimeSyncRequest(data);
     });
 
     // Listen for GPS requests
-    this.ws.on('gps-request', (data) => {
+    this.ws.on("gps-request", (data) => {
       this.handleGPSRequest(data);
     });
 
     // Listen for sync status updates
-    this.ws.on('time-sync-status', (data) => {
+    this.ws.on("time-sync-status", (data) => {
       this.updateSyncStatus(data);
     });
   }
@@ -38,17 +38,17 @@ class TimeSync {
    */
   initializeUI() {
     // Add sync status indicator to the UI
-    const statusBar = document.querySelector('.status-bar');
+    const statusBar = document.querySelector(".status-bar");
     if (statusBar) {
-      const syncIndicator = document.createElement('div');
-      syncIndicator.className = 'sync-status-indicator';
+      const syncIndicator = document.createElement("div");
+      syncIndicator.className = "sync-status-indicator";
       syncIndicator.innerHTML = `
         <span class="sync-icon">🔄</span>
         <span class="sync-text">Time Sync</span>
         <span class="sync-status">--</span>
       `;
       statusBar.appendChild(syncIndicator);
-      this.syncStatusElement = syncIndicator.querySelector('.sync-status');
+      this.syncStatusElement = syncIndicator.querySelector(".sync-status");
     }
   }
 
@@ -56,7 +56,7 @@ class TimeSync {
    * Handle time sync request from server
    */
   handleTimeSyncRequest(data) {
-    console.log('Time sync requested by server');
+    console.log("Time sync requested by server");
 
     // Get current client time and timezone
     const clientTime = new Date().toISOString();
@@ -64,28 +64,28 @@ class TimeSync {
 
     // Prepare response
     const response = {
-      type: 'time-sync-response',
+      type: "time-sync-response",
       requestId: data.requestId,
       clientTime: clientTime,
-      timezone: timezone
+      timezone: timezone,
     };
 
     // Try to get GPS location if available
-    if ('geolocation' in navigator) {
+    if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           response.gps = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy
+            accuracy: position.coords.accuracy,
           };
           this.sendTimeSyncResponse(response);
         },
         (error) => {
-          console.log('GPS not available:', error.message);
+          console.log("GPS not available:", error.message);
           this.sendTimeSyncResponse(response);
         },
-        { timeout: 3000 }
+        { timeout: 3000 },
       );
     } else {
       this.sendTimeSyncResponse(response);
@@ -96,37 +96,37 @@ class TimeSync {
    * Send time sync response to server
    */
   sendTimeSyncResponse(response) {
-    this.ws.send('time-sync-response', response);
-    console.log('Time sync response sent:', response);
+    this.ws.send("time-sync-response", response);
+    console.log("Time sync response sent:", response);
   }
 
   /**
    * Handle GPS request from server
    */
   handleGPSRequest(data) {
-    if ('geolocation' in navigator) {
+    if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          this.ws.send('gps-response', {
+          this.ws.send("gps-response", {
             requestId: data.requestId,
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             accuracy: position.coords.accuracy,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           });
         },
         (error) => {
-          this.ws.send('gps-response', {
+          this.ws.send("gps-response", {
             requestId: data.requestId,
-            error: error.message
+            error: error.message,
           });
         },
-        { timeout: 5000, enableHighAccuracy: true }
+        { timeout: 5000, enableHighAccuracy: true },
       );
     } else {
-      this.ws.send('gps-response', {
+      this.ws.send("gps-response", {
         requestId: data.requestId,
-        error: 'Geolocation not supported'
+        error: "Geolocation not supported",
       });
     }
   }
@@ -139,21 +139,21 @@ class TimeSync {
 
     if (this.syncStatusElement) {
       if (status.piReliable) {
-        this.syncStatusElement.textContent = '✓';
-        this.syncStatusElement.className = 'sync-status sync-ok';
+        this.syncStatusElement.textContent = "✓";
+        this.syncStatusElement.className = "sync-status sync-ok";
         this.syncStatusElement.title = `Last sync: ${this.formatTime(status.lastPiSync)}`;
       } else {
-        this.syncStatusElement.textContent = '!';
-        this.syncStatusElement.className = 'sync-status sync-warning';
+        this.syncStatusElement.textContent = "!";
+        this.syncStatusElement.className = "sync-status sync-warning";
         this.syncStatusElement.title = status.lastPiSync
           ? `Last sync: ${this.formatTime(status.lastPiSync)} (expired)`
-          : 'No sync performed';
+          : "No sync performed";
       }
     }
 
     // Show notification if sync lost reliability
     if (this.lastSyncStatus?.piReliable && !status.piReliable) {
-      this.showNotification('Time sync reliability lost', 'warning');
+      this.showNotification("Time sync reliability lost", "warning");
     }
   }
 
@@ -161,22 +161,22 @@ class TimeSync {
    * Format time for display
    */
   formatTime(isoString) {
-    if (!isoString) return 'Never';
+    if (!isoString) return "Never";
     const date = new Date(isoString);
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);
 
-    if (diffMins < 1) return 'Just now';
+    if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins} min ago`;
-    if (diffMins < 1440) return `${Math.floor(diffMins/60)} hours ago`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)} hours ago`;
     return date.toLocaleString();
   }
 
   /**
    * Show notification
    */
-  showNotification(message, type = 'info') {
+  showNotification(message, type = "info") {
     // Use existing notification system if available
     if (window.showNotification) {
       window.showNotification(message, type);
@@ -189,17 +189,17 @@ class TimeSync {
    * Manually trigger time sync
    */
   manualSync() {
-    console.log('Manual time sync requested');
+    console.log("Manual time sync requested");
 
     const clientTime = new Date().toISOString();
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-    this.ws.send('manual-time-sync', {
+    this.ws.send("manual-time-sync", {
       clientTime: clientTime,
-      timezone: timezone
+      timezone: timezone,
     });
 
-    this.showNotification('Time sync requested', 'info');
+    this.showNotification("Time sync requested", "info");
   }
 
   /**

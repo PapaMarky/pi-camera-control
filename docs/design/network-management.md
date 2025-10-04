@@ -7,21 +7,27 @@ The network management system provides sophisticated dual WiFi interface capabil
 ## Architecture Components
 
 ### 1. NetworkStateManager (`src/network/state-manager.js`)
+
 High-level network state orchestration:
+
 - Centralized network state management
 - Access point lifecycle management
 - Interface state monitoring
 - Event-driven architecture for state changes
 
 ### 2. NetworkServiceManager (`src/network/service-manager.js`)
+
 Low-level NetworkManager operations:
+
 - Direct `nmcli` command execution
 - WiFi scanning and connection management
 - Service state monitoring (hostapd, dnsmasq)
 - Country code and regulatory management
 
 ### 3. NetworkConfigManager (`src/network/config-manager.js`)
+
 Configuration file management:
+
 - Access point configuration generation
 - DNS and DHCP settings
 - Security and encryption setup
@@ -66,6 +72,7 @@ stateDiagram-v2
 ## Dual WiFi Interface Architecture
 
 ### Interface Configuration
+
 - **ap0**: Virtual access point interface (192.168.4.x network)
 - **wlan0**: Physical WiFi client interface (external network connection)
 - **Simultaneous Operation**: Both interfaces active concurrently
@@ -73,12 +80,14 @@ stateDiagram-v2
 ### Network Modes
 
 #### 1. Access Point Only (Default)
+
 - **State**: Single interface mode with ap0 active
 - **Purpose**: Direct camera and client connections
 - **Network**: 192.168.4.1/24 with DHCP range 192.168.4.2-192.168.4.20
 - **Services**: hostapd, dnsmasq active
 
 #### 2. Dual Mode (WiFi Client + AP)
+
 - **State**: Both interfaces operational
 - **Purpose**: Internet connectivity while maintaining local access
 - **Routing**: Separate routing tables for each interface
@@ -91,13 +100,18 @@ The system uses **NetworkManager** instead of wpa_supplicant directly:
 ```javascript
 // From src/network/service-manager.js
 // WiFi connection via NetworkManager
-const result = await execAsync(`nmcli dev wifi connect "${ssid}" password "${password}"`);
+const result = await execAsync(
+  `nmcli dev wifi connect "${ssid}" password "${password}"`,
+);
 
 // Network scanning
-const { stdout } = await execAsync('nmcli -t -f IN-USE,SSID,MODE,CHAN,RATE,SIGNAL,BARS,SECURITY dev wifi list');
+const { stdout } = await execAsync(
+  "nmcli -t -f IN-USE,SSID,MODE,CHAN,RATE,SIGNAL,BARS,SECURITY dev wifi list",
+);
 ```
 
 ### Key Discovery: NetworkManager vs wpa_supplicant
+
 - **Root Cause**: The Pi uses NetworkManager, not wpa_supplicant directly
 - **raspi-config Failures**: Normal behavior since raspi-config expects wpa_supplicant management
 - **Solution**: All WiFi operations use `nmcli` commands instead of `wpa_cli`
@@ -105,6 +119,7 @@ const { stdout } = await execAsync('nmcli -t -f IN-USE,SSID,MODE,CHAN,RATE,SIGNA
 ## Network Service Management
 
 ### Service Dependencies
+
 ```mermaid
 graph TD
     NM[NetworkManager] --> WLAN0[wlan0 interface]
@@ -123,12 +138,15 @@ graph TD
 ```
 
 ### Service States
+
 Each service is monitored for active/inactive status:
+
 - **hostapd**: Access point daemon
 - **dnsmasq**: DHCP and DNS server
 - **wpa_supplicant@wlan0**: WiFi client authentication (managed by NetworkManager)
 
 ### Interface State Monitoring
+
 ```javascript
 // From src/network/state-manager.js:155-167
 async updateInterfaceStates() {
@@ -148,35 +166,42 @@ async updateInterfaceStates() {
 ## WiFi Operations
 
 ### Network Scanning
+
 ```javascript
 // WiFi network discovery with signal strength and security info
 const networks = await networkServiceManager.scanWiFiNetworks(forceRefresh);
 
 // Result format:
 [
-    {
-        ssid: "NetworkName",
-        signal: 75,
-        security: "WPA2",
-        channel: 6,
-        inUse: false
-    }
-]
+  {
+    ssid: "NetworkName",
+    signal: 75,
+    security: "WPA2",
+    channel: 6,
+    inUse: false,
+  },
+];
 ```
 
 ### Connection Management
+
 ```javascript
 // Connect to WiFi with automatic profile management
-const result = await networkServiceManager.connectToWiFi(ssid, password, priority);
+const result = await networkServiceManager.connectToWiFi(
+  ssid,
+  password,
+  priority,
+);
 
 // Connection verification with 5-second delay
 setTimeout(async () => {
-    const verified = await this.verifyConnection();
-    this.broadcastConnectionResult(verified);
+  const verified = await this.verifyConnection();
+  this.broadcastConnectionResult(verified);
 }, 5000);
 ```
 
 ### Connection Persistence
+
 - **Automatic**: NetworkManager persists connections across reboots
 - **Priority Management**: New connections get higher priority
 - **Conflict Resolution**: Removes duplicate SSID profiles before creating new connections
@@ -184,20 +209,22 @@ setTimeout(async () => {
 ## Access Point Configuration
 
 ### Default Configuration
+
 ```javascript
 // From access point setup
 const defaultConfig = {
-    ssid: 'Pi-Camera-Control',
-    passphrase: 'camera123',
-    channel: 7,
-    hidden: false,
-    interface: 'ap0',
-    network: '192.168.4.0/24',
-    dhcp_range: '192.168.4.2,192.168.4.20'
+  ssid: "Pi-Camera-Control",
+  passphrase: "camera123",
+  channel: 7,
+  hidden: false,
+  interface: "ap0",
+  network: "192.168.4.0/24",
+  dhcp_range: "192.168.4.2,192.168.4.20",
 };
 ```
 
 ### Configuration Management
+
 ```javascript
 // From src/network/state-manager.js:273-292
 async configureAccessPoint(config) {
@@ -218,6 +245,7 @@ async configureAccessPoint(config) {
 ```
 
 ### Security Settings
+
 - **Encryption**: WPA2-PSK by default
 - **Minimum Passphrase**: 8 characters required
 - **Channel Selection**: Configurable (default channel 7)
@@ -226,11 +254,13 @@ async configureAccessPoint(config) {
 ## Network State Monitoring
 
 ### Real-time Updates
+
 - **Polling Interval**: 10 seconds for interface/service states
 - **Event-driven**: Immediate updates on state changes
 - **WebSocket Broadcasting**: Real-time client notifications
 
 ### State Caching
+
 ```javascript
 // NetworkStateManager maintains current state
 networkState: {
@@ -241,31 +271,35 @@ networkState: {
 ```
 
 ### Force Refresh Capability
+
 ```javascript
 // API supports force refresh for immediate state updates
-const status = await networkManager.getNetworkStatus(forceRefresh = true);
+const status = await networkManager.getNetworkStatus((forceRefresh = true));
 ```
 
 ## Event-Driven Architecture
 
 ### Event Types
+
 - **Interface Events**: State changes for ap0/wlan0
 - **Service Events**: hostapd/dnsmasq status changes
 - **Connection Events**: WiFi connect/disconnect
 - **Configuration Events**: Access point reconfiguration
 
 ### Event Broadcasting
+
 ```javascript
 // WebSocket events for real-time UI updates
-this.emit('serviceStateChanged', { service, state });
-this.emit('interfaceStateChanged', { interface, state });
-this.emit('wifiConnectionStarted', { ssid });
-this.emit('wifiConnectionFailed', { ssid, error });
+this.emit("serviceStateChanged", { service, state });
+this.emit("interfaceStateChanged", { interface, state });
+this.emit("wifiConnectionStarted", { ssid });
+this.emit("wifiConnectionFailed", { ssid, error });
 ```
 
 ## NetworkManager Command Reference
 
 ### Essential Commands
+
 ```bash
 # Check active connections
 nmcli -t -f NAME,TYPE,DEVICE con show --active
@@ -288,6 +322,7 @@ nmcli radio wifi on/off
 ```
 
 ### Service Management
+
 ```bash
 # Access point services
 sudo systemctl start hostapd
@@ -302,18 +337,21 @@ sudo ip addr show ap0
 ## Error Handling and Recovery
 
 ### Connection Failures
+
 1. **Authentication Errors**: Invalid credentials handling
 2. **Network Unreachable**: Timeout and retry logic
 3. **Interface Issues**: Interface reset and recovery
 4. **Service Failures**: Automatic service restart
 
 ### Fallback Strategies
+
 - **NetworkManager Fallback**: Direct `ip` commands if nmcli fails
 - **Service Recovery**: Automatic service restart on failure
 - **Configuration Recovery**: Backup and restore of working configurations
 - **Interface Recovery**: Physical interface reset procedures
 
 ### Graceful Degradation
+
 - **AP-Only Mode**: Fall back to access point when WiFi fails
 - **Partial Functionality**: Continue operation with limited connectivity
 - **User Notification**: Clear error messages via WebSocket events
@@ -321,12 +359,14 @@ sudo ip addr show ap0
 ## Performance Optimizations
 
 ### Connection Efficiency
+
 - **Profile Reuse**: Leverage NetworkManager connection profiles
 - **Parallel Operations**: Simultaneous interface management
 - **Optimized Scanning**: Configurable scan intervals
 - **Connection Caching**: State persistence across operations
 
 ### Resource Management
+
 - **Memory Efficiency**: Cleanup of temporary profiles
 - **CPU Optimization**: Efficient polling intervals
 - **Network Optimization**: Minimal broadcast traffic
@@ -334,6 +374,7 @@ sudo ip addr show ap0
 ## API Integration
 
 ### REST Endpoints
+
 - `GET /api/network/status` - Complete network status with force refresh option
 - `GET /api/network/wifi/scan` - Available WiFi networks with signal strength
 - `POST /api/network/wifi/connect` - Connect to WiFi with automatic verification
@@ -345,6 +386,7 @@ sudo ip addr show ap0
 - `GET /api/network/wifi/countries` - Get available country codes
 
 ### WebSocket Events
+
 - `network_service_changed` - Service state updates during transitions
 - `network_interface_changed` - Interface state updates with detailed info
 - `wifi_connection_started` - Connection attempt initiated with verification delay
@@ -355,6 +397,7 @@ sudo ip addr show ap0
 - `network_transition_complete` - Network mode transition finished
 
 ### Network Status Response
+
 ```javascript
 {
     interfaces: {
@@ -384,12 +427,14 @@ sudo ip addr show ap0
 ## Troubleshooting
 
 ### Common Issues
+
 1. **raspi-config WiFi Issues**: Normal - system uses NetworkManager
 2. **Connection Verification**: Check for `WiFi connection verified successfully` logs
 3. **Signal Strength**: UI displays percentage, stored as dBm in NetworkManager
 4. **Network Priorities**: New connections automatically get higher priority
 
 ### Debugging Commands
+
 ```bash
 # Network state inspection
 nmcli device status
@@ -407,6 +452,7 @@ nmcli radio wifi
 ```
 
 ### Log Analysis
+
 - **Connection Success**: Look for connection verification messages
 - **Service Issues**: Monitor systemd service logs
 - **Interface Problems**: Check kernel network interface logs

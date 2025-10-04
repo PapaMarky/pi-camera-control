@@ -44,13 +44,15 @@ export class TestPhotoService {
   /**
    * Create a TestPhotoService instance
    * @param {Function|Object} cameraController - Camera controller instance or getter function
+   * @param {Object} wsHandler - WebSocket handler for broadcasting progress events (optional)
    */
-  constructor(cameraController) {
+  constructor(cameraController, wsHandler = null) {
     // Support both direct controller and getter function
     this.getController =
       typeof cameraController === "function"
         ? cameraController
         : () => cameraController;
+    this.wsHandler = wsHandler;
     this.photos = []; // In-memory list of photos
     this.photoId = 1;
     this.captureLock = false; // Prevent concurrent captures
@@ -186,6 +188,9 @@ export class TestPhotoService {
         PHOTO_TIMEOUT_MS,
       );
 
+      // Capture timestamp RIGHT BEFORE shutter button press
+      const shutterStartTime = Date.now();
+
       logger.debug("Pressing shutter button");
       await controller.client.post(
         `${controller.baseUrl}/ccapi/ver100/shooting/control/shutterbutton`,
@@ -195,9 +200,35 @@ export class TestPhotoService {
       logger.debug("Waiting for photo completion event");
       const photoPath = await photoCompletionPromise;
 
-      logger.info("Photo completion event received", { photoPath });
+      // Capture timestamp RIGHT AFTER addedcontents event received
+      const processingEndTime = Date.now();
+      const processingTimeMs = processingEndTime - shutterStartTime;
 
-      // Step 7: Download photo from CCAPI with retry for camera busy
+      logger.info("Photo completion event received", {
+        photoPath,
+        processingTimeMs,
+      });
+
+      // Step 7A: Get file size for progress tracking
+      let fileSize = 0;
+      try {
+        logger.debug("Getting photo file size", { photoPath });
+        const infoResponse = await controller.client.get(
+          `${controller.baseUrl}${photoPath}?kind=info`,
+          { timeout: 5000 },
+        );
+        fileSize = infoResponse.data.filesize;
+        logger.debug("Photo size retrieved", {
+          bytes: fileSize,
+          mb: (fileSize / 1024 / 1024).toFixed(2),
+        });
+      } catch (infoError) {
+        logger.warn("Could not get file size, progress will show bytes only", {
+          error: infoError.message,
+        });
+      }
+
+      // Step 7B: Download photo from CCAPI with retry for camera busy and progress tracking
       // Camera may need time to finalize file after reporting it's ready
       let photoData = null;
       const maxDownloadRetries = 5;
@@ -221,7 +252,25 @@ export class TestPhotoService {
             `${controller.baseUrl}${photoPath}`,
             {
               responseType: "arraybuffer",
-              timeout: 30000, // 30s timeout for download
+              timeout: 60000, // Increased to 60s for large RAW files
+              onDownloadProgress: (progressEvent) => {
+                const loaded = progressEvent.loaded;
+                const total = progressEvent.total || fileSize;
+
+                if (total > 0) {
+                  const percentage = Math.round((loaded / total) * 100);
+
+                  // Emit WebSocket event for frontend
+                  if (this.wsHandler && this.wsHandler.broadcast) {
+                    this.wsHandler.broadcast("test_photo_download_progress", {
+                      percentage,
+                      loaded,
+                      total,
+                      photoId,
+                    });
+                  }
+                }
+              },
             },
           );
 
@@ -281,6 +330,7 @@ export class TestPhotoService {
         filename,
         timestamp,
         cameraPath, // Original path on camera
+        processingTimeMs, // Time from shutterbutton press to addedcontents event
         exif: {
           ISO: exif?.ISO,
           ExposureTime: exif?.ExposureTime,
@@ -300,6 +350,7 @@ export class TestPhotoService {
         photoId,
         filename,
         size: photoData.length,
+        processingTimeMs: `${processingTimeMs}ms`,
         elapsed: `${elapsed}ms`,
       });
 

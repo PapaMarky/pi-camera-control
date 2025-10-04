@@ -53,6 +53,7 @@ class CameraControlServer {
     );
 
     // Initialize test photo service with camera controller getter function
+    // wsHandler will be set in setupWebSocket()
     this.testPhotoService = new TestPhotoService(() =>
       this.getCurrentCameraController(),
     );
@@ -265,6 +266,9 @@ class CameraControlServer {
       timeSyncService,
     );
     this.wss.on("connection", this.wsHandler);
+
+    // Set wsHandler in test photo service for progress broadcasting
+    this.testPhotoService.wsHandler = this.wsHandler;
 
     logger.info("WebSocket server initialized");
   }

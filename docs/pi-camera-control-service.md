@@ -7,6 +7,7 @@ This document covers the systemd service for automatically starting and managing
 ### Quick Setup
 
 1. **Deploy the project** to your Raspberry Pi:
+
    ```bash
    git clone https://github.com/PapaMarky/pi-camera-control.git /home/pi/pi-camera-control
    cd /home/pi/pi-camera-control
@@ -23,11 +24,13 @@ The service will now automatically start on boot and restart if it crashes.
 ### Service Management
 
 #### Check Service Status
+
 ```bash
 sudo systemctl status pi-camera-control
 ```
 
 #### Start, Stop, Restart
+
 ```bash
 # Start the service
 sudo systemctl start pi-camera-control
@@ -40,6 +43,7 @@ sudo systemctl restart pi-camera-control
 ```
 
 #### Enable/Disable Auto-start
+
 ```bash
 # Enable auto-start on boot (default after installation)
 sudo systemctl enable pi-camera-control
@@ -51,12 +55,14 @@ sudo systemctl disable pi-camera-control
 ### Viewing Logs
 
 #### Live Log Monitoring
+
 ```bash
 # Follow live logs
 sudo journalctl -u pi-camera-control -f
 ```
 
 #### Historical Logs
+
 ```bash
 # View recent logs (last 50 entries)
 sudo journalctl -u pi-camera-control -n 50
@@ -69,10 +75,12 @@ sudo journalctl -u pi-camera-control --since "2023-09-01"
 ### Configuration
 
 The service automatically reads configuration from:
+
 - **Environment file**: `/home/pi/pi-camera-control/.env`
 - **Built-in defaults**: Production settings with camera IP `192.168.12.98`
 
 To customize settings:
+
 ```bash
 cd /home/pi/pi-camera-control
 cp .env.example .env
@@ -83,6 +91,7 @@ sudo systemctl restart pi-camera-control
 ### Uninstalling the Service
 
 To completely remove the service:
+
 ```bash
 sudo ./scripts/uninstall-service.sh
 ```
@@ -92,12 +101,15 @@ This stops the service, disables auto-start, and removes the service file.
 ### Troubleshooting
 
 #### Service Won't Start
+
 1. Check service logs:
+
    ```bash
    sudo journalctl -u pi-camera-control -n 20
    ```
 
 2. Test manual startup:
+
    ```bash
    cd /home/pi/pi-camera-control
    node src/server.js
@@ -109,12 +121,15 @@ This stops the service, disables auto-start, and removes the service file.
    ```
 
 #### Service Crashes Immediately
+
 - Check file permissions: `ls -la /home/pi/pi-camera-control/`
 - Verify dependencies: `npm install --production`
 - Review `.env` configuration for errors
 
 #### Network Issues
+
 The service runs as root to allow network configuration. If you see permission errors:
+
 ```bash
 # Verify service user
 sudo systemctl show pi-camera-control | grep "^User="
@@ -139,13 +154,13 @@ The systemd service is defined in `pi-camera-control.service` with the following
 
 ### Files Created
 
-| File | Purpose |
-|------|---------|
-| `pi-camera-control.service` | Main systemd service definition |
-| `scripts/install-service.sh` | Automated installation script |
-| `scripts/uninstall-service.sh` | Service removal script |
-| `docs/SERVICE_SETUP.md` | Detailed setup documentation |
-| `docs/pi-camera-control-service.md` | This reference document |
+| File                                | Purpose                         |
+| ----------------------------------- | ------------------------------- |
+| `pi-camera-control.service`         | Main systemd service definition |
+| `scripts/install-service.sh`        | Automated installation script   |
+| `scripts/uninstall-service.sh`      | Service removal script          |
+| `docs/SERVICE_SETUP.md`             | Detailed setup documentation    |
+| `docs/pi-camera-control-service.md` | This reference document         |
 
 ### Service Features
 
@@ -162,7 +177,7 @@ The service integrates with the Phase 2 Node.js architecture:
 
 - **Express Server**: HTTP API endpoints on port 3000
 - **WebSocket Server**: Real-time communication with clients
-- **Camera Controller**: CCAPI communication with Canon cameras  
+- **Camera Controller**: CCAPI communication with Canon cameras
 - **Power Manager**: Battery and thermal monitoring
 - **Network Manager**: Access point and WiFi configuration
 
@@ -176,11 +191,11 @@ The service integrates with the Phase 2 Node.js architecture:
 
 ### Development vs Production
 
-| Aspect | Development | Production (Service) |
-|--------|-------------|---------------------|
-| Start Command | `npm run dev` | Automatic via systemd |
-| Process Management | Manual | Automatic restart |
-| User | Current user | root |
-| Logging | Console | systemd journal |
-| Environment | Development | Production |
-| Auto-start | No | Yes (on boot) |
+| Aspect             | Development   | Production (Service)  |
+| ------------------ | ------------- | --------------------- |
+| Start Command      | `npm run dev` | Automatic via systemd |
+| Process Management | Manual        | Automatic restart     |
+| User               | Current user  | root                  |
+| Logging            | Console       | systemd journal       |
+| Environment        | Development   | Production            |
+| Auto-start         | No            | Yes (on boot)         |

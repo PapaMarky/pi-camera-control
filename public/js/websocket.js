@@ -15,22 +15,22 @@ class WebSocketManager {
     }
 
     this.connecting = true;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}`;
-    
-    console.log('Connecting to WebSocket:', wsUrl);
-    this.emit('connecting');
+
+    console.log("Connecting to WebSocket:", wsUrl);
+    this.emit("connecting");
 
     try {
       this.ws = new WebSocket(wsUrl);
-      
+
       this.ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log("WebSocket connected");
         this.connected = true;
         this.connecting = false;
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000;
-        this.emit('connected');
+        this.emit("connected");
       };
 
       this.ws.onmessage = (event) => {
@@ -38,16 +38,16 @@ class WebSocketManager {
           const data = JSON.parse(event.data);
           this.handleMessage(data);
         } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
+          console.error("Error parsing WebSocket message:", error);
         }
       };
 
       this.ws.onclose = (event) => {
-        console.log('WebSocket disconnected:', event.code, event.reason);
+        console.log("WebSocket disconnected:", event.code, event.reason);
         this.connected = false;
         this.connecting = false;
-        this.emit('disconnected', { code: event.code, reason: event.reason });
-        
+        this.emit("disconnected", { code: event.code, reason: event.reason });
+
         // Auto-reconnect unless it was a clean shutdown
         if (event.code !== 1000) {
           this.scheduleReconnect();
@@ -55,32 +55,36 @@ class WebSocketManager {
       };
 
       this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error("WebSocket error:", error);
         this.connected = false;
         this.connecting = false;
-        this.emit('error', error);
+        this.emit("error", error);
       };
-
     } catch (error) {
-      console.error('Failed to create WebSocket:', error);
+      console.error("Failed to create WebSocket:", error);
       this.connecting = false;
-      this.emit('error', error);
+      this.emit("error", error);
       this.scheduleReconnect();
     }
   }
 
   scheduleReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached');
-      this.emit('max_reconnect_attempts');
+      console.error("Max reconnection attempts reached");
+      this.emit("max_reconnect_attempts");
       return;
     }
 
     this.reconnectAttempts++;
-    const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000);
-    
-    console.log(`Scheduling reconnection attempt ${this.reconnectAttempts} in ${delay}ms`);
-    this.emit('reconnecting', { attempt: this.reconnectAttempts, delay });
+    const delay = Math.min(
+      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+      30000,
+    );
+
+    console.log(
+      `Scheduling reconnection attempt ${this.reconnectAttempts} in ${delay}ms`,
+    );
+    this.emit("reconnecting", { attempt: this.reconnectAttempts, delay });
 
     setTimeout(() => {
       this.connect();
@@ -89,7 +93,7 @@ class WebSocketManager {
 
   send(type, data = {}) {
     if (!this.connected || !this.ws) {
-      console.warn('WebSocket not connected, cannot send message:', type);
+      console.warn("WebSocket not connected, cannot send message:", type);
       return false;
     }
 
@@ -98,14 +102,21 @@ class WebSocketManager {
       this.ws.send(message);
       return true;
     } catch (error) {
-      console.error('Error sending WebSocket message:', error);
+      console.error("Error sending WebSocket message:", error);
       return false;
     }
   }
 
   // Enhanced method to send WebSocket operations with automatic UI state management
   async sendOperation(type, data = {}, uiOptions = {}) {
-    const { elementId, progressText, progressIcon, timeout = 30000, onSuccess, onError } = uiOptions;
+    const {
+      elementId,
+      progressText,
+      progressIcon,
+      timeout = 30000,
+      onSuccess,
+      onError,
+    } = uiOptions;
 
     try {
       // Set UI element to in-progress state if specified
@@ -113,14 +124,14 @@ class WebSocketManager {
         window.uiStateManager.setInProgress(elementId, {
           progressText,
           progressIcon,
-          timeout
+          timeout,
         });
       }
 
       // Send the WebSocket message
       const success = this.send(type, data);
       if (!success) {
-        throw new Error('Failed to send WebSocket message');
+        throw new Error("Failed to send WebSocket message");
       }
 
       // Return a promise that resolves when the result is received
@@ -146,7 +157,7 @@ class WebSocketManager {
             if (onSuccess) onSuccess(result);
             resolve(result);
           } else {
-            const error = new Error(result.error || 'Operation failed');
+            const error = new Error(result.error || "Operation failed");
             error.result = result;
             if (onError) onError(error);
             reject(error);
@@ -155,7 +166,6 @@ class WebSocketManager {
 
         this.on(resultType, handleResult);
       });
-
     } catch (error) {
       if (elementId) {
         window.uiStateManager.restore(elementId);
@@ -171,126 +181,126 @@ class WebSocketManager {
 
   handleMessage(message) {
     const { type, data, eventType } = message;
-    
+
     // Handle different message types
     switch (type) {
-      case 'welcome':
-        console.log('Received welcome message:', message);
-        this.emit('welcome', message);
+      case "welcome":
+        console.log("Received welcome message:", message);
+        this.emit("welcome", message);
         break;
-        
-      case 'status_update':
+
+      case "status_update":
         // For status_update, the camera/power data is in the message itself, not in 'data'
-        this.emit('status_update', { 
-          camera: message.camera, 
-          power: message.power, 
-          timestamp: message.timestamp 
+        this.emit("status_update", {
+          camera: message.camera,
+          power: message.power,
+          timestamp: message.timestamp,
         });
         break;
-        
-      case 'event':
+
+      case "event":
         // Handle broadcast events from the backend
         if (eventType) {
-          console.log('Received broadcast event:', eventType, data);
+          console.log("Received broadcast event:", eventType, data);
           this.emit(eventType, data);
         }
         break;
 
-      case 'timelapse_event':
+      case "timelapse_event":
         // Handle timelapse-specific events
         if (eventType) {
-          console.log('Received timelapse event:', eventType, data);
+          console.log("Received timelapse event:", eventType, data);
           // Emit the specific event type (e.g., session_completed, session_stopped, etc.)
           this.emit(eventType, data);
         }
         break;
-        
-      case 'photo_taken':
-        this.emit('photo_taken', data);
-        break;
-        
-      case 'camera_settings':
-        this.emit('camera_settings', data);
-        break;
-        
-      case 'interval_validation':
-        this.emit('interval_validation', data);
-        break;
-        
-      case 'intervalometer_start':
-        this.emit('intervalometer_start', data);
-        break;
-        
-      case 'intervalometer_stop':
-        this.emit('intervalometer_stop', data);
-        break;
-        
-      case 'status':
-        this.emit('status', data);
-        break;
-        
-      case 'pong':
-        this.emit('pong', data);
+
+      case "photo_taken":
+        this.emit("photo_taken", data);
         break;
 
-      case 'network_scan_result':
-        this.emit('network_scan_result', data);
+      case "camera_settings":
+        this.emit("camera_settings", data);
         break;
 
-      case 'network_mode_result':
-        this.emit('network_mode_result', data);
+      case "interval_validation":
+        this.emit("interval_validation", data);
         break;
 
-      case 'network_connect_result':
-        this.emit('network_connect_result', data);
+      case "intervalometer_start":
+        this.emit("intervalometer_start", data);
         break;
 
-      case 'network_disconnect_result':
-        this.emit('network_disconnect_result', data);
+      case "intervalometer_stop":
+        this.emit("intervalometer_stop", data);
         break;
 
-      case 'timelapse_reports':
-        this.emit('timelapse_reports', data);
+      case "status":
+        this.emit("status", data);
         break;
 
-      case 'timelapse_report':
-        this.emit('timelapse_report_response', data);
+      case "pong":
+        this.emit("pong", data);
         break;
 
-      case 'unsaved_session':
-        this.emit('unsaved_session', data);
+      case "network_scan_result":
+        this.emit("network_scan_result", data);
         break;
 
-      case 'session_saved':
-        this.emit('session_saved', data);
+      case "network_mode_result":
+        this.emit("network_mode_result", data);
         break;
 
-      case 'session_discarded':
-        this.emit('session_discarded', data);
+      case "network_connect_result":
+        this.emit("network_connect_result", data);
         break;
 
-      case 'activity_log':
+      case "network_disconnect_result":
+        this.emit("network_disconnect_result", data);
+        break;
+
+      case "timelapse_reports":
+        this.emit("timelapse_reports", data);
+        break;
+
+      case "timelapse_report":
+        this.emit("timelapse_report_response", data);
+        break;
+
+      case "unsaved_session":
+        this.emit("unsaved_session", data);
+        break;
+
+      case "session_saved":
+        this.emit("session_saved", data);
+        break;
+
+      case "session_discarded":
+        this.emit("session_discarded", data);
+        break;
+
+      case "activity_log":
         // Handle activity log messages from TimeSync service
         this.handleActivityLog(data);
         break;
 
-      case 'time-sync-request':
+      case "time-sync-request":
         // Server is requesting time sync from client
         this.handleTimeSyncRequest(message);
         break;
 
-      case 'time-sync-status':
+      case "time-sync-status":
         // Time sync status update
-        this.emit('time_sync_status', data);
+        this.emit("time_sync_status", data);
         break;
 
-      case 'error':
-        console.error('WebSocket error response:', data);
-        this.emit('error_response', data);
+      case "error":
+        console.error("WebSocket error response:", data);
+        this.emit("error_response", data);
         break;
 
       default:
-        console.log('Unknown WebSocket message type:', type, data);
+        console.log("Unknown WebSocket message type:", type, data);
     }
   }
 
@@ -298,14 +308,14 @@ class WebSocketManager {
     const { message, type, timestamp } = data;
 
     // Find the activity log element
-    const activityLog = document.getElementById('activity-log');
+    const activityLog = document.getElementById("activity-log");
     if (!activityLog) {
-      console.warn('Activity log element not found');
+      console.warn("Activity log element not found");
       return;
     }
 
     // Create log entry
-    const logEntry = document.createElement('div');
+    const logEntry = document.createElement("div");
     logEntry.className = `log-entry ${type}`;
 
     // Format timestamp for display
@@ -323,23 +333,27 @@ class WebSocketManager {
   }
 
   handleTimeSyncRequest(message) {
-    console.log('WebSocket: Handling time-sync-request', message);
+    console.log("WebSocket: Handling time-sync-request", message);
     const { requestId } = message;
 
     // Get current client time and timezone
     const clientTime = new Date().toISOString();
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-    console.log('WebSocket: Preparing time sync response', { clientTime, timezone, requestId });
-
-    // Respond with client time
-    const sent = this.send('time-sync-response', {
+    console.log("WebSocket: Preparing time sync response", {
       clientTime,
       timezone,
-      requestId
+      requestId,
     });
 
-    console.log('WebSocket: Time sync response sent:', sent);
+    // Respond with client time
+    const sent = this.send("time-sync-response", {
+      clientTime,
+      timezone,
+      requestId,
+    });
+
+    console.log("WebSocket: Time sync response sent:", sent);
   }
 
   // Event emitter functionality
@@ -362,7 +376,7 @@ class WebSocketManager {
 
   emit(event, data) {
     if (this.listeners.has(event)) {
-      this.listeners.get(event).forEach(callback => {
+      this.listeners.get(event).forEach((callback) => {
         try {
           callback(data);
         } catch (error) {
@@ -374,7 +388,7 @@ class WebSocketManager {
 
   disconnect() {
     if (this.ws) {
-      this.ws.close(1000, 'Client disconnect');
+      this.ws.close(1000, "Client disconnect");
       this.ws = null;
     }
     this.connected = false;
@@ -383,27 +397,27 @@ class WebSocketManager {
 
   // Utility methods for common operations
   takePhoto() {
-    return this.send('take_photo');
+    return this.send("take_photo");
   }
 
   getCameraSettings() {
-    return this.send('get_camera_settings');
+    return this.send("get_camera_settings");
   }
 
   startIntervalometer(options) {
-    return this.send('start_intervalometer', options);
+    return this.send("start_intervalometer", options);
   }
 
   stopIntervalometer() {
-    return this.send('stop_intervalometer');
+    return this.send("stop_intervalometer");
   }
 
   getStatus() {
-    return this.send('get_status');
+    return this.send("get_status");
   }
 
   ping() {
-    return this.send('ping');
+    return this.send("ping");
   }
 }
 

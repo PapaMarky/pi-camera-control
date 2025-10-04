@@ -10,7 +10,7 @@
 export async function waitForWebSocketConnection(page, timeout = 10000) {
   await page.waitForFunction(
     () => window.wsManager && window.wsManager.isConnected(),
-    { timeout }
+    { timeout },
   );
 }
 
@@ -22,10 +22,10 @@ export async function waitForWebSocketConnection(page, timeout = 10000) {
 export async function waitForCameraConnection(page, timeout = 15000) {
   await page.waitForFunction(
     () => {
-      const statusText = document.querySelector('.camera-status-text');
-      return statusText && statusText.textContent.includes('Connected');
+      const statusText = document.querySelector(".camera-status-text");
+      return statusText && statusText.textContent.includes("Connected");
     },
-    { timeout }
+    { timeout },
   );
 }
 
@@ -36,9 +36,9 @@ export async function waitForCameraConnection(page, timeout = 15000) {
  */
 export async function getLatestLogEntry(page) {
   return await page.evaluate(() => {
-    const log = document.getElementById('activity-log');
+    const log = document.getElementById("activity-log");
     const latestEntry = log?.firstElementChild;
-    return latestEntry?.querySelector('.log-message')?.textContent || '';
+    return latestEntry?.querySelector(".log-message")?.textContent || "";
   });
 }
 
@@ -50,10 +50,10 @@ export async function getLatestLogEntry(page) {
  */
 export async function getLogEntriesByType(page, type) {
   return await page.evaluate((logType) => {
-    const log = document.getElementById('activity-log');
+    const log = document.getElementById("activity-log");
     const entries = log?.querySelectorAll(`.log-entry.${logType}`) || [];
-    return Array.from(entries).map(entry =>
-      entry.querySelector('.log-message')?.textContent || ''
+    return Array.from(entries).map(
+      (entry) => entry.querySelector(".log-message")?.textContent || "",
     );
   }, type);
 }
@@ -77,11 +77,11 @@ export async function isElementInProgress(page, elementId) {
  * @param {object} response - Response to return
  */
 export async function mockApiResponse(page, url, response) {
-  await page.route(url, route => {
+  await page.route(url, (route) => {
     route.fulfill({
       status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(response)
+      contentType: "application/json",
+      body: JSON.stringify(response),
     });
   });
 }
@@ -94,11 +94,11 @@ export async function mockApiResponse(page, url, response) {
  * @param {object} error - Error response
  */
 export async function mockApiError(page, url, status, error) {
-  await page.route(url, route => {
+  await page.route(url, (route) => {
     route.fulfill({
       status,
-      contentType: 'application/json',
-      body: JSON.stringify(error)
+      contentType: "application/json",
+      body: JSON.stringify(error),
     });
   });
 }
@@ -109,7 +109,7 @@ export async function mockApiError(page, url, status, error) {
  * @param {number} timeout - Timeout in ms (default 10000)
  */
 export async function waitForLoadingComplete(page, timeout = 10000) {
-  await page.waitForSelector('#loading-overlay', { state: 'hidden', timeout });
+  await page.waitForSelector("#loading-overlay", { state: "hidden", timeout });
 }
 
 /**
@@ -123,8 +123,8 @@ export async function interceptWebSocketMessages(page) {
   await page.addInitScript(() => {
     window.__wsMessages = [];
     const originalSend = WebSocket.prototype.send;
-    WebSocket.prototype.send = function(data) {
-      window.__wsMessages.push({ type: 'sent', data: JSON.parse(data) });
+    WebSocket.prototype.send = function (data) {
+      window.__wsMessages.push({ type: "sent", data: JSON.parse(data) });
       return originalSend.call(this, data);
     };
   });
@@ -143,8 +143,8 @@ export async function interceptWebSocketMessages(page) {
 export async function simulateWebSocketMessage(page, message) {
   await page.evaluate((msg) => {
     if (window.wsManager && window.wsManager.ws) {
-      const event = new MessageEvent('message', {
-        data: JSON.stringify(msg)
+      const event = new MessageEvent("message", {
+        data: JSON.stringify(msg),
       });
       window.wsManager.ws.onmessage(event);
     }
@@ -159,9 +159,10 @@ export async function simulateWebSocketMessage(page, message) {
 export async function getCameraStatus(page) {
   return await page.evaluate(() => {
     return {
-      connected: document.querySelector('.camera-status-text')?.textContent || '',
-      model: document.getElementById('camera-model')?.textContent || '',
-      battery: document.getElementById('battery-level')?.textContent || ''
+      connected:
+        document.querySelector(".camera-status-text")?.textContent || "",
+      model: document.getElementById("camera-model")?.textContent || "",
+      battery: document.getElementById("battery-level")?.textContent || "",
     };
   });
 }
@@ -174,7 +175,7 @@ export async function getCameraStatus(page) {
 export async function takeDebugScreenshot(page, name) {
   await page.screenshot({
     path: `test-results/screenshots/${name}.png`,
-    fullPage: true
+    fullPage: true,
   });
 }
 
@@ -184,7 +185,7 @@ export async function takeDebugScreenshot(page, name) {
  */
 export async function clearActivityLog(page) {
   await page.evaluate(() => {
-    const log = document.getElementById('activity-log');
-    if (log) log.innerHTML = '';
+    const log = document.getElementById("activity-log");
+    if (log) log.innerHTML = "";
   });
 }

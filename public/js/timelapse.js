@@ -7,105 +7,121 @@ class TimelapseUI {
     this.wsManager = wsManager;
     this.currentReport = null;
     this.unsavedSession = null;
-    
+
     this.initialize();
   }
 
   initialize() {
-    console.log('Initializing Timelapse UI...');
-    
+    console.log("Initializing Timelapse UI...");
+
     // Bind event handlers
     this.setupEventHandlers();
-    
+
     // Load initial data
     this.loadReports();
     this.checkForUnsavedSession();
-    
-    console.log('Timelapse UI initialized');
+
+    console.log("Timelapse UI initialized");
   }
 
   setupEventHandlers() {
     // Reports list handlers
-    document.getElementById('refresh-reports-btn').addEventListener('click', () => {
-      this.loadReports();
-    });
+    document
+      .getElementById("refresh-reports-btn")
+      .addEventListener("click", () => {
+        this.loadReports();
+      });
 
-    document.getElementById('back-to-reports-btn').addEventListener('click', () => {
-      this.showReportsList();
-    });
+    document
+      .getElementById("back-to-reports-btn")
+      .addEventListener("click", () => {
+        this.showReportsList();
+      });
 
     // Report actions
-    document.getElementById('edit-report-title-btn').addEventListener('click', () => {
-      this.editReportTitle();
-    });
+    document
+      .getElementById("edit-report-title-btn")
+      .addEventListener("click", () => {
+        this.editReportTitle();
+      });
 
-    document.getElementById('delete-report-btn').addEventListener('click', () => {
-      this.deleteReport();
-    });
+    document
+      .getElementById("delete-report-btn")
+      .addEventListener("click", () => {
+        this.deleteReport();
+      });
 
-    document.getElementById('download-json-btn').addEventListener('click', () => {
-      this.downloadReportAsJSON();
-    });
+    document
+      .getElementById("download-json-btn")
+      .addEventListener("click", () => {
+        this.downloadReportAsJSON();
+      });
 
-    document.getElementById('download-markdown-btn').addEventListener('click', () => {
-      this.downloadReportAsMarkdown();
-    });
+    document
+      .getElementById("download-markdown-btn")
+      .addEventListener("click", () => {
+        this.downloadReportAsMarkdown();
+      });
 
     // Session completion handlers
-    document.getElementById('save-session-btn').addEventListener('click', () => {
-      this.saveSession();
-    });
+    document
+      .getElementById("save-session-btn")
+      .addEventListener("click", () => {
+        this.saveSession();
+      });
 
-    document.getElementById('discard-session-btn').addEventListener('click', () => {
-      this.discardSession();
-    });
+    document
+      .getElementById("discard-session-btn")
+      .addEventListener("click", () => {
+        this.discardSession();
+      });
 
     // WebSocket event handlers
     if (this.wsManager) {
       // Report data responses
-      this.wsManager.on('timelapse_reports_response', (data) => {
+      this.wsManager.on("timelapse_reports_response", (data) => {
         this.handleReportsResponse(data);
       });
 
-      this.wsManager.on('timelapse_reports', (data) => {
+      this.wsManager.on("timelapse_reports", (data) => {
         this.handleReportsResponse(data);
       });
 
-      this.wsManager.on('timelapse_report_response', (data) => {
+      this.wsManager.on("timelapse_report_response", (data) => {
         this.handleReportResponse(data);
       });
 
       // Session events
-      this.wsManager.on('session_completed', (data) => {
+      this.wsManager.on("session_completed", (data) => {
         this.handleSessionCompleted(data);
       });
 
-      this.wsManager.on('session_stopped', (data) => {
+      this.wsManager.on("session_stopped", (data) => {
         this.handleSessionStopped(data);
       });
 
-      this.wsManager.on('session_error', (data) => {
+      this.wsManager.on("session_error", (data) => {
         this.handleSessionError(data);
       });
 
-      this.wsManager.on('unsaved_session_found', (data) => {
+      this.wsManager.on("unsaved_session_found", (data) => {
         this.handleUnsavedSessionFound(data);
       });
 
-      this.wsManager.on('report_saved', (data) => {
+      this.wsManager.on("report_saved", (data) => {
         this.loadReports(); // Refresh the list after saving
       });
 
-      this.wsManager.on('session_saved', (data) => {
+      this.wsManager.on("session_saved", (data) => {
         this.handleSessionSaved(); // Hide completion page and show success
       });
 
-      this.wsManager.on('report_deleted', (data) => {
+      this.wsManager.on("report_deleted", (data) => {
         this.loadReports(); // Refresh the list after deleting
       });
 
       // Handle session discard response
-      this.wsManager.on('session_discarded', (data) => {
+      this.wsManager.on("session_discarded", (data) => {
         this.handleSessionDiscarded();
       });
     }
@@ -117,19 +133,19 @@ class TimelapseUI {
   async loadReports() {
     try {
       this.showReportsLoading();
-      
+
       if (this.wsManager && this.wsManager.isConnected()) {
         // Use WebSocket if available
-        this.wsManager.send('get_timelapse_reports', {});
+        this.wsManager.send("get_timelapse_reports", {});
       } else {
         // Fallback to REST API
-        const response = await fetch('/api/timelapse/reports');
+        const response = await fetch("/api/timelapse/reports");
         const data = await response.json();
         this.handleReportsResponse(data);
       }
     } catch (error) {
-      console.error('Failed to load reports:', error);
-      this.showReportsError('Failed to load reports');
+      console.error("Failed to load reports:", error);
+      this.showReportsError("Failed to load reports");
     }
   }
 
@@ -140,17 +156,17 @@ class TimelapseUI {
     try {
       if (this.wsManager && this.wsManager.isConnected()) {
         // Use WebSocket if available
-        this.wsManager.send('get_unsaved_session', {});
+        this.wsManager.send("get_unsaved_session", {});
       } else {
         // Fallback to REST API
-        const response = await fetch('/api/timelapse/unsaved-session');
+        const response = await fetch("/api/timelapse/unsaved-session");
         const data = await response.json();
         if (data.unsavedSession) {
           this.handleUnsavedSessionFound(data.unsavedSession);
         }
       }
     } catch (error) {
-      console.error('Failed to check for unsaved session:', error);
+      console.error("Failed to check for unsaved session:", error);
     }
   }
 
@@ -158,20 +174,20 @@ class TimelapseUI {
    * Handle reports response from API
    */
   handleReportsResponse(data) {
-    const reportsContainer = document.getElementById('reports-container');
-    const loadingElement = document.getElementById('reports-loading');
-    const emptyElement = document.getElementById('reports-empty');
-    const listElement = document.getElementById('reports-list');
+    const reportsContainer = document.getElementById("reports-container");
+    const loadingElement = document.getElementById("reports-loading");
+    const emptyElement = document.getElementById("reports-empty");
+    const listElement = document.getElementById("reports-list");
 
-    loadingElement.style.display = 'none';
+    loadingElement.style.display = "none";
 
     if (data.reports && data.reports.length > 0) {
-      emptyElement.style.display = 'none';
-      listElement.style.display = 'block';
+      emptyElement.style.display = "none";
+      listElement.style.display = "block";
       this.renderReportsList(data.reports);
     } else {
-      emptyElement.style.display = 'block';
-      listElement.style.display = 'none';
+      emptyElement.style.display = "block";
+      listElement.style.display = "none";
     }
   }
 
@@ -179,9 +195,11 @@ class TimelapseUI {
    * Render the reports list
    */
   renderReportsList(reports) {
-    const listElement = document.getElementById('reports-list');
-    
-    listElement.innerHTML = reports.map(report => `
+    const listElement = document.getElementById("reports-list");
+
+    listElement.innerHTML = reports
+      .map(
+        (report) => `
       <div class="report-item" data-report-id="${report.id}">
         <div class="report-header">
           <h5 class="report-title">${this.escapeHtml(report.title)}</h5>
@@ -210,24 +228,31 @@ class TimelapseUI {
           </button>
         </div>
       </div>
-    `).join('');
+    `,
+      )
+      .join("");
 
     // Add click handlers for view buttons
-    listElement.querySelectorAll('.view-report-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    listElement.querySelectorAll(".view-report-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
         const reportId = e.currentTarget.dataset.reportId;
         this.viewReport(reportId);
       });
     });
 
     // Add click handlers for delete buttons
-    listElement.querySelectorAll('.delete-report-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    listElement.querySelectorAll(".delete-report-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
         const reportId = e.currentTarget.dataset.reportId;
-        const reportItem = e.currentTarget.closest('.report-item');
-        const reportTitle = reportItem.querySelector('.report-title').textContent;
+        const reportItem = e.currentTarget.closest(".report-item");
+        const reportTitle =
+          reportItem.querySelector(".report-title").textContent;
 
-        if (confirm(`Are you sure you want to delete "${reportTitle}"? This action cannot be undone.`)) {
+        if (
+          confirm(
+            `Are you sure you want to delete "${reportTitle}"? This action cannot be undone.`,
+          )
+        ) {
           this.deleteReportById(reportId);
         }
       });
@@ -240,15 +265,15 @@ class TimelapseUI {
   async viewReport(reportId) {
     try {
       if (this.wsManager && this.wsManager.isConnected()) {
-        this.wsManager.send('get_timelapse_report', { id: reportId });
+        this.wsManager.send("get_timelapse_report", { id: reportId });
       } else {
         const response = await fetch(`/api/timelapse/reports/${reportId}`);
         const data = await response.json();
         this.handleReportResponse(data);
       }
     } catch (error) {
-      console.error('Failed to load report:', error);
-      this.showError('Failed to load report details');
+      console.error("Failed to load report:", error);
+      this.showError("Failed to load report details");
     }
   }
 
@@ -266,13 +291,13 @@ class TimelapseUI {
    * Show report details view
    */
   showReportDetails(report) {
-    const listSection = document.getElementById('reports-list-section');
-    const detailsSection = document.getElementById('report-details-section');
-    const titleElement = document.getElementById('report-title');
-    const contentElement = document.getElementById('report-content');
+    const listSection = document.getElementById("reports-list-section");
+    const detailsSection = document.getElementById("report-details-section");
+    const titleElement = document.getElementById("report-title");
+    const contentElement = document.getElementById("report-content");
 
-    listSection.style.display = 'none';
-    detailsSection.style.display = 'block';
+    listSection.style.display = "none";
+    detailsSection.style.display = "block";
     titleElement.textContent = report.title;
 
     contentElement.innerHTML = `
@@ -316,11 +341,11 @@ class TimelapseUI {
             </div>
             <div class="info-item">
               <span class="info-label">Interval:</span>
-              <span class="info-value">${report.intervalometer?.interval || '-'} seconds</span>
+              <span class="info-value">${report.intervalometer?.interval || "-"} seconds</span>
             </div>
             <div class="info-item">
               <span class="info-label">Total Planned:</span>
-              <span class="info-value">${report.intervalometer?.numberOfShots || 'Unlimited'}</span>
+              <span class="info-value">${report.intervalometer?.numberOfShots || "Unlimited"}</span>
             </div>
           </div>
         </div>
@@ -338,7 +363,7 @@ class TimelapseUI {
             </div>
             <div class="info-item">
               <span class="info-label">Failed:</span>
-              <span class="info-value ${report.results.imagesFailed > 0 ? 'error' : 'success'}">${report.results.imagesFailed}</span>
+              <span class="info-value ${report.results.imagesFailed > 0 ? "error" : "success"}">${report.results.imagesFailed}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Completion:</span>
@@ -347,20 +372,28 @@ class TimelapseUI {
           </div>
         </div>
         
-        ${report.results.errors && report.results.errors.length > 0 ? `
+        ${
+          report.results.errors && report.results.errors.length > 0
+            ? `
         <div class="report-section">
           <h5>Errors</h5>
           <div class="errors-list">
-            ${report.results.errors.map(error => `
+            ${report.results.errors
+              .map(
+                (error) => `
               <div class="error-item">
                 <span class="error-time">${this.formatTime(error.timestamp)}</span>
                 <span class="error-shot">Shot ${error.shotNumber}</span>
                 <span class="error-message">${this.escapeHtml(error.error)}</span>
               </div>
-            `).join('')}
+            `,
+              )
+              .join("")}
           </div>
         </div>
-        ` : ''}
+        `
+            : ""
+        }
         
         <div class="report-section">
           <h5>Metadata</h5>
@@ -383,11 +416,11 @@ class TimelapseUI {
    * Show reports list view
    */
   showReportsList() {
-    const listSection = document.getElementById('reports-list-section');
-    const detailsSection = document.getElementById('report-details-section');
+    const listSection = document.getElementById("reports-list-section");
+    const detailsSection = document.getElementById("report-details-section");
 
-    detailsSection.style.display = 'none';
-    listSection.style.display = 'block';
+    detailsSection.style.display = "none";
+    listSection.style.display = "block";
     this.currentReport = null;
   }
 
@@ -397,8 +430,12 @@ class TimelapseUI {
   editReportTitle() {
     if (!this.currentReport) return;
 
-    const newTitle = prompt('Enter new title:', this.currentReport.title);
-    if (newTitle && newTitle.trim() && newTitle.trim() !== this.currentReport.title) {
+    const newTitle = prompt("Enter new title:", this.currentReport.title);
+    if (
+      newTitle &&
+      newTitle.trim() &&
+      newTitle.trim() !== this.currentReport.title
+    ) {
       this.updateReportTitle(this.currentReport.id, newTitle.trim());
     }
   }
@@ -409,23 +446,29 @@ class TimelapseUI {
   async updateReportTitle(reportId, newTitle) {
     try {
       if (this.wsManager && this.wsManager.isConnected()) {
-        this.wsManager.send('update_report_title', { reportId, title: newTitle });
-      } else {
-        const response = await fetch(`/api/timelapse/reports/${reportId}/title`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: newTitle })
+        this.wsManager.send("update_report_title", {
+          reportId,
+          title: newTitle,
         });
-        
+      } else {
+        const response = await fetch(
+          `/api/timelapse/reports/${reportId}/title`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: newTitle }),
+          },
+        );
+
         if (response.ok) {
           this.currentReport.title = newTitle;
-          document.getElementById('report-title').textContent = newTitle;
+          document.getElementById("report-title").textContent = newTitle;
           this.loadReports(); // Refresh the list
         }
       }
     } catch (error) {
-      console.error('Failed to update report title:', error);
-      this.showError('Failed to update title');
+      console.error("Failed to update report title:", error);
+      this.showError("Failed to update title");
     }
   }
 
@@ -435,7 +478,11 @@ class TimelapseUI {
   deleteReport() {
     if (!this.currentReport) return;
 
-    if (confirm(`Are you sure you want to delete "${this.currentReport.title}"? This action cannot be undone.`)) {
+    if (
+      confirm(
+        `Are you sure you want to delete "${this.currentReport.title}"? This action cannot be undone.`,
+      )
+    ) {
       this.deleteReportById(this.currentReport.id);
     }
   }
@@ -446,10 +493,10 @@ class TimelapseUI {
   async deleteReportById(reportId) {
     try {
       if (this.wsManager && this.wsManager.isConnected()) {
-        this.wsManager.send('delete_timelapse_report', { id: reportId });
+        this.wsManager.send("delete_timelapse_report", { id: reportId });
       } else {
         const response = await fetch(`/api/timelapse/reports/${reportId}`, {
-          method: 'DELETE'
+          method: "DELETE",
         });
 
         if (response.ok) {
@@ -458,8 +505,8 @@ class TimelapseUI {
         }
       }
     } catch (error) {
-      console.error('Failed to delete report:', error);
-      this.showError('Failed to delete report');
+      console.error("Failed to delete report:", error);
+      this.showError("Failed to delete report");
     }
   }
 
@@ -468,7 +515,7 @@ class TimelapseUI {
    */
   handleSessionCompleted(data) {
     this.unsavedSession = data;
-    this.showSessionCompletion(data, 'completed');
+    this.showSessionCompletion(data, "completed");
   }
 
   /**
@@ -476,7 +523,7 @@ class TimelapseUI {
    */
   handleSessionStopped(data) {
     this.unsavedSession = data;
-    this.showSessionCompletion(data, 'stopped');
+    this.showSessionCompletion(data, "stopped");
   }
 
   /**
@@ -484,25 +531,30 @@ class TimelapseUI {
    */
   handleSessionError(data) {
     this.unsavedSession = data;
-    this.showSessionCompletion(data, 'error');
+    this.showSessionCompletion(data, "error");
   }
 
   /**
    * Handle unsaved session found
    */
   handleUnsavedSessionFound(sessionData) {
-    console.log('Unsaved session found:', sessionData);
+    console.log("Unsaved session found:", sessionData);
     this.unsavedSession = sessionData;
-    this.showSessionCompletion(sessionData.completionData, sessionData.completionData.reason.includes('error') ? 'error' : 'completed');
+    this.showSessionCompletion(
+      sessionData.completionData,
+      sessionData.completionData.reason.includes("error")
+        ? "error"
+        : "completed",
+    );
   }
 
   /**
    * Show session completion screen
    */
   showSessionCompletion(sessionData, type) {
-    const completionCard = document.getElementById('session-completion-card');
-    const summaryElement = document.getElementById('completion-summary');
-    const titleInput = document.getElementById('completion-title-input');
+    const completionCard = document.getElementById("session-completion-card");
+    const summaryElement = document.getElementById("completion-summary");
+    const titleInput = document.getElementById("completion-title-input");
 
     // Populate summary
     summaryElement.innerHTML = `
@@ -511,7 +563,7 @@ class TimelapseUI {
           <span class="status-icon">${this.getStatusIcon(type)}</span>
           <span class="status-text">${this.formatCompletionStatus(type)}</span>
         </div>
-        <h4>${sessionData.title || 'Untitled Session'}</h4>
+        <h4>${sessionData.title || "Untitled Session"}</h4>
       </div>
       
       <div class="completion-stats">
@@ -541,30 +593,30 @@ class TimelapseUI {
       </div>
 
       <div class="completion-reason">
-        <strong>Reason:</strong> ${sessionData.reason || 'Unknown'}
+        <strong>Reason:</strong> ${sessionData.reason || "Unknown"}
       </div>
     `;
 
     // Set title
-    titleInput.value = sessionData.title || '';
+    titleInput.value = sessionData.title || "";
 
     // Show the completion card and hide others
     this.hideAllCards();
-    completionCard.style.display = 'block';
-    
+    completionCard.style.display = "block";
+
     // Switch to this card in the menu
-    this.switchToCard('session-completion');
+    this.switchToCard("session-completion");
   }
 
   /**
    * Save session as report
    */
   async saveSession() {
-    const titleInput = document.getElementById('completion-title-input');
+    const titleInput = document.getElementById("completion-title-input");
     const title = titleInput.value.trim();
 
     if (!title) {
-      alert('Please enter a title for this session.');
+      alert("Please enter a title for this session.");
       titleInput.focus();
       return;
     }
@@ -572,25 +624,28 @@ class TimelapseUI {
     try {
       const sessionId = this.unsavedSession?.sessionId;
       if (!sessionId) {
-        throw new Error('No session data available');
+        throw new Error("No session data available");
       }
 
       if (this.wsManager && this.wsManager.isConnected()) {
-        this.wsManager.send('save_session_as_report', { sessionId, title });
+        this.wsManager.send("save_session_as_report", { sessionId, title });
       } else {
-        const response = await fetch(`/api/timelapse/sessions/${sessionId}/save`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title })
-        });
-        
+        const response = await fetch(
+          `/api/timelapse/sessions/${sessionId}/save`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title }),
+          },
+        );
+
         if (response.ok) {
           this.handleSessionSaved();
         }
       }
     } catch (error) {
-      console.error('Failed to save session:', error);
-      this.showError('Failed to save session report');
+      console.error("Failed to save session:", error);
+      this.showError("Failed to save session report");
     }
   }
 
@@ -598,30 +653,37 @@ class TimelapseUI {
    * Discard session
    */
   async discardSession() {
-    if (!confirm('Are you sure you want to discard this session? This action cannot be undone.')) {
+    if (
+      !confirm(
+        "Are you sure you want to discard this session? This action cannot be undone.",
+      )
+    ) {
       return;
     }
 
     try {
       const sessionId = this.unsavedSession?.sessionId;
       if (!sessionId) {
-        throw new Error('No session data available');
+        throw new Error("No session data available");
       }
 
       if (this.wsManager && this.wsManager.isConnected()) {
-        this.wsManager.send('discard_session', { sessionId });
+        this.wsManager.send("discard_session", { sessionId });
       } else {
-        const response = await fetch(`/api/timelapse/sessions/${sessionId}/discard`, {
-          method: 'POST'
-        });
-        
+        const response = await fetch(
+          `/api/timelapse/sessions/${sessionId}/discard`,
+          {
+            method: "POST",
+          },
+        );
+
         if (response.ok) {
           this.handleSessionDiscarded();
         }
       }
     } catch (error) {
-      console.error('Failed to discard session:', error);
-      this.showError('Failed to discard session');
+      console.error("Failed to discard session:", error);
+      this.showError("Failed to discard session");
     }
   }
 
@@ -634,18 +696,18 @@ class TimelapseUI {
     this.loadReports(); // Refresh reports list
     // Navigate to timelapse reports page after saving
     if (window.CameraUI && window.CameraUI.switchToCard) {
-      window.CameraUI.switchToCard('timelapse-reports');
+      window.CameraUI.switchToCard("timelapse-reports");
     } else {
       // Fallback to showing the timelapse reports card directly
-      document.querySelectorAll('.function-card').forEach(card => {
-        card.style.display = 'none';
+      document.querySelectorAll(".function-card").forEach((card) => {
+        card.style.display = "none";
       });
-      const reportsCard = document.getElementById('timelapse-reports-card');
+      const reportsCard = document.getElementById("timelapse-reports-card");
       if (reportsCard) {
-        reportsCard.style.display = 'block';
+        reportsCard.style.display = "block";
       }
     }
-    this.showSuccess('Session saved successfully');
+    this.showSuccess("Session saved successfully");
   }
 
   /**
@@ -656,67 +718,67 @@ class TimelapseUI {
     this.hideSessionCompletion();
     // Return to intervalometer page after discarding
     if (window.CameraUI && window.CameraUI.switchToCard) {
-      window.CameraUI.switchToCard('intervalometer');
+      window.CameraUI.switchToCard("intervalometer");
     } else {
       // Fallback to showing the intervalometer card directly
-      document.querySelectorAll('.function-card').forEach(card => {
-        card.style.display = 'none';
+      document.querySelectorAll(".function-card").forEach((card) => {
+        card.style.display = "none";
       });
-      const intervalometerCard = document.getElementById('intervalometer-card');
+      const intervalometerCard = document.getElementById("intervalometer-card");
       if (intervalometerCard) {
-        intervalometerCard.style.display = 'block';
+        intervalometerCard.style.display = "block";
       }
     }
-    this.showSuccess('Session discarded');
+    this.showSuccess("Session discarded");
   }
 
   /**
    * Hide session completion screen
    */
   hideSessionCompletion() {
-    const completionCard = document.getElementById('session-completion-card');
-    completionCard.style.display = 'none';
+    const completionCard = document.getElementById("session-completion-card");
+    completionCard.style.display = "none";
   }
 
   // Helper methods for UI management
   hideAllCards() {
-    document.querySelectorAll('.function-card').forEach(card => {
-      card.style.display = 'none';
+    document.querySelectorAll(".function-card").forEach((card) => {
+      card.style.display = "none";
     });
   }
 
   switchToCard(cardName) {
     // Remove active class from all menu items
-    document.querySelectorAll('.menu-item').forEach(item => {
-      item.classList.remove('active');
+    document.querySelectorAll(".menu-item").forEach((item) => {
+      item.classList.remove("active");
     });
 
     // Add active class to target menu item
     const menuItem = document.querySelector(`[data-card="${cardName}"]`);
     if (menuItem) {
-      menuItem.classList.add('active');
+      menuItem.classList.add("active");
     }
   }
 
   showReportsLoading() {
-    const loadingElement = document.getElementById('reports-loading');
-    const emptyElement = document.getElementById('reports-empty');
-    const listElement = document.getElementById('reports-list');
+    const loadingElement = document.getElementById("reports-loading");
+    const emptyElement = document.getElementById("reports-empty");
+    const listElement = document.getElementById("reports-list");
 
-    loadingElement.style.display = 'block';
-    emptyElement.style.display = 'none';
-    listElement.style.display = 'none';
+    loadingElement.style.display = "block";
+    emptyElement.style.display = "none";
+    listElement.style.display = "none";
   }
 
   showReportsError(message) {
-    const loadingElement = document.getElementById('reports-loading');
+    const loadingElement = document.getElementById("reports-loading");
     loadingElement.textContent = message;
   }
 
   showError(message) {
     // Use existing log system if available
     if (window.cameraManager && window.cameraManager.log) {
-      window.cameraManager.log(message, 'error');
+      window.cameraManager.log(message, "error");
     } else {
       console.error(message);
       alert(message);
@@ -726,7 +788,7 @@ class TimelapseUI {
   showSuccess(message) {
     // Use existing log system if available
     if (window.cameraManager && window.cameraManager.log) {
-      window.cameraManager.log(message, 'success');
+      window.cameraManager.log(message, "success");
     } else {
       console.log(message);
     }
@@ -734,7 +796,7 @@ class TimelapseUI {
 
   // Utility methods
   escapeHtml(text) {
-    const div = document.createElement('div');
+    const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
   }
@@ -768,29 +830,29 @@ class TimelapseUI {
    */
   formatStopCriteria(options) {
     if (!options) {
-      return 'ERROR: No options data';
+      return "ERROR: No options data";
     }
 
     if (!options.stopCondition) {
-      return 'ERROR: Missing stopCondition (legacy session)';
+      return "ERROR: Missing stopCondition (legacy session)";
     }
 
     // Use the stored stopCondition to determine what to display
     switch (options.stopCondition) {
-      case 'stop-at':
+      case "stop-at":
         if (options.stopTime) {
           return `Stop at ${new Date(options.stopTime).toLocaleTimeString()}`;
         }
-        return 'ERROR: stop-at selected but no stopTime';
+        return "ERROR: stop-at selected but no stopTime";
 
-      case 'stop-after':
+      case "stop-after":
         if (options.totalShots) {
           return `${options.totalShots} shots`;
         }
-        return 'ERROR: stop-after selected but no totalShots';
+        return "ERROR: stop-after selected but no totalShots";
 
-      case 'unlimited':
-        return 'Unlimited (manual stop)';
+      case "unlimited":
+        return "Unlimited (manual stop)";
 
       default:
         return `ERROR: Unknown stopCondition: ${options.stopCondition}`;
@@ -813,10 +875,14 @@ class TimelapseUI {
 
   getStatusIcon(status) {
     switch (status) {
-      case 'completed': return '✅';
-      case 'stopped': return '⏹️';
-      case 'error': return '❌';
-      default: return '📋';
+      case "completed":
+        return "✅";
+      case "stopped":
+        return "⏹️";
+      case "error":
+        return "❌";
+      default:
+        return "📋";
     }
   }
 
@@ -826,10 +892,14 @@ class TimelapseUI {
 
   formatCompletionStatus(type) {
     switch (type) {
-      case 'completed': return 'Session Completed';
-      case 'stopped': return 'Session Stopped';
-      case 'error': return 'Session Error';
-      default: return 'Session Ended';
+      case "completed":
+        return "Session Completed";
+      case "stopped":
+        return "Session Stopped";
+      case "error":
+        return "Session Error";
+      default:
+        return "Session Ended";
     }
   }
 
@@ -838,7 +908,7 @@ class TimelapseUI {
    */
   downloadReportAsJSON() {
     if (!this.currentReport) {
-      this.showError('No report loaded');
+      this.showError("No report loaded");
       return;
     }
 
@@ -847,15 +917,18 @@ class TimelapseUI {
       const jsonStr = JSON.stringify(this.currentReport, null, 2);
 
       // Create a blob and download link
-      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const blob = new Blob([jsonStr], { type: "application/json" });
       const url = URL.createObjectURL(blob);
 
       // Generate filename with timestamp
-      const timestamp = new Date(this.currentReport.startTime).toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      const timestamp = new Date(this.currentReport.startTime)
+        .toISOString()
+        .replace(/[:.]/g, "-")
+        .slice(0, -5);
       const filename = `timelapse-report-${timestamp}.json`;
 
       // Create download link and click it
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
@@ -865,10 +938,10 @@ class TimelapseUI {
       // Clean up the URL
       URL.revokeObjectURL(url);
 
-      this.showSuccess('Report downloaded as JSON');
+      this.showSuccess("Report downloaded as JSON");
     } catch (error) {
-      console.error('Failed to download JSON:', error);
-      this.showError('Failed to download report');
+      console.error("Failed to download JSON:", error);
+      this.showError("Failed to download report");
     }
   }
 
@@ -877,7 +950,7 @@ class TimelapseUI {
    */
   async downloadReportAsMarkdown() {
     if (!this.currentReport) {
-      this.showError('No report loaded');
+      this.showError("No report loaded");
       return;
     }
 
@@ -886,15 +959,18 @@ class TimelapseUI {
       const markdown = this.generateMarkdownReport(this.currentReport);
 
       // Create a blob and download link
-      const blob = new Blob([markdown], { type: 'text/markdown' });
+      const blob = new Blob([markdown], { type: "text/markdown" });
       const url = URL.createObjectURL(blob);
 
       // Generate filename with timestamp
-      const timestamp = new Date(this.currentReport.startTime).toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      const timestamp = new Date(this.currentReport.startTime)
+        .toISOString()
+        .replace(/[:.]/g, "-")
+        .slice(0, -5);
       const filename = `timelapse-report-${timestamp}.md`;
 
       // Create download link and click it
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
@@ -904,10 +980,10 @@ class TimelapseUI {
       // Clean up the URL
       URL.revokeObjectURL(url);
 
-      this.showSuccess('Report downloaded as Markdown');
+      this.showSuccess("Report downloaded as Markdown");
     } catch (error) {
-      console.error('Failed to download Markdown:', error);
-      this.showError('Failed to download report');
+      console.error("Failed to download Markdown:", error);
+      this.showError("Failed to download report");
     }
   }
 
@@ -915,7 +991,9 @@ class TimelapseUI {
    * Generate Markdown report from report data
    */
   generateMarkdownReport(report) {
-    const successRate = Math.round((report.results.imagesSuccessful / report.results.imagesCaptured) * 100);
+    const successRate = Math.round(
+      (report.results.imagesSuccessful / report.results.imagesCaptured) * 100,
+    );
 
     let markdown = `# ${report.title}\n\n`;
     markdown += `**Generated**: ${new Date().toLocaleString()}\n\n`;
@@ -928,8 +1006,8 @@ class TimelapseUI {
     markdown += `- **Success Rate**: ${successRate}%\n\n`;
 
     markdown += `## Session Settings\n\n`;
-    markdown += `- **Interval**: ${report.intervalometer?.interval || 'Unknown'} seconds\n`;
-    markdown += `- **Total Planned**: ${report.intervalometer?.numberOfShots || 'Unlimited'}\n`;
+    markdown += `- **Interval**: ${report.intervalometer?.interval || "Unknown"} seconds\n`;
+    markdown += `- **Total Planned**: ${report.intervalometer?.numberOfShots || "Unlimited"}\n`;
     if (report.intervalometer?.stopAt) {
       markdown += `- **Stop Time**: ${report.intervalometer.stopAt}\n`;
     }
@@ -948,10 +1026,10 @@ class TimelapseUI {
       markdown += `## Errors\n\n`;
       markdown += `| Time | Shot # | Error |\n`;
       markdown += `|------|--------|-------|\n`;
-      report.results.errors.forEach(error => {
+      report.results.errors.forEach((error) => {
         const time = this.formatTime(error.timestamp);
         const shot = error.shotNumber;
-        const message = error.error.replace(/\|/g, '\\|'); // Escape pipes in error messages
+        const message = error.error.replace(/\|/g, "\\|"); // Escape pipes in error messages
         markdown += `| ${time} | ${shot} | ${message} |\n`;
       });
       markdown += `\n`;
@@ -959,7 +1037,7 @@ class TimelapseUI {
 
     if (report.cameraInfo) {
       markdown += `## Camera Information\n\n`;
-      markdown += `- **Model**: ${report.cameraInfo.productname || report.metadata?.cameraModel || 'Unknown'}\n`;
+      markdown += `- **Model**: ${report.cameraInfo.productname || report.metadata?.cameraModel || "Unknown"}\n`;
       if (report.cameraInfo.serialnumber) {
         markdown += `- **Serial Number**: ${report.cameraInfo.serialnumber}\n`;
       }
@@ -970,24 +1048,29 @@ class TimelapseUI {
     }
 
     // Add camera settings table if available
-    if (report.cameraSettings && Object.keys(report.cameraSettings).length > 0) {
+    if (
+      report.cameraSettings &&
+      Object.keys(report.cameraSettings).length > 0
+    ) {
       markdown += `## Camera Settings\n\n`;
       markdown += `<table>\n`;
       markdown += `<tr><th>Setting</th><th>Value</th></tr>\n`;
 
       Object.entries(report.cameraSettings).forEach(([key, setting]) => {
         // Skip the 'values' array if present
-        if (key === 'values' && Array.isArray(setting)) {
+        if (key === "values" && Array.isArray(setting)) {
           return;
         }
 
         // Get the display name (key)
-        const name = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const name = key
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (l) => l.toUpperCase());
 
         // Format the value based on type
-        let value = '';
-        if (setting && typeof setting === 'object') {
-          if ('value' in setting) {
+        let value = "";
+        if (setting && typeof setting === "object") {
+          if ("value" in setting) {
             // If it has a 'value' property, use that
             value = this.formatSettingValueForHTML(setting.value);
           } else {
@@ -1017,10 +1100,10 @@ class TimelapseUI {
    */
   formatSettingValue(value) {
     if (value === null || value === undefined) {
-      return '`N/A`';
+      return "`N/A`";
     }
 
-    if (typeof value === 'object') {
+    if (typeof value === "object") {
       // Check if it's a simple key-value object
       const keys = Object.keys(value);
 
@@ -1029,31 +1112,31 @@ class TimelapseUI {
         const jsonStr = JSON.stringify(value);
         // If it's short, keep it on one line with backticks
         if (jsonStr.length < 50) {
-          return '`' + jsonStr + '`';
+          return "`" + jsonStr + "`";
         }
         // Otherwise format it nicely
         const formatted = JSON.stringify(value, null, 2);
         // Escape underscores and format with line breaks
-        return this.escapeForMarkdownTable(formatted).replace(/\n/g, '<br>');
+        return this.escapeForMarkdownTable(formatted).replace(/\n/g, "<br>");
       }
 
       // For simple objects with just a few properties, format nicely
-      if (keys.length <= 5 && keys.every(k => typeof value[k] !== 'object')) {
+      if (keys.length <= 5 && keys.every((k) => typeof value[k] !== "object")) {
         // Single line for simple objects, wrapped in backticks
-        const formatted = keys.map(k => `${k}: ${value[k]}`).join(', ');
-        return '`' + formatted + '`';
+        const formatted = keys.map((k) => `${k}: ${value[k]}`).join(", ");
+        return "`" + formatted + "`";
       }
 
       // For complex objects, format as readable JSON with line breaks
       const jsonStr = JSON.stringify(value, null, 2);
       // Escape underscores and use <br> for line breaks, preserve spaces
       return this.escapeForMarkdownTable(jsonStr)
-        .replace(/\n/g, '<br>')
-        .replace(/ /g, '&nbsp;');
+        .replace(/\n/g, "<br>")
+        .replace(/ /g, "&nbsp;");
     }
 
     // Wrap single values in backticks
-    return '`' + String(value) + '`';
+    return "`" + String(value) + "`";
   }
 
   /**
@@ -1061,10 +1144,10 @@ class TimelapseUI {
    */
   formatSettingValueForHTML(value) {
     if (value === null || value === undefined) {
-      return '<code>N/A</code>';
+      return "<code>N/A</code>";
     }
 
-    if (typeof value === 'object') {
+    if (typeof value === "object") {
       // Check if it's a simple key-value object
       const keys = Object.keys(value);
 
@@ -1073,34 +1156,36 @@ class TimelapseUI {
         const jsonStr = JSON.stringify(value);
         // If it's short, keep it on one line
         if (jsonStr.length < 50) {
-          return '<code>' + this.escapeHTML(jsonStr) + '</code>';
+          return "<code>" + this.escapeHTML(jsonStr) + "</code>";
         }
         // Otherwise format it nicely with proper line breaks
         const formatted = JSON.stringify(value, null, 2);
-        return '<pre><code>' + this.escapeHTML(formatted) + '</code></pre>';
+        return "<pre><code>" + this.escapeHTML(formatted) + "</code></pre>";
       }
 
       // For simple objects with just a few properties, format nicely
-      if (keys.length <= 5 && keys.every(k => typeof value[k] !== 'object')) {
+      if (keys.length <= 5 && keys.every((k) => typeof value[k] !== "object")) {
         // Multi-line for simple objects using <br>
-        const formatted = keys.map(k => this.escapeHTML(`${k}: ${value[k]}`)).join('<br>');
-        return '<code>' + formatted + '</code>';
+        const formatted = keys
+          .map((k) => this.escapeHTML(`${k}: ${value[k]}`))
+          .join("<br>");
+        return "<code>" + formatted + "</code>";
       }
 
       // For complex objects, format as readable JSON with proper code block
       const jsonStr = JSON.stringify(value, null, 2);
-      return '<pre><code>' + this.escapeHTML(jsonStr) + '</code></pre>';
+      return "<pre><code>" + this.escapeHTML(jsonStr) + "</code></pre>";
     }
 
     // Wrap single values in code tags
-    return '<code>' + this.escapeHTML(String(value)) + '</code>';
+    return "<code>" + this.escapeHTML(String(value)) + "</code>";
   }
 
   /**
    * Escape HTML special characters
    */
   escapeHTML(str) {
-    const div = document.createElement('div');
+    const div = document.createElement("div");
     div.textContent = str;
     return div.innerHTML;
   }
@@ -1111,7 +1196,7 @@ class TimelapseUI {
   escapeForMarkdownTable(str) {
     // Escape underscores to prevent italic formatting
     // Escape pipes to prevent table issues
-    return str.replace(/_/g, '\\_').replace(/\|/g, '\\|');
+    return str.replace(/_/g, "\\_").replace(/\|/g, "\\|");
   }
 }
 

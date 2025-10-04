@@ -498,29 +498,36 @@ class TestShotUI {
       const originalText = btn.querySelector(".btn-text").textContent;
       btn.querySelector(".btn-text").textContent = "Taking photo...";
 
-      // Update to "Downloading..." after 1.5s (after shutter fires)
-      const downloadTextTimeout = setTimeout(() => {
-        btn.querySelector(".btn-text").textContent = "Downloading...";
-      }, 1500);
+      // Listen for download progress events
+      const progressHandler = (data) => {
+        console.log("TestShotUI: Download progress event received:", data);
+        btn.querySelector(".btn-text").textContent =
+          `Downloading (${data.percentage}%)`;
+      };
 
-      // Call API
-      const response = await fetch("/api/camera/photos/test", {
-        method: "POST",
-      });
+      this.wsManager.on("test_photo_download_progress", progressHandler);
 
-      clearTimeout(downloadTextTimeout);
+      try {
+        // Call API
+        const response = await fetch("/api/camera/photos/test", {
+          method: "POST",
+        });
 
-      if (!response.ok) {
-        const errorMessage = await this.extractErrorMessage(response);
-        throw new Error(errorMessage);
+        if (!response.ok) {
+          const errorMessage = await this.extractErrorMessage(response);
+          throw new Error(errorMessage);
+        }
+
+        const photo = await response.json();
+        console.log("TestShotUI: Test photo captured:", photo);
+
+        // Add to test photos list
+        this.testPhotos.push(photo);
+        this.renderTestPhotoGallery();
+      } finally {
+        // Clean up progress listener
+        this.wsManager.off("test_photo_download_progress", progressHandler);
       }
-
-      const photo = await response.json();
-      console.log("TestShotUI: Test photo captured:", photo);
-
-      // Add to test photos list
-      this.testPhotos.push(photo);
-      this.renderTestPhotoGallery();
     } catch (error) {
       console.error("TestShotUI: Test photo capture failed:", error);
       alert(`Failed to capture test photo: ${error.message}`);
@@ -563,6 +570,25 @@ class TestShotUI {
   }
 
   /**
+   * Format processing time for display
+   * @param {number} ms - Processing time in milliseconds
+   * @returns {string|null} Formatted time (e.g., "2.3s" or "450ms") or null if invalid
+   */
+  formatProcessingTime(ms) {
+    if (ms === undefined || ms === null || ms < 0) {
+      return null;
+    }
+
+    if (ms >= 1000) {
+      // Display as seconds with 1 decimal place
+      return `${(ms / 1000).toFixed(1)}s`;
+    } else {
+      // Display as milliseconds
+      return `${Math.round(ms)}ms`;
+    }
+  }
+
+  /**
    * Render the test photo gallery
    */
   renderTestPhotoGallery() {
@@ -592,6 +618,14 @@ class TestShotUI {
         const exif = photo.exif || {};
         const exifDisplay = this.formatExif(exif);
 
+        // Format processing time for display
+        const processingTime = this.formatProcessingTime(
+          photo.processingTimeMs,
+        );
+        const processingTimeDisplay = processingTime
+          ? ` (${processingTime})`
+          : "";
+
         return `
         <div class="test-photo-card" style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
           <img src="${photo.url}/file"
@@ -602,7 +636,7 @@ class TestShotUI {
           <!-- EXIF Metadata -->
           <div class="exif-metadata" data-exif style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0,0,0,0.05); border-radius: 4px; font-size: 0.875rem;">
             <div style="font-weight: 600; margin-bottom: 0.5rem;">Details</div>
-            ${photo.cameraPath ? `<div style="margin-bottom: 0.5rem;"><strong>${photo.cameraPath}</strong></div>` : ""}
+            ${photo.cameraPath ? `<div style="margin-bottom: 0.5rem;"><strong>${photo.cameraPath}${processingTimeDisplay}</strong></div>` : ""}
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem;">
               ${exifDisplay}
             </div>

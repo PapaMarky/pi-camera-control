@@ -18,7 +18,8 @@ class UIStateManager {
   captureState(elementId) {
     const element = document.getElementById(elementId);
     if (!element) {
-      if (this.debugMode) console.warn(`UIStateManager: Element ${elementId} not found`);
+      if (this.debugMode)
+        console.warn(`UIStateManager: Element ${elementId} not found`);
       return null;
     }
 
@@ -28,11 +29,11 @@ class UIStateManager {
       disabled: element.disabled,
       className: element.className,
       style: element.style.cssText,
-      attributes: {}
+      attributes: {},
     };
 
     // Capture all attributes
-    Array.from(element.attributes).forEach(attr => {
+    Array.from(element.attributes).forEach((attr) => {
       state.attributes[attr.name] = attr.value;
     });
 
@@ -49,7 +50,10 @@ class UIStateManager {
   setInProgress(elementId, options = {}) {
     const element = document.getElementById(elementId);
     if (!element) {
-      if (this.debugMode) console.warn(`UIStateManager: Cannot set in-progress, element ${elementId} not found`);
+      if (this.debugMode)
+        console.warn(
+          `UIStateManager: Cannot set in-progress, element ${elementId} not found`,
+        );
       return false;
     }
 
@@ -63,41 +67,45 @@ class UIStateManager {
 
     // Apply in-progress state based on element type and options
     const {
-      progressText = 'In progress...',
-      progressIcon = '⏳',
+      progressText = "In progress...",
+      progressIcon = "⏳",
       disableElement = true,
       addProgressClass = true,
-      timeout = null
+      timeout = null,
     } = options;
 
     // Handle different element types
-    if (element.tagName === 'BUTTON') {
+    if (element.tagName === "BUTTON") {
       if (disableElement) element.disabled = true;
 
-      const icon = element.querySelector('.btn-icon');
+      const icon = element.querySelector(".btn-icon");
       if (icon) {
         icon.textContent = progressIcon;
       } else {
         element.textContent = progressText;
       }
 
-      if (addProgressClass) element.classList.add('in-progress');
-    } else if (element.classList.contains('status-text') ||
-               element.classList.contains('status-value') ||
-               element.tagName === 'SPAN' ||
-               element.tagName === 'DIV') {
+      if (addProgressClass) element.classList.add("in-progress");
+    } else if (
+      element.classList.contains("status-text") ||
+      element.classList.contains("status-value") ||
+      element.tagName === "SPAN" ||
+      element.tagName === "DIV"
+    ) {
       element.textContent = progressText;
-      if (addProgressClass) element.classList.add('in-progress');
+      if (addProgressClass) element.classList.add("in-progress");
     } else {
       // Generic element handling
       element.textContent = progressText;
-      if (addProgressClass) element.classList.add('in-progress');
+      if (addProgressClass) element.classList.add("in-progress");
     }
 
     // Set up timeout protection if specified
     if (timeout && timeout > 0) {
       const timeoutId = setTimeout(() => {
-        console.warn(`UIStateManager: Auto-restoring ${elementId} after ${timeout}ms timeout`);
+        console.warn(
+          `UIStateManager: Auto-restoring ${elementId} after ${timeout}ms timeout`,
+        );
         this.restore(elementId);
       }, timeout);
 
@@ -105,7 +113,10 @@ class UIStateManager {
     }
 
     if (this.debugMode) {
-      console.log(`UIStateManager: Set in-progress state for ${elementId}`, options);
+      console.log(
+        `UIStateManager: Set in-progress state for ${elementId}`,
+        options,
+      );
     }
 
     return true;
@@ -119,12 +130,16 @@ class UIStateManager {
     const originalState = this.elementStates.get(elementId);
 
     if (!element) {
-      if (this.debugMode) console.warn(`UIStateManager: Cannot restore, element ${elementId} not found`);
+      if (this.debugMode)
+        console.warn(
+          `UIStateManager: Cannot restore, element ${elementId} not found`,
+        );
       return false;
     }
 
     if (!originalState) {
-      if (this.debugMode) console.warn(`UIStateManager: No saved state for ${elementId}`);
+      if (this.debugMode)
+        console.warn(`UIStateManager: No saved state for ${elementId}`);
       return false;
     }
 
@@ -136,7 +151,7 @@ class UIStateManager {
       element.innerHTML = originalState.innerHTML;
     }
 
-    if ('disabled' in originalState) {
+    if ("disabled" in originalState) {
       element.disabled = originalState.disabled;
     }
 
@@ -170,11 +185,14 @@ class UIStateManager {
   updateContent(elementId, content, options = {}) {
     const element = document.getElementById(elementId);
     if (!element) {
-      if (this.debugMode) console.warn(`UIStateManager: Cannot update content, element ${elementId} not found`);
+      if (this.debugMode)
+        console.warn(
+          `UIStateManager: Cannot update content, element ${elementId} not found`,
+        );
       return false;
     }
 
-    const { updateType = 'text', preserveState = false } = options;
+    const { updateType = "text", preserveState = false } = options;
 
     if (!preserveState && this.elementStates.has(elementId)) {
       // If we're updating content and not preserving state, clear saved state
@@ -188,14 +206,17 @@ class UIStateManager {
       }
     }
 
-    if (updateType === 'html') {
+    if (updateType === "html") {
       element.innerHTML = content;
     } else {
       element.textContent = content;
     }
 
     if (this.debugMode) {
-      console.log(`UIStateManager: Updated content for ${elementId}`, { content, options });
+      console.log(`UIStateManager: Updated content for ${elementId}`, {
+        content,
+        options,
+      });
     }
 
     return true;
@@ -224,11 +245,11 @@ class UIStateManager {
     });
 
     // Clear any remaining timeouts
-    this.timeouts.forEach(timeoutId => clearTimeout(timeoutId));
+    this.timeouts.forEach((timeoutId) => clearTimeout(timeoutId));
     this.timeouts.clear();
 
     if (this.debugMode) {
-      console.log('UIStateManager: Cleared all states');
+      console.log("UIStateManager: Cleared all states");
     }
   }
 
@@ -237,7 +258,9 @@ class UIStateManager {
    */
   setDebugMode(enabled) {
     this.debugMode = enabled;
-    console.log(`UIStateManager: Debug mode ${enabled ? 'enabled' : 'disabled'}`);
+    console.log(
+      `UIStateManager: Debug mode ${enabled ? "enabled" : "disabled"}`,
+    );
   }
 
   /**
@@ -247,7 +270,7 @@ class UIStateManager {
     return {
       activeElements: this.getActiveElements(),
       activeTimeouts: Array.from(this.timeouts.keys()),
-      totalStates: this.elementStates.size
+      totalStates: this.elementStates.size,
     };
   }
 }
@@ -256,6 +279,9 @@ class UIStateManager {
 window.uiStateManager = new UIStateManager();
 
 // Optional: Enable debug mode in development
-if (window.location.hostname === 'localhost' || window.location.hostname.includes('picontrol')) {
+if (
+  window.location.hostname === "localhost" ||
+  window.location.hostname.includes("picontrol")
+) {
   window.uiStateManager.setDebugMode(true);
 }
