@@ -954,6 +954,12 @@ export function createApiRouter(
           currentShot:
             (status.stats?.shotsTaken || status.progress?.shots || 0) + 1,
           nextShotTime: status.nextShotTime || null,
+          // Include overtime stats for frontend display
+          overtimeShots: status.stats?.overtimeShots || 0,
+          totalOvertimeSeconds: status.stats?.totalOvertimeSeconds || 0,
+          maxOvertimeSeconds: status.stats?.maxOvertimeSeconds || 0,
+          lastShotDuration: status.stats?.lastShotDuration || 0,
+          totalShotDurationSeconds: status.stats?.totalShotDurationSeconds || 0,
         },
         options: {
           interval: status.options?.interval || 30,
@@ -962,6 +968,7 @@ export function createApiRouter(
           stopTime: status.options?.stopTime || null,
           stopCondition: status.options?.stopCondition,
         },
+        averageShotDuration: status.averageShotDuration || 0,
       });
     } catch (error) {
       logger.error("Failed to get intervalometer status:", error);
