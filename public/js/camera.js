@@ -177,10 +177,27 @@ class CameraManager {
     radios.forEach((radio) => {
       radio.addEventListener("change", () => {
         // Enable/disable inputs based on selection
-        shotsInput.disabled = radio.value !== "shots";
-        timeInput.disabled = radio.value !== "time";
+        const shotsSelected = radio.value === "shots";
+        const timeSelected = radio.value === "time";
 
-        // Clear disabled inputs
+        shotsInput.disabled = !shotsSelected;
+        timeInput.disabled = !timeSelected;
+
+        // When switching TO shots mode, restore default value if empty
+        if (shotsSelected && !shotsInput.value) {
+          shotsInput.value = "10";
+        }
+
+        // When switching TO time mode, set default to 1 hour from now if empty
+        if (timeSelected && !timeInput.value) {
+          const now = new Date();
+          now.setHours(now.getHours() + 1);
+          const hours = String(now.getHours()).padStart(2, "0");
+          const minutes = String(now.getMinutes()).padStart(2, "0");
+          timeInput.value = `${hours}:${minutes}`;
+        }
+
+        // Clear disabled inputs when switching away
         if (shotsInput.disabled) shotsInput.value = "";
         if (timeInput.disabled) timeInput.value = "";
       });
@@ -822,18 +839,25 @@ class CameraManager {
 
     // Map UI stopCondition values to backend values and add to options
     if (stopCondition === "shots") {
-      const shots = document.getElementById("shots-input").value;
-      if (!shots || shots <= 0) {
-        this.handleError("Please enter a valid number of shots");
+      const shotsInput = document.getElementById("shots-input");
+      const shots = shotsInput.value;
+      const parsedShots = parseInt(shots);
+      if (!shots || parsedShots <= 0 || isNaN(parsedShots)) {
+        const errorMessage = "Please enter a valid number of shots";
+        Toast.error(errorMessage);
+        shotsInput.focus();
         return;
       }
       options.stopCondition = "stop-after";
-      options.shots = parseInt(shots);
-      logMessage += ` for ${shots} shots`;
+      options.shots = parsedShots;
+      logMessage += ` for ${parsedShots} shots`;
     } else if (stopCondition === "time") {
-      const stopTime = document.getElementById("stop-time-input").value;
+      const timeInput = document.getElementById("stop-time-input");
+      const stopTime = timeInput.value;
       if (!stopTime) {
-        this.handleError("Please enter a stop time");
+        const errorMessage = "Please enter a stop time";
+        Toast.error(errorMessage);
+        timeInput.focus();
         return;
       }
       options.stopCondition = "stop-at";
