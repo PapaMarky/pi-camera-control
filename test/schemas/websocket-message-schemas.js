@@ -70,6 +70,13 @@ const MessageSchemas = {
       network: {
         interfaces: "object",
       },
+      storage: {
+        mounted: "boolean?",
+        totalMB: "number?",
+        freeMB: "number?",
+        usedMB: "number?",
+        percentUsed: "number?",
+      },
       intervalometer: "object?",
       timesync: "object?",
       clientId: "string",
@@ -99,6 +106,13 @@ const MessageSchemas = {
       },
       network: {
         interfaces: "object",
+      },
+      storage: {
+        mounted: "boolean?",
+        totalMB: "number?",
+        freeMB: "number?",
+        usedMB: "number?",
+        percentUsed: "number?",
       },
       intervalometer: {
         running: "boolean?",

@@ -175,6 +175,7 @@ Main application server that orchestrates all components:
 - Connection monitoring and health checks
 - Photo capture with error recovery
 - Camera settings retrieval
+- SD card storage monitoring via CCAPI v1.10+ `/devicestatus/storage` endpoint
 
 **LiveViewManager** (`src/camera/liveview-manager.js`)
 
@@ -323,6 +324,7 @@ The system uses EventEmitter patterns throughout for loose coupling:
 - **Network Events**: WiFi state changes, AP configuration
 - **Power Events**: Battery status, thermal warnings
 - **Session Events**: Intervalometer start/stop/completion
+- **Storage Events**: SD card capacity and availability updates
 
 ## Configuration Management
 

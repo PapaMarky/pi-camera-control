@@ -75,6 +75,66 @@ Returns camera battery status and information.
 
 **Note:** Format matches Canon CCAPI v1.40 specification. The `level` field is returned as a string, not a number. Additional fields include `position` (camera location), `kind` (battery type), and standard `quality` values ("bad", "normal", "good", "unknown").
 
+#### Get Camera Storage
+
+```http
+GET /api/camera/storage
+```
+
+Returns SD card storage information from the camera.
+
+**Response (SD card mounted):**
+
+```json
+{
+  "mounted": true,
+  "name": "card1",
+  "totalBytes": 32000000000,
+  "freeBytes": 8000000000,
+  "usedBytes": 24000000000,
+  "totalMB": 30517,
+  "freeMB": 7629,
+  "usedMB": 22888,
+  "percentUsed": 75,
+  "contentCount": 1234,
+  "accessMode": "readwrite"
+}
+```
+
+**Response (No SD card):**
+
+```json
+{
+  "mounted": false,
+  "name": null,
+  "totalBytes": 0,
+  "freeBytes": 0,
+  "usedBytes": 0,
+  "totalMB": 0,
+  "freeMB": 0,
+  "usedMB": 0,
+  "percentUsed": 0,
+  "contentCount": 0,
+  "accessMode": null
+}
+```
+
+**Fields:**
+
+- `mounted` (boolean): Whether an SD card is inserted and mounted
+- `name` (string|null): Storage name from camera (e.g., "card1")
+- `totalBytes` (number): Total SD card capacity in bytes
+- `freeBytes` (number): Available free space in bytes
+- `usedBytes` (number): Used space in bytes (calculated: total - free)
+- `totalMB` (number): Total capacity in megabytes
+- `freeMB` (number): Free space in megabytes
+- `usedMB` (number): Used space in megabytes
+- `percentUsed` (number): Percentage of space used (0-100)
+- `contentCount` (number): Total number of files on card
+- `accessMode` (string|null): Access capability ("readwrite" or "readonly")
+
+**Note:** Uses Canon CCAPI v1.10+ endpoint `/ccapi/ver110/devicestatus/storage`. All size values are rounded to nearest megabyte. The `usedBytes` field is calculated as `maxsize - spacesize` from the CCAPI response.
+
 #### Take Photo
 
 ```http
@@ -886,9 +946,27 @@ graph LR
       "wlan0": { "connected": true },
       "ap0": { "active": true }
     }
+  },
+  "storage": {
+    "mounted": true,
+    "totalMB": 30517,
+    "freeMB": 7629,
+    "usedMB": 22888,
+    "percentUsed": 75
   }
 }
 ```
+
+**Storage Field Details:**
+
+- `mounted` (boolean): Whether SD card is present
+- `totalMB` (number): Total capacity in megabytes
+- `freeMB` (number): Available free space in megabytes
+- `usedMB` (number): Used space in megabytes
+- `percentUsed` (number): Percentage used (0-100)
+- Field is `null` when camera is not connected or storage info unavailable
+
+````
 
 ##### Event Notifications
 
@@ -902,7 +980,7 @@ graph LR
     "shotNumber": 25
   }
 }
-```
+````
 
 ##### Discovery Events
 

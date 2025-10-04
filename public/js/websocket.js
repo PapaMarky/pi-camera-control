@@ -190,12 +190,8 @@ class WebSocketManager {
         break;
 
       case "status_update":
-        // For status_update, the camera/power data is in the message itself, not in 'data'
-        this.emit("status_update", {
-          camera: message.camera,
-          power: message.power,
-          timestamp: message.timestamp,
-        });
+        // Emit the entire message with all fields (camera, power, network, storage, discovery, intervalometer)
+        this.emit("status_update", message);
         break;
 
       case "event":
