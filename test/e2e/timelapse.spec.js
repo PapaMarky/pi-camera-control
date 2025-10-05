@@ -171,15 +171,15 @@ test.describe("Session Completion", () => {
     expect(await titleInput.count()).toBe(1);
   });
 
-  test("should have save and discard buttons", async ({ page }) => {
+  test("should have done button and auto-save notice", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
 
-    const saveBtn = await page.locator("#save-session-btn");
-    const discardBtn = await page.locator("#discard-session-btn");
+    const doneBtn = await page.locator("#completion-done-btn");
+    const autoSaveNotice = await page.locator(".auto-save-notice");
 
-    expect(await saveBtn.count()).toBe(1);
-    expect(await discardBtn.count()).toBe(1);
+    expect(await doneBtn.count()).toBe(1);
+    expect(await autoSaveNotice.count()).toBe(1);
   });
 });
 

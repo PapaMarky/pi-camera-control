@@ -1012,6 +1012,10 @@ graph LR
 
 ##### Timelapse Events
 
+**Session Completion (Auto-Save Enabled)**
+
+When a timelapse session completes, stops, or encounters an error, the system automatically saves the session report without requiring user action.
+
 ```json
 {
   "type": "timelapse_event",
@@ -1024,6 +1028,8 @@ graph LR
   }
 }
 ```
+
+**Note:** As of v2.1.0, session reports are automatically saved when sessions complete, stop, or error. The `needsUserDecision` field has been removed from these events. Reports are immediately available in the reports list without user intervention.
 
 ##### Photo Overtime Event
 
@@ -1351,28 +1357,42 @@ const clients = new Set();
 }
 ```
 
-#### Session Saved Event
+#### Report Saved Event
 
-Broadcast when a timelapse session is saved as a report:
+Broadcast when a timelapse session report is saved (automatically or manually):
 
 ```json
 {
   "type": "timelapse_event",
-  "eventType": "session_saved",
+  "eventType": "report_saved",
   "timestamp": "2024-01-01T12:00:00.000Z",
   "data": {
     "sessionId": "session-uuid",
+    "title": "Night Sky Timelapse",
+    "reportId": "report-uuid",
     "report": {
       "id": "report-uuid",
+      "sessionId": "session-uuid",
       "title": "Night Sky Timelapse",
-      "createdAt": "2024-01-01T12:00:00.000Z",
-      "shotCount": 100,
-      "successRate": 98
-    },
-    "message": "Session saved as report successfully"
+      "startTime": "2024-01-01T20:00:00.000Z",
+      "endTime": "2024-01-01T23:00:00.000Z",
+      "status": "completed",
+      "results": {
+        "imagesCaptured": 100,
+        "imagesSuccessful": 98,
+        "imagesFailed": 2
+      }
+    }
   }
 }
 ```
+
+**Automatic Saving Behavior:**
+
+- Reports are automatically saved when sessions complete normally
+- Reports are automatically saved when users stop sessions
+- Reports are automatically saved when sessions error
+- If auto-save fails (e.g., disk full), the system falls back to unsaved session recovery
 
 #### Session Discarded Event
 
@@ -1389,6 +1409,274 @@ Broadcast when a timelapse session is discarded:
   }
 }
 ```
+
+### IntervalometerStateManager Internal Events
+
+The IntervalometerStateManager emits local events for state coordination. These are NOT broadcast via WebSocket but can be listened to by backend components.
+
+#### initialized
+
+Emitted when IntervalometerStateManager completes initialization.
+
+**Payload:**
+
+```json
+{
+  "hasUnsavedSession": false,
+  "sessionCount": 5
+}
+```
+
+#### initializationFailed
+
+Emitted when IntervalometerStateManager fails to initialize.
+
+**Payload:**
+
+```json
+{
+  "error": "Failed to load session history: Permission denied"
+}
+```
+
+#### sessionCreated
+
+Emitted when a new timelapse session is created.
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "title": "Night Sky Timelapse",
+  "options": {
+    "interval": 30,
+    "stopCondition": "unlimited"
+  }
+}
+```
+
+#### sessionCreateFailed
+
+Emitted when session creation fails.
+
+**Payload:**
+
+```json
+{
+  "error": "Cannot create new session while another is running"
+}
+```
+
+#### sessionStarted
+
+Emitted when a session begins capturing photos.
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "startTime": "2024-01-01T20:00:00.000Z"
+}
+```
+
+#### sessionPaused
+
+Emitted when a running session is paused.
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "timestamp": "2024-01-01T21:00:00.000Z"
+}
+```
+
+#### sessionResumed
+
+Emitted when a paused session is resumed.
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "timestamp": "2024-01-01T21:05:00.000Z"
+}
+```
+
+#### photoTaken
+
+Emitted after each successful photo capture.
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "shotNumber": 42,
+  "success": true,
+  "duration": 2340
+}
+```
+
+#### photoFailed
+
+Emitted when a photo capture fails.
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "shotNumber": 43,
+  "success": false,
+  "error": "Camera disconnected"
+}
+```
+
+#### sessionStopped
+
+Emitted when a session is stopped by the user.
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "reason": "Stopped by user",
+  "completedAt": "2024-01-01T23:00:00.000Z",
+  "stats": {
+    "shotsTaken": 100,
+    "shotsSuccessful": 98,
+    "shotsFailed": 2
+  }
+}
+```
+
+#### sessionCompleted
+
+Emitted when a session completes normally (reaches stop condition).
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "reason": "Target shot count reached",
+  "completedAt": "2024-01-01T23:00:00.000Z",
+  "stats": {
+    "shotsTaken": 200,
+    "shotsSuccessful": 198,
+    "shotsFailed": 2
+  }
+}
+```
+
+#### sessionError
+
+Emitted when a session encounters an unrecoverable error.
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "error": "Camera connection lost",
+  "timestamp": "2024-01-01T22:30:00.000Z"
+}
+```
+
+#### stateChanged
+
+Emitted on any state transition.
+
+**Payload:**
+
+```json
+{
+  "previousState": "running",
+  "newState": "stopped",
+  "sessionId": "session-uuid",
+  "timestamp": "2024-01-01T23:00:00.000Z"
+}
+```
+
+#### reportSaved
+
+Emitted when a session report is successfully saved.
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "reportId": "report-uuid",
+  "title": "Night Sky Timelapse"
+}
+```
+
+#### reportSaveFailed
+
+Emitted when saving a report fails.
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "error": "Disk full"
+}
+```
+
+#### sessionDiscarded
+
+Emitted when an unsaved session is discarded.
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid"
+}
+```
+
+#### unsavedSessionFound
+
+Emitted during initialization if an unsaved session exists.
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "title": "Incomplete Session",
+  "shotsTaken": 45,
+  "createdAt": "2024-01-01T20:00:00.000Z"
+}
+```
+
+#### statusUpdate
+
+Emitted when session status changes (internal monitoring).
+
+**Payload:**
+
+```json
+{
+  "sessionId": "session-uuid",
+  "state": "running",
+  "stats": {
+    "shotsTaken": 42,
+    "shotsSuccessful": 41,
+    "shotsFailed": 1
+  }
+}
+```
+
+**Note:** These events are emitted by IntervalometerStateManager for internal backend coordination. For WebSocket broadcasts to clients, see the "Session Management Events" section above.
 
 ### Activity Log Messages
 

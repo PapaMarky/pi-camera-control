@@ -535,7 +535,7 @@ class NetworkUI {
       // WiFi is enabled but not connected
       toggleBtn.className = "danger-btn";
       toggleBtn.disabled = false;
-      toggleIcon.textContent = "📵";
+      toggleIcon.textContent = "❌";
       toggleText.textContent = "Turn Off WiFi";
     }
   }

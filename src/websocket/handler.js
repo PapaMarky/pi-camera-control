@@ -1127,15 +1127,35 @@ export function createWebSocketHandler(
       event,
     );
 
+    const deadClients = new Set();
+    let successCount = 0;
+    let failureCount = 0;
+
     for (const client of clients) {
       try {
         if (client.readyState === client.OPEN) {
           client.send(message);
+          successCount++;
           logger.debug(`Sent event to client`);
+        } else {
+          deadClients.add(client);
         }
       } catch (error) {
-        logger.debug("Failed to broadcast event:", error.message);
+        logger.error(`Failed to send event ${type} to client:`, error.message);
+        failureCount++;
+        deadClients.add(client);
       }
+    }
+
+    // Clean up dead connections
+    for (const deadClient of deadClients) {
+      clients.delete(deadClient);
+    }
+
+    if (failureCount > 0 || deadClients.size > 0) {
+      logger.warn(
+        `Event ${type} broadcast: ${successCount} succeeded, ${failureCount} failed, ${deadClients.size} dead clients removed`,
+      );
     }
   };
 
@@ -1170,14 +1190,37 @@ export function createWebSocketHandler(
       `Broadcasting discovery event ${eventType} to ${clients.size} clients`,
     );
 
+    const deadClients = new Set();
+    let successCount = 0;
+    let failureCount = 0;
+
     for (const client of clients) {
       try {
         if (client.readyState === client.OPEN) {
           client.send(message);
+          successCount++;
+        } else {
+          deadClients.add(client);
         }
       } catch (error) {
-        logger.debug("Failed to broadcast discovery event:", error.message);
+        logger.error(
+          `Failed to send discovery event ${eventType} to client:`,
+          error.message,
+        );
+        failureCount++;
+        deadClients.add(client);
       }
+    }
+
+    // Clean up dead connections
+    for (const deadClient of deadClients) {
+      clients.delete(deadClient);
+    }
+
+    if (failureCount > 0 || deadClients.size > 0) {
+      logger.warn(
+        `Discovery event ${eventType} broadcast: ${successCount} succeeded, ${failureCount} failed, ${deadClients.size} dead clients removed`,
+      );
     }
 
     // Also trigger a status update to refresh camera status
@@ -1198,14 +1241,37 @@ export function createWebSocketHandler(
       `Broadcasting timelapse event ${eventType} to ${clients.size} clients`,
     );
 
+    const deadClients = new Set();
+    let successCount = 0;
+    let failureCount = 0;
+
     for (const client of clients) {
       try {
         if (client.readyState === client.OPEN) {
           client.send(message);
+          successCount++;
+        } else {
+          deadClients.add(client);
         }
       } catch (error) {
-        logger.debug("Failed to broadcast timelapse event:", error.message);
+        logger.error(
+          `Failed to send timelapse event ${eventType} to client:`,
+          error.message,
+        );
+        failureCount++;
+        deadClients.add(client);
       }
+    }
+
+    // Clean up dead connections
+    for (const deadClient of deadClients) {
+      clients.delete(deadClient);
+    }
+
+    if (failureCount > 0 || deadClients.size > 0) {
+      logger.warn(
+        `Timelapse event ${eventType} broadcast: ${successCount} succeeded, ${failureCount} failed, ${deadClients.size} dead clients removed`,
+      );
     }
   };
 
@@ -1222,14 +1288,24 @@ export function createWebSocketHandler(
       `Broadcasting activity log to ${clients.size} clients: ${data.message}`,
     );
 
+    const deadClients = new Set();
+
     for (const client of clients) {
       try {
         if (client.readyState === client.OPEN) {
           client.send(message);
+        } else {
+          deadClients.add(client);
         }
       } catch (error) {
-        logger.debug("Failed to broadcast activity log:", error.message);
+        logger.debug("Failed to send activity log to client:", error.message);
+        deadClients.add(client);
       }
+    }
+
+    // Clean up dead connections
+    for (const deadClient of deadClients) {
+      clients.delete(deadClient);
     }
   };
 
@@ -1331,6 +1407,7 @@ export function createWebSocketHandler(
   handleConnection.broadcastDiscoveryEvent = broadcastDiscoveryEvent;
   handleConnection.broadcastTimelapseEvent = broadcastTimelapseEvent;
   handleConnection.broadcastActivityLog = broadcastActivityLog;
+  handleConnection.broadcastNetworkEvent = broadcastNetworkEvent; // Network-specific events
 
   return handleConnection;
 }

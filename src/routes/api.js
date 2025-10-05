@@ -102,6 +102,16 @@ export function createApiRouter(
       }
 
       await currentController.updateCameraSetting(setting, value);
+
+      // Broadcast setting change to all connected clients
+      if (server.wsHandler && server.wsHandler.broadcast) {
+        server.wsHandler.broadcast("camera_setting_changed", {
+          setting,
+          value,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       res.json({
         success: true,
         message: `Setting ${setting} updated to ${value}`,
@@ -724,6 +734,15 @@ export function createApiRouter(
       );
 
       if (result) {
+        // Broadcast configuration update to all connected clients
+        if (server.wsHandler && server.wsHandler.broadcastDiscoveryEvent) {
+          server.wsHandler.broadcastDiscoveryEvent("cameraConfigured", {
+            ip,
+            port,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
         res.json({
           success: true,
           message: "Camera configuration updated successfully",
@@ -1276,100 +1295,23 @@ export function createApiRouter(
         });
       }
 
-      // Format timestamp for date command (YYYY-MM-DD HH:MM:SS UTC)
-      // Always use UTC for internal system time to avoid timezone confusion
-      const formattedTime = clientTime
-        .toISOString()
-        .slice(0, 19)
-        .replace("T", " ");
-
       logger.info(
         `Time sync requested. Current: ${new Date().toISOString()}, Client: ${clientTime.toISOString()}, Client timezone: ${timezone}`,
       );
 
-      const { spawn } = await import("child_process");
+      // Use system-time utility for proper async/await handling (fixes BE-5)
+      const { syncSystemTime } = await import("../utils/system-time.js");
 
-      // Set system time in UTC
-      const setTime = spawn("sudo", ["date", "-u", "-s", formattedTime], {
-        stdio: "pipe",
-      });
+      // Properly await the system time sync - prevents race condition
+      const result = await syncSystemTime(clientTime, timezone);
 
-      setTime.on("close", async (timeCode) => {
-        if (timeCode === 0) {
-          logger.info(
-            `System time synchronized successfully to UTC: ${formattedTime}`,
-          );
-
-          // Set timezone if provided
-          let timezoneSetResult = null;
-          if (timezone) {
-            try {
-              // Set system timezone using timedatectl (systemd)
-              const setTimezone = spawn(
-                "sudo",
-                ["timedatectl", "set-timezone", timezone],
-                { stdio: "pipe" },
-              );
-
-              await new Promise((resolve) => {
-                setTimezone.on("close", (tzCode) => {
-                  if (tzCode === 0) {
-                    timezoneSetResult = { success: true, timezone };
-                    logger.info(`System timezone set to: ${timezone}`);
-                    resolve();
-                  } else {
-                    logger.warn(
-                      `Failed to set timezone to ${timezone}, exit code: ${tzCode}`,
-                    );
-                    timezoneSetResult = {
-                      success: false,
-                      error: `Failed to set timezone: ${timezone}`,
-                    };
-                    resolve(); // Don't fail the whole operation
-                  }
-                });
-
-                setTimezone.on("error", (tzError) => {
-                  logger.warn("Timezone set error:", tzError.message);
-                  timezoneSetResult = {
-                    success: false,
-                    error: tzError.message,
-                  };
-                  resolve(); // Don't fail the whole operation
-                });
-              });
-            } catch (error) {
-              logger.warn("Error setting timezone:", error.message);
-              timezoneSetResult = { success: false, error: error.message };
-            }
-          }
-
-          const newTime = new Date().toISOString();
-          const newTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-          res.json({
-            success: true,
-            message: "System time synchronized successfully",
-            previousTime: new Date().toISOString(),
-            newTime: newTime,
-            timezone: newTimezone,
-            timezoneSync: timezoneSetResult,
-          });
-        } else {
-          logger.error(`Time sync failed with exit code: ${timeCode}`);
-          res.status(500).json({
-            success: false,
-            error: "Failed to set system time. Check sudo permissions.",
-          });
-        }
-      });
-
-      setTime.on("error", (error) => {
-        logger.error("Time sync error:", error);
-        res.status(500).json({
-          success: false,
-          error: "Failed to execute time sync command",
-        });
+      res.json({
+        success: true,
+        message: "System time synchronized successfully",
+        previousTime: new Date().toISOString(),
+        newTime: result.newTime,
+        timezone: result.timezone,
+        timezoneSync: result.timezoneSync,
       });
     } catch (error) {
       logger.error("Failed to sync time:", error);
@@ -1377,6 +1319,7 @@ export function createApiRouter(
         createApiError(error.message, {
           code: ErrorCodes.SYSTEM_ERROR,
           component: Components.API_ROUTER,
+          operation: "setSystemTime",
         }),
       );
     }
@@ -1465,6 +1408,15 @@ export function createApiRouter(
         const forceRefresh = req.query.refresh === "true";
         const networks =
           await networkServiceManager.scanWiFiNetworks(forceRefresh);
+
+        // Broadcast scan completion to all clients (BE-8)
+        if (server.wsHandler && server.wsHandler.broadcastNetworkEvent) {
+          server.wsHandler.broadcastNetworkEvent("wifi_scan_complete", {
+            networkCount: networks.length,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
         res.json({ networks });
       } catch (error) {
         logger.error("WiFi scan failed:", error);
@@ -1496,6 +1448,22 @@ export function createApiRouter(
     // Connect to WiFi network - LOW-LEVEL SERVICE OPERATION
     router.post("/network/wifi/connect", async (req, res) => {
       try {
+        // Guard: Check if network operation is safe (IP-5)
+        const { isNetworkOperationSafe, createNetworkOperationError } =
+          await import("../utils/network-operation-guard.js");
+        const safetyCheck = isNetworkOperationSafe(intervalometerStateManager);
+
+        if (!safetyCheck.safe) {
+          return res
+            .status(409)
+            .json(
+              createNetworkOperationError(
+                safetyCheck.sessionState,
+                "WiFi connect",
+              ),
+            );
+        }
+
         const { ssid, password, priority } = req.body;
 
         if (!ssid) {
@@ -1528,6 +1496,22 @@ export function createApiRouter(
     // Disconnect from WiFi - LOW-LEVEL SERVICE OPERATION
     router.post("/network/wifi/disconnect", async (req, res) => {
       try {
+        // Guard: Check if network operation is safe (IP-5)
+        const { isNetworkOperationSafe, createNetworkOperationError } =
+          await import("../utils/network-operation-guard.js");
+        const safetyCheck = isNetworkOperationSafe(intervalometerStateManager);
+
+        if (!safetyCheck.safe) {
+          return res
+            .status(409)
+            .json(
+              createNetworkOperationError(
+                safetyCheck.sessionState,
+                "WiFi disconnect",
+              ),
+            );
+        }
+
         const result = await networkServiceManager.disconnectWiFi();
         res.json(result);
       } catch (error) {
@@ -1544,6 +1528,22 @@ export function createApiRouter(
     // Configure access point - HIGH-LEVEL STATE OPERATION (affects overall state)
     router.post("/network/accesspoint/configure", async (req, res) => {
       try {
+        // Guard: Check if network operation is safe (IP-5)
+        const { isNetworkOperationSafe, createNetworkOperationError } =
+          await import("../utils/network-operation-guard.js");
+        const safetyCheck = isNetworkOperationSafe(intervalometerStateManager);
+
+        if (!safetyCheck.safe) {
+          return res
+            .status(409)
+            .json(
+              createNetworkOperationError(
+                safetyCheck.sessionState,
+                "Access Point configuration",
+              ),
+            );
+        }
+
         const { ssid, passphrase, channel, hidden } = req.body;
 
         if (!ssid || !passphrase) {
@@ -1752,6 +1752,15 @@ export function createApiRouter(
     router.post("/discovery/scan", async (req, res) => {
       try {
         await discoveryManager.searchForCameras();
+
+        // Broadcast scan initiation to all clients (BE-9)
+        if (server.wsHandler && server.wsHandler.broadcastDiscoveryEvent) {
+          server.wsHandler.broadcastDiscoveryEvent("scanStarted", {
+            timestamp: new Date().toISOString(),
+            manual: true,
+          });
+        }
+
         res.json({ success: true, message: "Camera scan initiated" });
       } catch (error) {
         logger.error("Failed to trigger camera scan:", error);

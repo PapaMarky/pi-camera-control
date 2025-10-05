@@ -252,21 +252,28 @@ class CameraManager {
       this.handleError(data.message);
     });
 
-    // Intervalometer events (API responses)
-    wsManager.on("intervalometer_start", (data) => {
-      this.log("Intervalometer started successfully", "success");
-      this.updateIntervalometerUI(data.status);
-    });
-
     // Intervalometer broadcast events (for all clients)
+    // Note: Using ONLY broadcast events, not API response events, to avoid duplicate UI updates
     wsManager.on("intervalometer_started", (data) => {
       this.log("Intervalometer started successfully", "success");
+      // Restore the start button
+      this.setButtonLoading("start-intervalometer-btn", false);
       // Get full status from server
       this.refreshIntervalometerStatus();
     });
 
     wsManager.on("intervalometer_stopped", (data) => {
-      this.log("Intervalometer stopped", "info");
+      // Create detailed stop message from broadcast data
+      let logMessage = "Intervalometer stopped";
+      if (data.stats) {
+        const { shotsTaken, shotsSuccessful } = data.stats;
+        const successRate =
+          shotsTaken > 0
+            ? ((shotsSuccessful / shotsTaken) * 100).toFixed(1)
+            : 100;
+        logMessage += ` (${shotsTaken} shots taken, ${successRate}% success rate)`;
+      }
+      this.log(logMessage, "info");
       this.refreshIntervalometerStatus();
     });
 
@@ -332,22 +339,6 @@ class CameraManager {
       this.stopIntervalometerStatusUpdates();
       // Then update UI to completed state
       this.updateIntervalometerUI({ state: "completed", stats: data.stats });
-    });
-
-    wsManager.on("intervalometer_stop", (data) => {
-      // Create detailed stop message
-      let logMessage = "Intervalometer stopped";
-      if (data.status && data.status.stats) {
-        const { shotsTaken, shotsSuccessful } = data.status.stats;
-        const successRate =
-          shotsTaken > 0
-            ? ((shotsSuccessful / shotsTaken) * 100).toFixed(1)
-            : 100;
-        logMessage += ` (${shotsTaken} shots taken, ${successRate}% success rate)`;
-      }
-      this.log(logMessage, "info");
-
-      this.updateIntervalometerUI(data.status || { state: "stopped", ...data });
     });
 
     // Welcome message
@@ -788,6 +779,9 @@ class CameraManager {
         // Clear form validation states
         ipInput.setCustomValidity("");
         portInput.setCustomValidity("");
+
+        // Update camera status display after successful configuration
+        setTimeout(() => this.updateCameraStatus(), 1000);
       } else {
         this.handleError(`Configuration update failed: ${result.error}`);
       }
@@ -882,6 +876,7 @@ class CameraManager {
       if (wsManager.connected) {
         console.log("Using WebSocket path");
         wsManager.startIntervalometer(options);
+        // Button will be restored when we receive session_started event
       } else {
         console.log("Using REST API path");
         const response = await fetch("/api/intervalometer/start", {
@@ -895,13 +890,13 @@ class CameraManager {
         if (result.success) {
           this.log("Intervalometer started successfully", "success");
           this.updateIntervalometerUI(result.status);
+          this.setButtonLoading("start-intervalometer-btn", false);
         } else {
           throw new Error(result.error || "Failed to start intervalometer");
         }
       }
     } catch (error) {
       this.handleError(`Start failed: ${error.message}`);
-    } finally {
       this.setButtonLoading("start-intervalometer-btn", false);
     }
   }
@@ -1519,23 +1514,12 @@ class CameraManager {
     if (loading) {
       const { progressText, progressIcon = "⏳", timeout = 30000 } = options;
 
-      // Handle buttons with icons vs text
-      const button = document.getElementById(buttonId);
-      const icon = button?.querySelector(".btn-icon");
-
-      if (icon) {
-        // Button has icon - use icon-based progress
-        window.uiStateManager.setInProgress(buttonId, {
-          progressIcon,
-          timeout,
-        });
-      } else {
-        // Button uses text - use text-based progress
-        window.uiStateManager.setInProgress(buttonId, {
-          progressText: progressText || "Loading...",
-          timeout,
-        });
-      }
+      // Pass both icon and text progress to UIStateManager
+      window.uiStateManager.setInProgress(buttonId, {
+        progressIcon,
+        progressText: progressText || "Loading...",
+        timeout,
+      });
     } else {
       window.uiStateManager.restore(buttonId);
     }
@@ -1690,13 +1674,20 @@ WebSocket: ${wsManager.connected ? "Connected" : "Disconnected"}
     } else if (cardName === "network-settings") {
       this.populateCameraConfigForm();
     } else if (cardName === "utilities") {
-      if (window.utilitiesManager) {
-        window.utilitiesManager.initialize();
+      // Initialize UtilitiesManager if not already created (prevents race condition with DOMContentLoaded)
+      if (!window.utilitiesManager) {
+        window.utilitiesManager = new UtilitiesManager();
       }
+      window.utilitiesManager.initialize();
     } else if (cardName === "timelapse-reports") {
       // Load timelapse reports when the card is shown
       if (window.timelapseUI) {
         window.timelapseUI.loadReports();
+      }
+    } else if (cardName === "test-shot") {
+      // Auto-load camera settings when switching to Test Shot card
+      if (window.testShotUI && this.status.connected) {
+        window.testShotUI.loadSettings();
       }
     }
 

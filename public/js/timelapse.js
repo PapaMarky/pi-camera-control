@@ -7,6 +7,7 @@ class TimelapseUI {
     this.wsManager = wsManager;
     this.currentReport = null;
     this.unsavedSession = null;
+    this.boundHandlers = new Map(); // Track bound handlers for cleanup
 
     this.initialize();
   }
@@ -65,66 +66,79 @@ class TimelapseUI {
 
     // Session completion handlers
     document
-      .getElementById("save-session-btn")
+      .getElementById("completion-done-btn")
       .addEventListener("click", () => {
-        this.saveSession();
-      });
-
-    document
-      .getElementById("discard-session-btn")
-      .addEventListener("click", () => {
-        this.discardSession();
+        this.handleCompletionDone();
       });
 
     // WebSocket event handlers
     if (this.wsManager) {
+      // Helper to register and track handlers
+      const registerHandler = (event, handler) => {
+        this.boundHandlers.set(event, handler);
+        this.wsManager.on(event, handler);
+      };
+
       // Report data responses
-      this.wsManager.on("timelapse_reports_response", (data) => {
+      // Use ONLY broadcast event to avoid duplicate UI updates
+      registerHandler("timelapse_reports", (data) => {
         this.handleReportsResponse(data);
       });
 
-      this.wsManager.on("timelapse_reports", (data) => {
-        this.handleReportsResponse(data);
-      });
-
-      this.wsManager.on("timelapse_report_response", (data) => {
+      registerHandler("timelapse_report_response", (data) => {
         this.handleReportResponse(data);
       });
 
       // Session events
-      this.wsManager.on("session_completed", (data) => {
+      registerHandler("session_completed", (data) => {
         this.handleSessionCompleted(data);
       });
 
-      this.wsManager.on("session_stopped", (data) => {
+      registerHandler("session_stopped", (data) => {
         this.handleSessionStopped(data);
       });
 
-      this.wsManager.on("session_error", (data) => {
+      registerHandler("session_error", (data) => {
         this.handleSessionError(data);
       });
 
-      this.wsManager.on("unsaved_session_found", (data) => {
+      registerHandler("unsaved_session_found", (data) => {
         this.handleUnsavedSessionFound(data);
       });
 
-      this.wsManager.on("report_saved", (data) => {
+      registerHandler("report_saved", (data) => {
         this.loadReports(); // Refresh the list after saving
       });
 
-      this.wsManager.on("session_saved", (data) => {
+      registerHandler("session_saved", (data) => {
         this.handleSessionSaved(); // Hide completion page and show success
       });
 
-      this.wsManager.on("report_deleted", (data) => {
+      registerHandler("report_deleted", (data) => {
         this.loadReports(); // Refresh the list after deleting
       });
 
       // Handle session discard response
-      this.wsManager.on("session_discarded", (data) => {
+      registerHandler("session_discarded", (data) => {
         this.handleSessionDiscarded();
       });
     }
+  }
+
+  /**
+   * Cleanup method to remove all event listeners
+   * Should be called before destroying the UI manager instance
+   */
+  destroy() {
+    console.log("TimelapseUI: Cleaning up event listeners");
+
+    // Remove all WebSocket event handlers
+    for (const [event, handler] of this.boundHandlers) {
+      this.wsManager.off(event, handler);
+    }
+    this.boundHandlers.clear();
+
+    console.log("TimelapseUI: Cleanup complete");
   }
 
   /**
@@ -609,14 +623,65 @@ class TimelapseUI {
   }
 
   /**
-   * Save session as report
+   * Handle completion done - navigate back to intervalometer
+   * Note: Report is already auto-saved by backend, so no save action needed
+   */
+  handleCompletionDone() {
+    const titleInput = document.getElementById("completion-title-input");
+    const title = titleInput.value.trim();
+
+    // If user edited the title, update it
+    if (title && this.unsavedSession?.sessionId) {
+      this.updateReportTitle(this.unsavedSession.sessionId, title);
+    }
+
+    // Clear unsaved session and navigate to intervalometer
+    this.unsavedSession = null;
+    this.hideSessionCompletion();
+
+    if (window.CameraUI && window.CameraUI.switchToCard) {
+      window.CameraUI.switchToCard("intervalometer");
+    } else {
+      // Fallback to showing the intervalometer card directly
+      document.querySelectorAll(".function-card").forEach((card) => {
+        card.style.display = "none";
+      });
+      const intervalometerCard = document.getElementById("intervalometer-card");
+      if (intervalometerCard) {
+        intervalometerCard.style.display = "block";
+      }
+    }
+  }
+
+  /**
+   * Update report title (if user edited it after auto-save)
+   */
+  async updateReportTitle(sessionId, title) {
+    try {
+      if (this.wsManager && this.wsManager.isConnected()) {
+        this.wsManager.send("update_report_title", { sessionId, title });
+      } else {
+        await fetch(`/api/timelapse/reports/${sessionId}/title`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+      }
+    } catch (error) {
+      console.error("Failed to update report title:", error);
+      // Non-critical error - don't show to user
+    }
+  }
+
+  /**
+   * Save session as report (DEPRECATED - kept for backward compatibility)
    */
   async saveSession() {
     const titleInput = document.getElementById("completion-title-input");
     const title = titleInput.value.trim();
 
     if (!title) {
-      alert("Please enter a title for this session.");
+      Toast.error("Please enter a title for this session.");
       titleInput.focus();
       return;
     }
@@ -650,7 +715,7 @@ class TimelapseUI {
   }
 
   /**
-   * Discard session
+   * Discard session (DEPRECATED - kept for backward compatibility)
    */
   async discardSession() {
     if (
@@ -781,7 +846,7 @@ class TimelapseUI {
       window.cameraManager.log(message, "error");
     } else {
       console.error(message);
-      alert(message);
+      Toast.error(message);
     }
   }
 

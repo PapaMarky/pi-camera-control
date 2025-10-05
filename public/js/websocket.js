@@ -26,11 +26,20 @@ class WebSocketManager {
 
       this.ws.onopen = () => {
         console.log("WebSocket connected");
+        const wasReconnecting = this.reconnectAttempts > 0;
         this.connected = true;
         this.connecting = false;
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000;
         this.emit("connected");
+
+        // Show success feedback if this was a reconnection (FE-6)
+        if (wasReconnecting && window.cameraManager) {
+          window.cameraManager.log(
+            "Server connection restored successfully",
+            "success",
+          );
+        }
       };
 
       this.ws.onmessage = (event) => {
@@ -85,6 +94,14 @@ class WebSocketManager {
       `Scheduling reconnection attempt ${this.reconnectAttempts} in ${delay}ms`,
     );
     this.emit("reconnecting", { attempt: this.reconnectAttempts, delay });
+
+    // Show user feedback for reconnection attempts (FE-6)
+    if (window.cameraManager) {
+      window.cameraManager.log(
+        `Reconnecting to server... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
+        "warning",
+      );
+    }
 
     setTimeout(() => {
       this.connect();
