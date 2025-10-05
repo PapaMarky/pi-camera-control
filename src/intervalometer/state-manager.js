@@ -229,32 +229,62 @@ export class IntervalometerStateManager extends EventEmitter {
   async handleSessionStopped(session, data) {
     this.updateSessionState("stopped");
 
-    // Mark as unsaved for recovery
-    this.unsavedSession = {
-      sessionId: session.id,
-      title: session.title,
-      completionData: {
+    // Auto-save the session report
+    try {
+      const completionData = {
         ...data,
         reason: "Stopped by user",
         completedAt: new Date(),
-      },
-      needsUserDecision: true,
-    };
+      };
 
-    // Save unsaved session to disk
-    await this.saveUnsavedSession();
+      // Store completion data temporarily for report generation
+      this.unsavedSession = {
+        sessionId: session.id,
+        title: session.title,
+        completionData,
+      };
 
-    logger.info("Session stopped, marked as unsaved", {
-      sessionId: session.id,
-      title: session.title,
-    });
+      // Automatically save the report
+      await this.saveSessionReport(session.id, null);
 
-    this.emit("sessionStopped", {
-      sessionId: session.id,
-      title: session.title,
-      needsUserDecision: true,
-      ...data,
-    });
+      logger.info("Session stopped, report auto-saved", {
+        sessionId: session.id,
+        title: session.title,
+      });
+
+      this.emit("sessionStopped", {
+        sessionId: session.id,
+        title: session.title,
+        ...data,
+      });
+    } catch (error) {
+      // If auto-save fails, fall back to unsaved session recovery
+      logger.error("Auto-save failed, marking as unsaved", {
+        sessionId: session.id,
+        error: error.message,
+      });
+
+      this.unsavedSession = {
+        sessionId: session.id,
+        title: session.title,
+        completionData: {
+          ...data,
+          reason: "Stopped by user",
+          completedAt: new Date(),
+        },
+        needsUserDecision: true,
+      };
+
+      await this.saveUnsavedSession();
+
+      this.emit("sessionStopped", {
+        sessionId: session.id,
+        title: session.title,
+        needsUserDecision: true,
+        error: error.message,
+        ...data,
+      });
+    }
   }
 
   /**
@@ -263,33 +293,63 @@ export class IntervalometerStateManager extends EventEmitter {
   async handleSessionCompleted(session, data) {
     this.updateSessionState("completed");
 
-    // Mark as unsaved for recovery
-    this.unsavedSession = {
-      sessionId: session.id,
-      title: session.title,
-      completionData: {
+    // Auto-save the session report
+    try {
+      const completionData = {
         ...data,
         reason: data.reason || "Session completed normally",
         completedAt: new Date(),
-      },
-      needsUserDecision: true,
-    };
+      };
 
-    // Save unsaved session to disk
-    await this.saveUnsavedSession();
+      // Store completion data temporarily for report generation
+      this.unsavedSession = {
+        sessionId: session.id,
+        title: session.title,
+        completionData,
+      };
 
-    logger.info("Session completed, marked as unsaved", {
-      sessionId: session.id,
-      title: session.title,
-      reason: data.reason,
-    });
+      // Automatically save the report
+      await this.saveSessionReport(session.id, null);
 
-    this.emit("sessionCompleted", {
-      sessionId: session.id,
-      title: session.title,
-      needsUserDecision: true,
-      ...data,
-    });
+      logger.info("Session completed, report auto-saved", {
+        sessionId: session.id,
+        title: session.title,
+        reason: data.reason,
+      });
+
+      this.emit("sessionCompleted", {
+        sessionId: session.id,
+        title: session.title,
+        ...data,
+      });
+    } catch (error) {
+      // If auto-save fails, fall back to unsaved session recovery
+      logger.error("Auto-save failed, marking as unsaved", {
+        sessionId: session.id,
+        error: error.message,
+      });
+
+      this.unsavedSession = {
+        sessionId: session.id,
+        title: session.title,
+        completionData: {
+          ...data,
+          reason: data.reason || "Session completed normally",
+          completedAt: new Date(),
+        },
+        needsUserDecision: true,
+      };
+
+      await this.saveUnsavedSession();
+
+      this.emit("sessionCompleted", {
+        sessionId: session.id,
+        title: session.title,
+        needsUserDecision: true,
+        error: error.message,
+        ...data,
+      });
+    }
   }
 
   /**
@@ -298,33 +358,63 @@ export class IntervalometerStateManager extends EventEmitter {
   async handleSessionError(session, data) {
     this.updateSessionState("error");
 
-    // Mark as unsaved for recovery
-    this.unsavedSession = {
-      sessionId: session.id,
-      title: session.title,
-      completionData: {
+    // Auto-save the session report
+    try {
+      const completionData = {
         ...data,
         reason: data.reason || "Session error",
         completedAt: new Date(),
-      },
-      needsUserDecision: true,
-    };
+      };
 
-    // Save unsaved session to disk
-    await this.saveUnsavedSession();
+      // Store completion data temporarily for report generation
+      this.unsavedSession = {
+        sessionId: session.id,
+        title: session.title,
+        completionData,
+      };
 
-    logger.error("Session error, marked as unsaved", {
-      sessionId: session.id,
-      title: session.title,
-      error: data.reason,
-    });
+      // Automatically save the report
+      await this.saveSessionReport(session.id, null);
 
-    this.emit("sessionError", {
-      sessionId: session.id,
-      title: session.title,
-      needsUserDecision: true,
-      ...data,
-    });
+      logger.info("Session error, report auto-saved", {
+        sessionId: session.id,
+        title: session.title,
+        error: data.reason,
+      });
+
+      this.emit("sessionError", {
+        sessionId: session.id,
+        title: session.title,
+        ...data,
+      });
+    } catch (error) {
+      // If auto-save fails, fall back to unsaved session recovery
+      logger.error("Auto-save failed, marking as unsaved", {
+        sessionId: session.id,
+        error: error.message,
+      });
+
+      this.unsavedSession = {
+        sessionId: session.id,
+        title: session.title,
+        completionData: {
+          ...data,
+          reason: data.reason || "Session error",
+          completedAt: new Date(),
+        },
+        needsUserDecision: true,
+      };
+
+      await this.saveUnsavedSession();
+
+      this.emit("sessionError", {
+        sessionId: session.id,
+        title: session.title,
+        needsUserDecision: true,
+        error: error.message,
+        ...data,
+      });
+    }
   }
 
   /**
@@ -436,6 +526,10 @@ export class IntervalometerStateManager extends EventEmitter {
     const metadata = session.getMetadata();
     const now = new Date();
 
+    // Determine report status from sessionData.state (set by updateSessionState)
+    const sessionData = this.sessionHistory.get(session.id);
+    const reportStatus = sessionData ? sessionData.state : status.state;
+
     return {
       id: `report-${session.id}`,
       sessionId: session.id,
@@ -443,13 +537,7 @@ export class IntervalometerStateManager extends EventEmitter {
       startTime: toReportFormat(status.stats.startTime),
       endTime: toReportFormat(status.stats.endTime || now),
       duration: status.duration,
-      status: completionData
-        ? completionData.reason.includes("error")
-          ? "error"
-          : completionData.reason.includes("Stopped")
-            ? "stopped"
-            : "completed"
-        : status.state,
+      status: reportStatus,
       intervalometer: {
         interval: status.options.interval,
         stopCondition: status.options.stopCondition || "unlimited",

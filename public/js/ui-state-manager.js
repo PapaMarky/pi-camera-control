@@ -79,9 +79,15 @@ class UIStateManager {
       if (disableElement) element.disabled = true;
 
       const icon = element.querySelector(".btn-icon");
+      const textSpan = element.querySelector(".btn-text");
+
       if (icon) {
         icon.textContent = progressIcon;
-      } else {
+      }
+      if (textSpan) {
+        textSpan.textContent = progressText;
+      } else if (!icon) {
+        // Only set element.textContent if there's no icon or text span
         element.textContent = progressText;
       }
 

@@ -261,6 +261,8 @@ class CameraManager {
     // Intervalometer broadcast events (for all clients)
     wsManager.on("intervalometer_started", (data) => {
       this.log("Intervalometer started successfully", "success");
+      // Restore the start button
+      this.setButtonLoading("start-intervalometer-btn", false);
       // Get full status from server
       this.refreshIntervalometerStatus();
     });
@@ -882,6 +884,7 @@ class CameraManager {
       if (wsManager.connected) {
         console.log("Using WebSocket path");
         wsManager.startIntervalometer(options);
+        // Button will be restored when we receive session_started event
       } else {
         console.log("Using REST API path");
         const response = await fetch("/api/intervalometer/start", {
@@ -895,13 +898,13 @@ class CameraManager {
         if (result.success) {
           this.log("Intervalometer started successfully", "success");
           this.updateIntervalometerUI(result.status);
+          this.setButtonLoading("start-intervalometer-btn", false);
         } else {
           throw new Error(result.error || "Failed to start intervalometer");
         }
       }
     } catch (error) {
       this.handleError(`Start failed: ${error.message}`);
-    } finally {
       this.setButtonLoading("start-intervalometer-btn", false);
     }
   }
@@ -1519,23 +1522,12 @@ class CameraManager {
     if (loading) {
       const { progressText, progressIcon = "⏳", timeout = 30000 } = options;
 
-      // Handle buttons with icons vs text
-      const button = document.getElementById(buttonId);
-      const icon = button?.querySelector(".btn-icon");
-
-      if (icon) {
-        // Button has icon - use icon-based progress
-        window.uiStateManager.setInProgress(buttonId, {
-          progressIcon,
-          timeout,
-        });
-      } else {
-        // Button uses text - use text-based progress
-        window.uiStateManager.setInProgress(buttonId, {
-          progressText: progressText || "Loading...",
-          timeout,
-        });
-      }
+      // Pass both icon and text progress to UIStateManager
+      window.uiStateManager.setInProgress(buttonId, {
+        progressIcon,
+        progressText: progressText || "Loading...",
+        timeout,
+      });
     } else {
       window.uiStateManager.restore(buttonId);
     }

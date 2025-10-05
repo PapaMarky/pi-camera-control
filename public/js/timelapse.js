@@ -65,15 +65,9 @@ class TimelapseUI {
 
     // Session completion handlers
     document
-      .getElementById("save-session-btn")
+      .getElementById("completion-done-btn")
       .addEventListener("click", () => {
-        this.saveSession();
-      });
-
-    document
-      .getElementById("discard-session-btn")
-      .addEventListener("click", () => {
-        this.discardSession();
+        this.handleCompletionDone();
       });
 
     // WebSocket event handlers
@@ -609,7 +603,58 @@ class TimelapseUI {
   }
 
   /**
-   * Save session as report
+   * Handle completion done - navigate back to intervalometer
+   * Note: Report is already auto-saved by backend, so no save action needed
+   */
+  handleCompletionDone() {
+    const titleInput = document.getElementById("completion-title-input");
+    const title = titleInput.value.trim();
+
+    // If user edited the title, update it
+    if (title && this.unsavedSession?.sessionId) {
+      this.updateReportTitle(this.unsavedSession.sessionId, title);
+    }
+
+    // Clear unsaved session and navigate to intervalometer
+    this.unsavedSession = null;
+    this.hideSessionCompletion();
+
+    if (window.CameraUI && window.CameraUI.switchToCard) {
+      window.CameraUI.switchToCard("intervalometer");
+    } else {
+      // Fallback to showing the intervalometer card directly
+      document.querySelectorAll(".function-card").forEach((card) => {
+        card.style.display = "none";
+      });
+      const intervalometerCard = document.getElementById("intervalometer-card");
+      if (intervalometerCard) {
+        intervalometerCard.style.display = "block";
+      }
+    }
+  }
+
+  /**
+   * Update report title (if user edited it after auto-save)
+   */
+  async updateReportTitle(sessionId, title) {
+    try {
+      if (this.wsManager && this.wsManager.isConnected()) {
+        this.wsManager.send("update_report_title", { sessionId, title });
+      } else {
+        await fetch(`/api/timelapse/reports/${sessionId}/title`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+      }
+    } catch (error) {
+      console.error("Failed to update report title:", error);
+      // Non-critical error - don't show to user
+    }
+  }
+
+  /**
+   * Save session as report (DEPRECATED - kept for backward compatibility)
    */
   async saveSession() {
     const titleInput = document.getElementById("completion-title-input");
@@ -650,7 +695,7 @@ class TimelapseUI {
   }
 
   /**
-   * Discard session
+   * Discard session (DEPRECATED - kept for backward compatibility)
    */
   async discardSession() {
     if (

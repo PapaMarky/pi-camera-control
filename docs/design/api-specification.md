@@ -1012,6 +1012,10 @@ graph LR
 
 ##### Timelapse Events
 
+**Session Completion (Auto-Save Enabled)**
+
+When a timelapse session completes, stops, or encounters an error, the system automatically saves the session report without requiring user action.
+
 ```json
 {
   "type": "timelapse_event",
@@ -1024,6 +1028,8 @@ graph LR
   }
 }
 ```
+
+**Note:** As of v2.1.0, session reports are automatically saved when sessions complete, stop, or error. The `needsUserDecision` field has been removed from these events. Reports are immediately available in the reports list without user intervention.
 
 ##### Photo Overtime Event
 
@@ -1351,28 +1357,42 @@ const clients = new Set();
 }
 ```
 
-#### Session Saved Event
+#### Report Saved Event
 
-Broadcast when a timelapse session is saved as a report:
+Broadcast when a timelapse session report is saved (automatically or manually):
 
 ```json
 {
   "type": "timelapse_event",
-  "eventType": "session_saved",
+  "eventType": "report_saved",
   "timestamp": "2024-01-01T12:00:00.000Z",
   "data": {
     "sessionId": "session-uuid",
+    "title": "Night Sky Timelapse",
+    "reportId": "report-uuid",
     "report": {
       "id": "report-uuid",
+      "sessionId": "session-uuid",
       "title": "Night Sky Timelapse",
-      "createdAt": "2024-01-01T12:00:00.000Z",
-      "shotCount": 100,
-      "successRate": 98
-    },
-    "message": "Session saved as report successfully"
+      "startTime": "2024-01-01T20:00:00.000Z",
+      "endTime": "2024-01-01T23:00:00.000Z",
+      "status": "completed",
+      "results": {
+        "imagesCaptured": 100,
+        "imagesSuccessful": 98,
+        "imagesFailed": 2
+      }
+    }
   }
 }
 ```
+
+**Automatic Saving Behavior:**
+
+- Reports are automatically saved when sessions complete normally
+- Reports are automatically saved when users stop sessions
+- Reports are automatically saved when sessions error
+- If auto-save fails (e.g., disk full), the system falls back to unsaved session recovery
 
 #### Session Discarded Event
 
