@@ -20,11 +20,12 @@
 ## Executive Summary
 
 **Total Issues**: 27 distinct integration issues found across frontend, backend, and integration layers
-**Issues Completed**: 0/27
-**Current Phase**: Planning
+**Issues Completed**: 2/27 (BE-1, BE-3 complete; BE-2 investigated - no change needed)
+**Current Phase**: Phase 1 - Critical Backend Fixes (In Progress)
 **Target Completion**: TBD
 
 ### Issue Breakdown
+
 - **Critical**: 3 (Backend WebSocket broadcasts)
 - **High**: 5 (UI feedback, dual responses, state tracking)
 - **Medium**: 10 (Error propagation, event cleanup, guards)
@@ -35,6 +36,7 @@
 ## Frontend Issues (6 Total)
 
 ### FE-1: Utilities Manager Race Condition ⏳
+
 **Priority**: High
 **Status**: Not Started
 **File**: `public/js/utilities.js:289-291`, `public/js/camera.js:1685-1688`
@@ -42,6 +44,7 @@
 **Problem**: UtilitiesManager may not exist when `switchToCard('utilities')` is called because it's created in a DOMContentLoaded listener that may not have fired yet.
 
 **Fix**:
+
 ```javascript
 // In camera.js switchToCard() method, replace:
 } else if (cardName === "utilities") {
@@ -67,6 +70,7 @@
 ---
 
 ### FE-2: Clear Liveview Button State Not Updated ⏳
+
 **Priority**: High
 **Status**: Not Started
 **File**: `public/js/test-shot.js:174`
@@ -74,6 +78,7 @@
 **Problem**: "Clear All" button doesn't update enabled/disabled state after clearing gallery.
 
 **Fix**:
+
 ```javascript
 // In clearAll() method, after this.renderGallery(), add:
 clearAll() {
@@ -86,6 +91,7 @@ clearAll() {
 ```
 
 **Test**:
+
 1. Capture live view
 2. Click "Clear All"
 3. Verify "Clear All" button becomes disabled
@@ -96,6 +102,7 @@ clearAll() {
 ---
 
 ### FE-3: WiFi Toggle Icon Inconsistency ⏳
+
 **Priority**: Medium
 **Status**: Not Started
 **File**: `public/js/network.js:538`
@@ -103,6 +110,7 @@ clearAll() {
 **Problem**: When WiFi is enabled but not connected, button shows "📵" (no signal) icon but action is "Turn Off WiFi" - icon doesn't match action.
 
 **Fix**:
+
 ```javascript
 // Line 538, change from:
 toggleIcon.textContent = "📵";
@@ -119,6 +127,7 @@ toggleIcon.textContent = "❌";
 ---
 
 ### FE-4: Test Shot Settings Not Auto-Loading ⏳
+
 **Priority**: Medium
 **Status**: Not Started
 **File**: `public/js/camera.js:1667-1697`
@@ -126,6 +135,7 @@ toggleIcon.textContent = "❌";
 **Problem**: Camera settings don't load automatically when switching to Test Shot card - user must click "Refresh Settings".
 
 **Fix**:
+
 ```javascript
 // In switchToCard() method, add new case:
 } else if (cardName === "timelapse-reports") {
@@ -140,6 +150,7 @@ toggleIcon.textContent = "❌";
 ```
 
 **Test**:
+
 1. Connect camera
 2. Switch to Test Shot card
 3. Verify settings display without clicking Refresh
@@ -150,6 +161,7 @@ toggleIcon.textContent = "❌";
 ---
 
 ### FE-5: Camera IP Config No UI Update ⏳
+
 **Priority**: Medium
 **Status**: Not Started
 **File**: `public/js/camera.js:785-793`
@@ -157,10 +169,14 @@ toggleIcon.textContent = "❌";
 **Problem**: After successfully updating camera IP configuration, the Controller Status card doesn't update to show new IP.
 
 **Fix**:
+
 ```javascript
 // After successful config update, add:
 if (result.success) {
-  this.log(`Camera configuration updated successfully: ${ip}:${port}`, "success");
+  this.log(
+    `Camera configuration updated successfully: ${ip}:${port}`,
+    "success",
+  );
   ipInput.setCustomValidity("");
   portInput.setCustomValidity("");
 
@@ -170,6 +186,7 @@ if (result.success) {
 ```
 
 **Test**:
+
 1. Update camera IP via Network Settings
 2. Check Controller Status card shows new IP
 
@@ -179,6 +196,7 @@ if (result.success) {
 ---
 
 ### FE-6: WebSocket Reconnect No User Feedback ⏳
+
 **Priority**: Low
 **Status**: Not Started
 **File**: `public/js/websocket.js:85-88`
@@ -186,21 +204,25 @@ if (result.success) {
 **Problem**: WebSocket reconnection attempts are logged to console but not shown to user.
 
 **Fix**:
+
 ```javascript
 // After line 88, add:
-console.log(`Scheduling reconnection attempt ${this.reconnectAttempts} in ${delay}ms`);
+console.log(
+  `Scheduling reconnection attempt ${this.reconnectAttempts} in ${delay}ms`,
+);
 this.emit("reconnecting", { attempt: this.reconnectAttempts, delay });
 
 // ADD THIS:
 if (window.cameraManager) {
   window.cameraManager.log(
     `Reconnecting... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
-    "warning"
+    "warning",
   );
 }
 ```
 
 **Test**:
+
 1. Restart server while UI is open
 2. Verify reconnection attempts shown in activity log
 
@@ -212,25 +234,27 @@ if (window.cameraManager) {
 ## Backend Issues (11 Total)
 
 ### BE-1: Camera Settings Update Missing WebSocket Broadcast 🔥
+
 **Priority**: Critical
-**Status**: Not Started
+**Status**: ✅ COMPLETE
 **File**: `src/routes/api.js:78-124`
 
 **Problem**: When camera settings are updated via API, no WebSocket event is broadcast to other clients.
 
 **Frontend Impact**: Settings changes invisible to other connected clients, manual refresh required.
 
-**Fix**:
+**Fix Applied**:
+
 ```javascript
-// After line 110 (successful update):
+// After line 104 (successful update):
 await currentController.updateCameraSetting(setting, value);
 
-// ADD THIS:
-if (server.wss && server.wss.broadcast) {
-  server.wss.broadcast('camera_setting_changed', {
+// ADDED:
+if (server.wsHandler && server.wsHandler.broadcast) {
+  server.wsHandler.broadcast("camera_setting_changed", {
     setting,
     value,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 }
 
@@ -242,69 +266,78 @@ res.json({
 });
 ```
 
+**Implementation Notes**:
+
+- Used `server.wsHandler.broadcast()` (not `server.wss.broadcast()`)
+- Event name follows snake_case convention: `camera_setting_changed`
+- Includes setting, value, and timestamp in payload
+
 **Test**:
+
 1. Connect two clients
 2. Change camera setting in client A
 3. Verify client B receives update
 
-**Completed**: ❌
-**Completed Date**: N/A
+**Completed**: ✅
+**Completed Date**: 2025-10-05
 
 ---
 
 ### BE-2: Photo Capture Incomplete Response Schema 🔥
+
 **Priority**: Critical
-**Status**: Not Started
+**Status**: ✅ INVESTIGATED - NO CHANGE NEEDED
 **File**: `src/routes/api.js:607-631`
 
 **Problem**: Photo capture response only includes `success` and `timestamp`, missing file path and metadata.
 
 **Frontend Impact**: Cannot display captured photo, show filename, or access image.
 
-**Fix**:
-```javascript
-// Replace lines 619-620:
-const result = await currentController.takePhoto();
-res.json({
-  success: true,
-  timestamp: new Date().toISOString(),
-  // ADD THESE:
-  photoPath: result.path,
-  filename: result.filename,
-  cameraPath: result.cameraPath
-});
-```
+**Investigation Results**:
+After investigating the implementation, I found that:
 
-**Note**: Verify `currentController.takePhoto()` returns these fields. May need to update CameraController as well.
+1. The basic `/api/camera/photo` endpoint uses `CameraController.takePhoto()` which only triggers the camera shutter - it does NOT download the photo
+2. The API specification documents this endpoint as returning only `{success: true, timestamp: "..."}` - which matches current implementation
+3. For test photos with download and metadata, the separate `/api/camera/photos/test` endpoint exists using `TestPhotoService.capturePhoto()`
 
-**Test**:
-1. Take photo via API
-2. Verify response includes path, filename, cameraPath
+**Conclusion**:
+The current implementation is **correct by design**. The basic photo capture endpoint is for triggering the shutter only (used by intervalometer). Photo download and metadata extraction is handled by the separate test photo endpoint.
 
-**Completed**: ❌
-**Completed Date**: N/A
+**Original assumption was incorrect** - `takePhoto()` is not meant to return file information.
+
+**Alternative Implementation** (if photo metadata is truly needed):
+Would require either:
+
+1. Creating a new endpoint that downloads the photo, OR
+2. Using the existing `/api/camera/photos/test` endpoint, OR
+3. Polling the camera's storage endpoint after capture
+
+**Completed**: ✅ (Investigation complete - no code change needed)
+**Completed Date**: 2025-10-05
 
 ---
 
 ### BE-3: Camera Configuration No Broadcast 🔥
+
 **Priority**: Critical
-**Status**: Not Started
+**Status**: ✅ COMPLETE
 **File**: `src/routes/api.js:667-749`
 
 **Problem**: When camera IP/port configuration changes, no WebSocket broadcast to inform clients.
 
 **Frontend Impact**: Clients don't know camera reconnected, status shows stale info until refresh.
 
-**Fix**:
+**Fix Applied**:
+
 ```javascript
-// After line 732 (successful config update):
+// After line 731 (successful config update):
 if (result) {
-  // ADD THIS:
-  if (server.wss && server.wss.broadcastDiscoveryEvent) {
-    server.wss.broadcastDiscoveryEvent('cameraConfigured', {
+  // ADDED:
+  if (server.wsHandler && server.wsHandler.broadcastDiscoveryEvent) {
+    server.wsHandler.broadcastDiscoveryEvent("cameraConfigured", {
       ip,
       port,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 
@@ -316,17 +349,25 @@ if (result) {
 }
 ```
 
+**Implementation Notes**:
+
+- Used `server.wsHandler.broadcastDiscoveryEvent()` (discovery-specific broadcaster)
+- Event name: `cameraConfigured` (will be wrapped in discovery_event message type)
+- Also triggers automatic status broadcast after 500ms (built into broadcastDiscoveryEvent)
+
 **Test**:
+
 1. Connect two clients
 2. Update camera config in client A
 3. Verify client B receives camera_configured event
 
-**Completed**: ❌
-**Completed Date**: N/A
+**Completed**: ✅
+**Completed Date**: 2025-10-05
 
 ---
 
 ### BE-4: Camera Time Sync Missing Broadcast ⏳
+
 **Priority**: Medium
 **Status**: Not Started
 **File**: `src/routes/api.js:1901-1965`
@@ -336,6 +377,7 @@ if (result) {
 **Frontend Impact**: Time sync status doesn't update in real-time for other clients.
 
 **Fix**:
+
 ```javascript
 // After line 1944 (successful sync):
 timeSyncService.state.recordCameraSync(offset);
@@ -343,16 +385,17 @@ timeSyncService.broadcastSyncStatus();
 
 // ADD THIS:
 if (server.wss && server.wss.broadcastEvent) {
-  server.wss.broadcastEvent('camera_time_synced', {
+  server.wss.broadcastEvent("camera_time_synced", {
     previousTime: previousTime.toISOString(),
     newTime: piTime.toISOString(),
     offset: offset,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 }
 ```
 
 **Test**:
+
 1. Sync camera time
 2. Verify all clients receive update
 
@@ -362,6 +405,7 @@ if (server.wss && server.wss.broadcastEvent) {
 ---
 
 ### BE-5: System Time Async Race Condition ⏳
+
 **Priority**: Medium
 **Status**: Not Started
 **File**: `src/routes/api.js:1242-1383`
@@ -371,9 +415,10 @@ if (server.wss && server.wss.broadcastEvent) {
 **Frontend Impact**: Uncertain whether sync succeeded, possible HTTP timeout.
 
 **Fix**: Replace spawn pattern with promisified exec:
+
 ```javascript
 const { promisify } = await import("util");
-const execAsync = promisify(require('child_process').exec);
+const execAsync = promisify(require("child_process").exec);
 
 try {
   await execAsync(`sudo date -u -s "${formattedTime}"`);
@@ -409,6 +454,7 @@ try {
 ```
 
 **Test**:
+
 1. Sync system time
 2. Verify immediate response
 3. Test with slow system (simulate delay)
@@ -419,6 +465,7 @@ try {
 ---
 
 ### BE-6: WebSocket Status Broadcast Silent Errors ⏳
+
 **Priority**: Medium
 **Status**: Not Started
 **File**: `src/websocket/handler.js:79-166`
@@ -428,6 +475,7 @@ try {
 **Frontend Impact**: Clients don't know why status is incomplete, missing data appears as null without explanation.
 
 **Fix**:
+
 ```javascript
 // In broadcastStatus function, add after each try-catch:
 let networkStatus = null;
@@ -437,10 +485,10 @@ if (networkManager) {
   } catch (error) {
     logger.error("Failed to get network status for broadcast:", error);
     // ADD THIS:
-    broadcastEvent('status_error', {
-      component: 'network',
+    broadcastEvent("status_error", {
+      component: "network",
       error: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 }
@@ -448,6 +496,7 @@ if (networkManager) {
 ```
 
 **Test**:
+
 1. Simulate network manager failure
 2. Verify clients receive status_error event
 
@@ -457,6 +506,7 @@ if (networkManager) {
 ---
 
 ### BE-7: Intervalometer Status Inconsistent Schema ⏳
+
 **Priority**: Low
 **Status**: Not Started
 **File**: `src/routes/api.js:959-1009`
@@ -466,20 +516,22 @@ if (networkManager) {
 **Frontend Impact**: Frontend must handle two different response formats, harder to type-check.
 
 **Fix**:
+
 ```javascript
 // Always return full schema with null values:
 if (status.state === "stopped" && !status.stats) {
   return res.json({
     running: false,
     state: "stopped",
-    stats: null,        // Consistent null instead of missing
-    options: null,      // Consistent null instead of missing
-    averageShotDuration: 0
+    stats: null, // Consistent null instead of missing
+    options: null, // Consistent null instead of missing
+    averageShotDuration: 0,
   });
 }
 ```
 
 **Test**:
+
 1. Get status with no session
 2. Verify response has stats: null, options: null
 
@@ -489,6 +541,7 @@ if (status.state === "stopped" && !status.stats) {
 ---
 
 ### BE-8: WiFi Scan No Broadcast ⏳
+
 **Priority**: Low
 **Status**: Not Started
 **File**: `src/routes/api.js:1462-1478`
@@ -498,15 +551,16 @@ if (status.state === "stopped" && !status.stats) {
 **Frontend Impact**: Other clients don't see scan results without manual refresh.
 
 **Fix**:
+
 ```javascript
 // After successful scan (line 1468):
 const networks = await networkServiceManager.scanWiFiNetworks(forceRefresh);
 
 // ADD THIS:
 if (server.wss && server.wss.broadcastNetworkEvent) {
-  server.wss.broadcastNetworkEvent('wifi_scan_complete', {
+  server.wss.broadcastNetworkEvent("wifi_scan_complete", {
     networkCount: networks.length,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 }
 
@@ -514,6 +568,7 @@ res.json({ networks });
 ```
 
 **Test**:
+
 1. Connect two clients
 2. Scan WiFi in client A
 3. Verify client B receives notification
@@ -524,6 +579,7 @@ res.json({ networks });
 ---
 
 ### BE-9: Manual Camera Scan No Broadcast ⏳
+
 **Priority**: Low
 **Status**: Not Started
 **File**: `src/routes/api.js:1752-1765`
@@ -533,15 +589,16 @@ res.json({ networks });
 **Frontend Impact**: No indication scan in progress for other clients.
 
 **Fix**:
+
 ```javascript
 // After initiating scan (line 1754):
 await discoveryManager.searchForCameras();
 
 // ADD THIS:
 if (server.wss && server.wss.broadcastDiscoveryEvent) {
-  server.wss.broadcastDiscoveryEvent('scanStarted', {
+  server.wss.broadcastDiscoveryEvent("scanStarted", {
     timestamp: new Date().toISOString(),
-    manual: true
+    manual: true,
   });
 }
 
@@ -549,6 +606,7 @@ res.json({ success: true, message: "Camera scan initiated" });
 ```
 
 **Test**:
+
 1. Connect two clients
 2. Initiate manual scan in client A
 3. Verify client B shows scan in progress
@@ -559,6 +617,7 @@ res.json({ success: true, message: "Camera scan initiated" });
 ---
 
 ### BE-10: State Manager Events Not Documented ⏳
+
 **Priority**: Low
 **Status**: Not Started
 **File**: `src/intervalometer/state-manager.js`, `docs/design/api-specification.md`
@@ -573,38 +632,48 @@ res.json({ success: true, message: "Camera scan initiated" });
 ### Intervalometer State Manager Events
 
 #### initialized
+
 Emitted when IntervalometerStateManager initializes.
 **Payload**: `{ hasUnsavedSession: boolean, sessionCount: number }`
 
 #### sessionCreated
+
 Emitted when new timelapse session created.
 **Payload**: `{ sessionId: string, title: string, options: object }`
 
 #### sessionStarted
+
 Emitted when session begins capturing.
 **Payload**: `{ sessionId: string, ... }`
 
 #### photoTaken
+
 Emitted after each successful photo.
 **Payload**: `{ sessionId: string, shotNumber: number, success: boolean, ... }`
 
 #### photoFailed
+
 Emitted when photo capture fails.
 **Payload**: `{ sessionId: string, shotNumber: number, error: string, ... }`
 
 #### sessionPaused / sessionResumed
+
 Emitted when session paused/resumed.
 
 #### sessionStopped / sessionCompleted / sessionError
+
 Emitted when session ends.
 
 #### stateChanged
+
 Emitted on state transitions.
 
 #### reportSaved
+
 Emitted when report saved successfully.
 
 #### unsavedSessionFound
+
 Emitted on startup if unsaved session exists.
 ```
 
@@ -616,6 +685,7 @@ Emitted on startup if unsaved session exists.
 ---
 
 ### BE-11: Network State Changes Not Broadcast ⏳
+
 **Priority**: Low
 **Status**: Not Started
 **File**: `src/network/state-manager.js:205-230`, `src/server.js`
@@ -627,26 +697,29 @@ Emitted on startup if unsaved session exists.
 **Fix**:
 
 1. In NetworkStateManager initialization:
+
 ```javascript
-this.on('serviceStateChanged', (data) => {
+this.on("serviceStateChanged", (data) => {
   if (this.wssBroadcast) {
-    this.wssBroadcast('network_service_changed', data);
+    this.wssBroadcast("network_service_changed", data);
   }
 });
 
-this.on('interfaceStateChanged', (data) => {
+this.on("interfaceStateChanged", (data) => {
   if (this.wssBroadcast) {
-    this.wssBroadcast('network_interface_changed', data);
+    this.wssBroadcast("network_interface_changed", data);
   }
 });
 ```
 
 2. In `src/server.js`, connect broadcaster:
+
 ```javascript
 networkStateManager.wssBroadcast = wss.broadcastNetworkEvent;
 ```
 
 **Test**:
+
 1. Change network state
 2. Verify WebSocket events broadcast
 
@@ -658,24 +731,32 @@ networkStateManager.wssBroadcast = wss.broadcastNetworkEvent;
 ## Integration Pattern Issues (10 Total)
 
 ### IP-1: Dual Response Handling Race Conditions 🔥
+
 **Priority**: High
 **Status**: Not Started
 **Files**: Multiple - `camera.js:256-267`, intervalometer handlers, network handlers
 
 **Problem**: Operations use BOTH REST API responses AND WebSocket broadcasts, causing:
+
 - Duplicate UI updates
 - Duplicate log messages
 - State conflicts when both fire
 - Race conditions
 
 **Example**:
+
 ```javascript
 // TWO handlers for same operation:
-wsManager.on("intervalometer_start", (data) => { /* ... */ });
-wsManager.on("intervalometer_started", (data) => { /* ... */ });
+wsManager.on("intervalometer_start", (data) => {
+  /* ... */
+});
+wsManager.on("intervalometer_started", (data) => {
+  /* ... */
+});
 ```
 
 **Fix Strategy**:
+
 1. Choose ONE channel per operation:
    - WebSocket responses for initiating client only
    - WebSocket broadcasts for ALL clients (including initiator)
@@ -683,12 +764,14 @@ wsManager.on("intervalometer_started", (data) => { /* ... */ });
 3. Document pattern in API spec
 
 **Implementation**:
+
 - Review all WebSocket event handlers
 - Identify duplicates
 - Remove response handlers, keep only broadcast handlers
 - Update API spec with chosen pattern
 
 **Test**:
+
 1. Start intervalometer
 2. Verify only ONE "started successfully" message
 3. Verify UI updates only ONCE
@@ -699,6 +782,7 @@ wsManager.on("intervalometer_started", (data) => { /* ... */ });
 ---
 
 ### IP-2: Frontend State Tracking vs Backend State 🔥
+
 **Priority**: High
 **Status**: Not Started
 **Files**: Various - stats tracking in camera.js, timelapse.js
@@ -706,12 +790,14 @@ wsManager.on("intervalometer_started", (data) => { /* ... */ });
 **Problem**: Frontend maintains local counters that duplicate backend state, causing sync bugs.
 
 **Current Pattern (GOOD)**:
+
 ```javascript
 // Backend is source of truth, frontend polls
 updateOvertimeDisplay(status.stats, status.options);
 ```
 
 **Anti-pattern (BAD)**:
+
 ```javascript
 // Frontend tracks its own counts
 this.photoCount++;
@@ -719,17 +805,20 @@ this.successCount++;
 ```
 
 **Fix Strategy**:
+
 - **Backend is ALWAYS source of truth for ALL stats**
 - Frontend should NEVER maintain counters
 - Only display backend data from status updates
 
 **Implementation**:
+
 1. Audit frontend for local stat tracking
 2. Remove local counters
 3. Use backend stats from periodic updates or WebSocket events
 4. Document pattern in architecture docs
 
 **Test**:
+
 1. Disconnect WebSocket mid-session
 2. Reconnect
 3. Verify stats still accurate (no frontend drift)
@@ -740,6 +829,7 @@ this.successCount++;
 ---
 
 ### IP-3: Missing Loading/Error States 🔥
+
 **Priority**: High
 **Status**: Not Started
 **Files**: `test-shot.js:119-154`, multiple API calls
@@ -747,20 +837,22 @@ this.successCount++;
 **Problem**: Inconsistent UI feedback - some operations show loading states, others don't. Mix of alert() vs toast vs silent failures.
 
 **Bad Pattern**:
+
 ```javascript
 try {
   const response = await fetch("/api/...");
   // No loading indicator
 } catch (error) {
-  alert(`Failed: ${error.message}`);  // Using alert()
+  alert(`Failed: ${error.message}`); // Using alert()
 }
 ```
 
 **Good Pattern**:
+
 ```javascript
 window.uiStateManager.setInProgress(buttonId, {
   progressText: "Loading...",
-  timeout: 10000
+  timeout: 10000,
 });
 
 try {
@@ -774,16 +866,19 @@ try {
 ```
 
 **Fix Strategy**:
+
 1. Replace ALL `alert()` with `Toast.error()`
 2. Use `window.uiStateManager` for ALL async operations
 3. Ensure every operation has loading/success/error states
 
 **Implementation**:
+
 1. Search for `alert(` in all frontend JS
 2. Search for `fetch(` without uiStateManager
 3. Standardize pattern across all operations
 
 **Test**:
+
 1. Trigger each operation
 2. Verify loading state shown
 3. Verify success/error feedback
@@ -794,6 +889,7 @@ try {
 ---
 
 ### IP-4: Incomplete Error Propagation Chain ⏳
+
 **Priority**: Medium
 **Status**: Not Started
 **Files**: `src/websocket/handler.js:452-455`, frontend error handlers
@@ -801,16 +897,19 @@ try {
 **Problem**: Backend sends errors via `sendError()` but frontend doesn't always show them to user visually.
 
 **Fix Strategy**:
+
 1. Audit all `sendError()` call sites in backend
 2. Verify frontend has `error_response` handler that shows toast
 3. Add integration test for error propagation
 
 **Implementation**:
+
 1. Review websocket.js for error_response handler
 2. Ensure handler calls Toast.error()
 3. Test each error path end-to-end
 
 **Test**:
+
 1. Trigger each API error condition
 2. Verify toast notification shown
 
@@ -820,21 +919,25 @@ try {
 ---
 
 ### IP-5: Network Operation Connectivity Warnings ⏳
+
 **Priority**: Medium
 **Status**: Not Started
 **File**: `public/js/network.js:507`
 
 **Problem**: WiFi connect shows warning about losing connectivity, but other network operations don't:
+
 - AP configuration
 - WiFi disable
 - Network disconnect
 
 **Fix Strategy**:
+
 - Create shared `NetworkOperationGuard` utility
 - Apply to all operations that could disconnect client
 - Document in network-management.md
 
 **Implementation**:
+
 ```javascript
 class NetworkOperationGuard {
   static async checkWillDisconnect(operation) {
@@ -854,6 +957,7 @@ class NetworkOperationGuard {
 ```
 
 **Test**:
+
 1. Connect via WiFi
 2. Try to disable WiFi
 3. Verify warning shown
@@ -864,21 +968,25 @@ class NetworkOperationGuard {
 ---
 
 ### IP-6: Event Listener Cleanup Missing ⏳
+
 **Priority**: Medium
 **Status**: Not Started
 **Files**: `timelapse.js`, `test-shot.js`, `network.js`
 
 **Problem**: WebSocket event listeners set up but not cleaned up, causing:
+
 - Multiple handlers fire on reconnect
 - Memory leaks
 - Duplicate UI updates
 
 **Fix Strategy**:
+
 - Implement `destroy()` methods that call `wsManager.off()`
 - Call destroy before reconnecting
 - Use WeakMap for handler references
 
 **Implementation**:
+
 ```javascript
 class TimelapseUI {
   constructor(wsManager) {
@@ -889,8 +997,8 @@ class TimelapseUI {
 
   setupEventHandlers() {
     const handler = (data) => this.handleReportsResponse(data);
-    this.boundHandlers.set('timelapse_reports', handler);
-    this.wsManager.on('timelapse_reports', handler);
+    this.boundHandlers.set("timelapse_reports", handler);
+    this.wsManager.on("timelapse_reports", handler);
   }
 
   destroy() {
@@ -903,6 +1011,7 @@ class TimelapseUI {
 ```
 
 **Test**:
+
 1. Reconnect WebSocket
 2. Trigger events
 3. Verify handlers only fire once
@@ -913,27 +1022,32 @@ class TimelapseUI {
 ---
 
 ### IP-7: Event Naming Migration Incomplete ⏳
+
 **Priority**: Medium
 **Status**: Not Started
 **Files**: Multiple - event handlers across codebase
 
 **Problem**: Mix of camelCase and snake_case event names:
+
 - `photo_taken` vs `photoTaken`
 - `intervalometer_started` vs `cameraDiscovered`
 
 **Status**: Migration plan exists in `docs/design/event-naming-migration-plan.md` but incomplete.
 
 **Fix Strategy**:
+
 - Complete migration to snake_case per existing plan
 - Add linting rule to enforce convention
 
 **Implementation**:
+
 1. Review migration plan document
 2. Complete remaining conversions
 3. Remove legacy event name support
 4. Add ESLint rule
 
 **Test**:
+
 1. Search codebase for camelCase events
 2. Verify all use snake_case
 
@@ -943,6 +1057,7 @@ class TimelapseUI {
 ---
 
 ### IP-8: Status Polling Redundancy ⏳
+
 **Priority**: Low
 **Status**: Not Started
 **Files**: `app.js:105-113`, `websocket/handler.js:169-172`
@@ -950,11 +1065,13 @@ class TimelapseUI {
 **Problem**: BOTH WebSocket broadcasts AND periodic REST API polling running simultaneously - wasteful.
 
 **Fix Strategy**:
+
 - Use WebSocket broadcasts as primary
 - Only fall back to REST if WebSocket disconnected
 - Document pattern in architecture docs
 
 **Implementation**:
+
 ```javascript
 startStatusUpdates() {
   this.statusUpdateInterval = setInterval(async () => {
@@ -968,6 +1085,7 @@ startStatusUpdates() {
 ```
 
 **Test**:
+
 1. Monitor network tab with WebSocket connected
 2. Verify no REST status calls
 3. Disconnect WebSocket
@@ -979,6 +1097,7 @@ startStatusUpdates() {
 ---
 
 ### IP-9: Modal State Management Scattered ⏳
+
 **Priority**: Low
 **Status**: Not Started
 **Files**: `network.js`, `timelapse.js`, `camera.js` - ~15 modal methods each
@@ -986,11 +1105,13 @@ startStatusUpdates() {
 **Problem**: Each modal manages its own show/hide logic - duplicate code, hard to add features like modal stacking.
 
 **Fix Strategy**:
+
 - Create `ModalManager` utility class
 - Centralize modal lifecycle
 - Handle ESC key, backdrop clicks consistently
 
 **Implementation**:
+
 ```javascript
 class ModalManager {
   constructor() {
@@ -1005,16 +1126,17 @@ class ModalManager {
 
   hide(modalId) {
     // ... hide logic
-    this.activeModals = this.activeModals.filter(id => id !== modalId);
+    this.activeModals = this.activeModals.filter((id) => id !== modalId);
   }
 
   hideAll() {
-    this.activeModals.forEach(id => this.hide(id));
+    this.activeModals.forEach((id) => this.hide(id));
   }
 }
 ```
 
 **Test**:
+
 1. Open multiple modals
 2. Press ESC, verify top modal closes
 3. Click backdrop, verify modal closes
@@ -1025,6 +1147,7 @@ class ModalManager {
 ---
 
 ### IP-10: WebSocket Handler Switch Statement ⏳
+
 **Priority**: Low
 **Status**: Not Started
 **Files**: `websocket.js:186-300`, `websocket/handler.js:350-451`
@@ -1032,10 +1155,12 @@ class ModalManager {
 **Problem**: Single massive switch statement hard to maintain and test.
 
 **Fix Strategy**:
+
 - Extract to handler map
 - Each handler is a separate testable function
 
 **Implementation**:
+
 ```javascript
 class WebSocketManager {
   constructor() {
@@ -1056,13 +1181,20 @@ class WebSocketManager {
     }
   }
 
-  handleWelcome(message) { /* ... */ }
-  handleStatusUpdate(message) { /* ... */ }
-  handleEvent(message) { /* ... */ }
+  handleWelcome(message) {
+    /* ... */
+  }
+  handleStatusUpdate(message) {
+    /* ... */
+  }
+  handleEvent(message) {
+    /* ... */
+  }
 }
 ```
 
 **Test**:
+
 1. Unit test each handler independently
 2. Integration test message routing
 
@@ -1074,6 +1206,7 @@ class WebSocketManager {
 ## Implementation Strategy
 
 ### Phase 1: Critical Backend Fixes (Week 1)
+
 **Focus**: Fix missing WebSocket broadcasts
 
 1. BE-1: Camera settings broadcast
@@ -1085,6 +1218,7 @@ class WebSocketManager {
 ---
 
 ### Phase 2: High Priority UI/Integration (Week 2)
+
 **Focus**: Fix user-visible issues and race conditions
 
 4. FE-1: Utilities manager race condition
@@ -1097,6 +1231,7 @@ class WebSocketManager {
 ---
 
 ### Phase 3: Medium Priority Improvements (Week 3)
+
 **Focus**: Complete error handling and state management
 
 8. BE-4: Time sync broadcast
@@ -1116,6 +1251,7 @@ class WebSocketManager {
 ---
 
 ### Phase 4: Polish & Documentation (Week 4)
+
 **Focus**: Low priority fixes and documentation
 
 19. BE-7 through BE-11: Schema consistency, broadcasts, documentation
@@ -1129,16 +1265,19 @@ class WebSocketManager {
 ## Testing Strategy
 
 ### Unit Tests
+
 - Add tests for each state manager event emission
 - Test error handling in all API endpoints
 - Test WebSocket message handlers individually
 
 ### Integration Tests
+
 - Test complete event flow: UI → API → WebSocket → UI
 - Test error propagation end-to-end
 - Test multi-client scenarios
 
 ### E2E Tests
+
 - Test all user workflows with network delays
 - Test reconnection scenarios
 - Test multi-client synchronization
@@ -1168,12 +1307,21 @@ class WebSocketManager {
 
 ## Progress Tracking
 
-**Week 1**: 0% → TBD%
+**Phase 1 (Critical Backend Fixes)**: 67% complete (2/3 issues)
+
+- ✅ BE-1: Camera settings broadcast
+- ✅ BE-2: Photo capture schema (investigated - no change needed)
+- ✅ BE-3: Camera config broadcast
+
+**Week 1**: 0% → 7% (2/27 issues complete)
 **Week 2**: TBD% → TBD%
 **Week 3**: TBD% → TBD%
 **Week 4**: TBD% → 100%
 
-**Last Session Notes**: Initial plan created 2025-10-05
+**Last Session Notes**:
+
+- 2025-10-05: Initial plan created
+- 2025-10-05: Phase 1 backend fixes implemented (BE-1, BE-3), BE-2 investigated and confirmed correct by design
 
 ---
 

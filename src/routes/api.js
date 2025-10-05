@@ -102,6 +102,16 @@ export function createApiRouter(
       }
 
       await currentController.updateCameraSetting(setting, value);
+
+      // Broadcast setting change to all connected clients
+      if (server.wsHandler && server.wsHandler.broadcast) {
+        server.wsHandler.broadcast("camera_setting_changed", {
+          setting,
+          value,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       res.json({
         success: true,
         message: `Setting ${setting} updated to ${value}`,
@@ -724,6 +734,15 @@ export function createApiRouter(
       );
 
       if (result) {
+        // Broadcast configuration update to all connected clients
+        if (server.wsHandler && server.wsHandler.broadcastDiscoveryEvent) {
+          server.wsHandler.broadcastDiscoveryEvent("cameraConfigured", {
+            ip,
+            port,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
         res.json({
           success: true,
           message: "Camera configuration updated successfully",
