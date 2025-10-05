@@ -1408,6 +1408,15 @@ export function createApiRouter(
         const forceRefresh = req.query.refresh === "true";
         const networks =
           await networkServiceManager.scanWiFiNetworks(forceRefresh);
+
+        // Broadcast scan completion to all clients (BE-8)
+        if (server.wsHandler && server.wsHandler.broadcastNetworkEvent) {
+          server.wsHandler.broadcastNetworkEvent("wifi_scan_complete", {
+            networkCount: networks.length,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
         res.json({ networks });
       } catch (error) {
         logger.error("WiFi scan failed:", error);
@@ -1743,6 +1752,15 @@ export function createApiRouter(
     router.post("/discovery/scan", async (req, res) => {
       try {
         await discoveryManager.searchForCameras();
+
+        // Broadcast scan initiation to all clients (BE-9)
+        if (server.wsHandler && server.wsHandler.broadcastDiscoveryEvent) {
+          server.wsHandler.broadcastDiscoveryEvent("scanStarted", {
+            timestamp: new Date().toISOString(),
+            manual: true,
+          });
+        }
+
         res.json({ success: true, message: "Camera scan initiated" });
       } catch (error) {
         logger.error("Failed to trigger camera scan:", error);

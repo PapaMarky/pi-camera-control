@@ -134,6 +134,15 @@ export class NetworkStateManager extends EventEmitter {
       this.updateInterfaceState(data.interface, data.state);
       this.emit("interfaceStateChanged", data);
     });
+
+    // Forward WiFi connection events for WebSocket broadcasting (BE-11)
+    this.serviceManager.on("wifiConnectionStarted", (data) => {
+      this.emit("wifiConnectionStarted", data);
+    });
+
+    this.serviceManager.on("wifiConnectionFailed", (data) => {
+      this.emit("wifiConnectionFailed", data);
+    });
   }
 
   /**

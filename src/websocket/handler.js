@@ -1407,6 +1407,7 @@ export function createWebSocketHandler(
   handleConnection.broadcastDiscoveryEvent = broadcastDiscoveryEvent;
   handleConnection.broadcastTimelapseEvent = broadcastTimelapseEvent;
   handleConnection.broadcastActivityLog = broadcastActivityLog;
+  handleConnection.broadcastNetworkEvent = broadcastNetworkEvent; // Network-specific events
 
   return handleConnection;
 }

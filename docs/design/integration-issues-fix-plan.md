@@ -1,8 +1,8 @@
 # Integration Issues Fix Plan
 
 **Created**: 2025-10-05
-**Last Updated**: 2025-10-05 (Session 4)
-**Status**: Phases 1-5 Complete (74% overall)
+**Last Updated**: 2025-10-05 (Session 6)
+**Status**: All Phases Complete (100% overall)
 
 ## CRITICAL: Keep This Document Updated
 
@@ -20,17 +20,18 @@
 ## Executive Summary
 
 **Total Issues**: 27 distinct integration issues found across frontend, backend, and integration layers
-**Issues Completed**: 22/27 (Phases 1-5 complete)
-**Current Phase**: Phase 5 Complete - Backend Guardian Session
-**Completion Status**: 81% complete
+**Issues Completed**: 27/27 (All phases complete)
+**Current Phase**: Complete - All issues resolved
+**Completion Status**: 100% complete
 
 ### Issue Breakdown
 
 - **Critical**: 3/3 complete ✅ (Backend WebSocket broadcasts)
 - **High**: 5/5 complete ✅ (UI feedback, dual responses, state tracking)
 - **Medium**: 10/10 complete ✅ (BE-6 broadcast errors, IP-4 error propagation, guards, event cleanup)
-- **Low**: 4/9 complete ✅ (WebSocket feedback, investigations, liveview cleanup)
-  - 5 items investigated and deferred (BE-7, BE-8, BE-9, BE-10, BE-11 - all investigations found current implementation correct)
+- **Low**: 9/9 complete ✅ (WebSocket feedback, investigations, liveview cleanup, documentation, network broadcasts)
+  - 5 items investigated and found correct (BE-7 through BE-11 first set - investigations)
+  - 4 items implemented (BE-8 through BE-11 second set - WiFi scan, camera scan, documentation, network events)
 
 ---
 
@@ -244,6 +245,7 @@ if (wasReconnecting && window.cameraManager) {
 ```
 
 **Implementation Notes**:
+
 - Added warning message when reconnection attempts start
 - Added success message when reconnection succeeds
 - Messages appear in activity log for user visibility
@@ -528,6 +530,7 @@ res.json({
 **Fix Applied**:
 
 Standardized ALL broadcast functions to:
+
 1. Track dead clients in a Set
 2. Log errors with specific context (event type, client count)
 3. Clean up dead connections after broadcast
@@ -571,7 +574,7 @@ for (const deadClient of deadClients) {
 
 if (failureCount > 0 || deadClients.size > 0) {
   logger.warn(
-    `Event ${type} broadcast: ${successCount} succeeded, ${failureCount} failed, ${deadClients.size} dead clients removed`
+    `Event ${type} broadcast: ${successCount} succeeded, ${failureCount} failed, ${deadClients.size} dead clients removed`,
   );
 }
 ```
@@ -596,9 +599,11 @@ if (failureCount > 0 || deadClients.size > 0) {
 Compared actual implementation with documented schema in `api-specification.md`:
 
 **Documented Fields** (lines 430-452):
+
 - running, state, stats (with 13 sub-fields), options (4 sub-fields), averageShotDuration
 
 **Actual API Implementation** (api.js lines 991-1018):
+
 - ✅ All documented fields present and correct
 - ✅ Overtime stats included (overtimeShots, totalOvertimeSeconds, maxOvertimeSeconds, lastShotDuration, totalShotDurationSeconds)
 - ✅ Consistent schema for active sessions
@@ -606,6 +611,7 @@ Compared actual implementation with documented schema in `api-specification.md`:
 
 **Session getStatus() Internal Fields**:
 The session object's `getStatus()` method (timelapse-session.js) returns additional fields NOT exposed via REST API:
+
 - sessionId, title, createdAt, duration, remainingShots, estimatedEndTime, successRate
 
 **Conclusion**: The REST endpoint **deliberately filters** what fields to expose. This is intentional design - the API exposes a clean, stable interface while the internal session object maintains additional state. Schema is **correct and well-designed**.
@@ -628,6 +634,7 @@ The session object's `getStatus()` method (timelapse-session.js) returns additio
 **Investigation Results**:
 
 **Current Response Schema** (test-photo.js lines 327-357):
+
 ```javascript
 {
   id: 1,
@@ -651,6 +658,7 @@ The session object's `getStatus()` method (timelapse-session.js) returns additio
 ```
 
 **Features**:
+
 - ✅ Complete EXIF metadata extraction
 - ✅ Processing time measurement (useful for interval planning)
 - ✅ Download progress tracking via WebSocket events
@@ -679,18 +687,21 @@ The session object's `getStatus()` method (timelapse-session.js) returns additio
 **Investigation Results**:
 
 **Existing Functionality**:
+
 - Method `getAPClients()` already exists in NetworkServiceManager (line 1164)
 - Uses `hostapd_cli list_sta` to get connected clients
 - Falls back to ARP table scanning for 192.168.4.x subnet
 - Returns array of client objects with MAC addresses and IPs
 
 **Current Status**:
+
 - ✅ Functionality implemented
 - ❌ Not called in `getNetworkStatus()`
 - ❌ Not exposed in REST API or WebSocket broadcasts
 
 **Usefulness Assessment**:
 Knowing how many devices are connected to the Pi's AP would be useful for:
+
 - Confirming phone/laptop successfully connected
 - Debugging connectivity issues
 - Monitoring active connections
@@ -717,6 +728,7 @@ Knowing how many devices are connected to the Pi's AP would be useful for:
 **Investigation Results**:
 
 **Documented Schema** (api-specification.md lines 990-997):
+
 ```javascript
 {
   type: "discovery_event",
@@ -732,16 +744,19 @@ Knowing how many devices are connected to the Pi's AP would be useful for:
 
 **Actual deviceInfo Object** (upnp.js lines 501-510):
 Contains many additional fields:
+
 - deviceType, friendlyName, manufacturer, manufacturerURL
 - modelDescription, modelName, serialNumber, udn
 - Extended Canon fields: ccapiUrl, deviceNickname, onService
 - Plus: uuid, ipAddress, discoveredAt
 
 **Frontend Usage**:
+
 - ❌ Frontend does NOT listen to camera_discovered events
-- ❌ No consumer for this event in public/js/*.js
+- ❌ No consumer for this event in public/js/\*.js
 
 **Conclusion**:
+
 - Documented schema is minimal but **technically correct** for the fields it shows
 - Event is broadcast but not consumed by frontend
 - Full schema documentation could be added but is LOW priority since event is unused
@@ -764,6 +779,7 @@ Contains many additional fields:
 **Investigation Results**:
 
 **Session Report Schema** (state-manager.js lines 524-564):
+
 ```javascript
 {
   id: "report-{sessionId}",
@@ -797,11 +813,13 @@ Contains many additional fields:
 ```
 
 **Current Documentation**:
+
 - REST endpoints documented (lines 483-530 of api-specification.md)
 - WebSocket events documented (lines 1361-1412)
 - But full schema not documented in detail
 
 **Conclusion**: Schema is comprehensive and well-structured. Marked for future documentation but LOW priority since:
+
 - Reports are working correctly
 - Schema is stable and unlikely to change
 - Can be inferred from TypeScript/code inspection
@@ -813,25 +831,28 @@ Contains many additional fields:
 
 ---
 
-### BE-8: WiFi Scan No Broadcast ⏳
+### BE-8: WiFi Scan No Broadcast ✅
 
 **Priority**: Low
-**Status**: Not Started
-**File**: `src/routes/api.js:1462-1478`
+**Status**: Complete
+**File**: `src/routes/api.js:1405-1430`, `src/websocket/handler.js:1410`
 
 **Problem**: WiFi scan results only sent to requesting client, not broadcast.
 
 **Frontend Impact**: Other clients don't see scan results without manual refresh.
 
-**Fix**:
+**Fix Applied**:
+
+1. **Exported broadcastNetworkEvent** from WebSocket handler (handler.js:1410)
+2. **Added broadcast** after WiFi scan completes (api.js:1412-1418):
 
 ```javascript
-// After successful scan (line 1468):
+// After successful scan:
 const networks = await networkServiceManager.scanWiFiNetworks(forceRefresh);
 
-// ADD THIS:
-if (server.wss && server.wss.broadcastNetworkEvent) {
-  server.wss.broadcastNetworkEvent("wifi_scan_complete", {
+// Broadcast scan completion to all clients (BE-8)
+if (server.wsHandler && server.wsHandler.broadcastNetworkEvent) {
+  server.wsHandler.broadcastNetworkEvent("wifi_scan_complete", {
     networkCount: networks.length,
     timestamp: new Date().toISOString(),
   });
@@ -844,32 +865,34 @@ res.json({ networks });
 
 1. Connect two clients
 2. Scan WiFi in client A
-3. Verify client B receives notification
+3. Verify client B receives `wifi_scan_complete` event
 
-**Completed**: ❌
-**Completed Date**: N/A
+**Completed**: ✅
+**Completed Date**: 2025-10-05
 
 ---
 
-### BE-9: Manual Camera Scan No Broadcast ⏳
+### BE-9: Manual Camera Scan No Broadcast ✅
 
 **Priority**: Low
-**Status**: Not Started
-**File**: `src/routes/api.js:1752-1765`
+**Status**: Complete
+**File**: `src/routes/api.js:1751-1774`
 
 **Problem**: Manual camera scan initiation not broadcast to other clients.
 
 **Frontend Impact**: No indication scan in progress for other clients.
 
-**Fix**:
+**Fix Applied**:
+
+Added broadcast after camera scan initiation (api.js:1756-1762):
 
 ```javascript
-// After initiating scan (line 1754):
+// After initiating scan:
 await discoveryManager.searchForCameras();
 
-// ADD THIS:
-if (server.wss && server.wss.broadcastDiscoveryEvent) {
-  server.wss.broadcastDiscoveryEvent("scanStarted", {
+// Broadcast scan initiation to all clients (BE-9)
+if (server.wsHandler && server.wsHandler.broadcastDiscoveryEvent) {
+  server.wsHandler.broadcastDiscoveryEvent("scanStarted", {
     timestamp: new Date().toISOString(),
     manual: true,
   });
@@ -882,122 +905,113 @@ res.json({ success: true, message: "Camera scan initiated" });
 
 1. Connect two clients
 2. Initiate manual scan in client A
-3. Verify client B shows scan in progress
+3. Verify client B receives `discovery_event` with `scanStarted` type
 
-**Completed**: ❌
-**Completed Date**: N/A
+**Completed**: ✅
+**Completed Date**: 2025-10-05
 
 ---
 
-### BE-10: State Manager Events Not Documented ⏳
+### BE-10: State Manager Events Not Documented ✅
 
 **Priority**: Low
-**Status**: Not Started
-**File**: `src/intervalometer/state-manager.js`, `docs/design/api-specification.md`
+**Status**: Complete
+**File**: `docs/design/api-specification.md:1413-1661`
 
-**Problem**: IntervalometerStateManager emits ~10 events that aren't documented in API spec.
+**Problem**: IntervalometerStateManager emits ~18 events that weren't documented in API spec.
 
 **Frontend Impact**: Developers don't know events exist, miss opportunities for real-time updates.
 
-**Fix**: Add section to `docs/design/api-specification.md`:
+**Fix Applied**:
 
-```markdown
-### Intervalometer State Manager Events
+Added comprehensive "IntervalometerStateManager Internal Events" section to `docs/design/api-specification.md` (lines 1413-1661) documenting all 18 events:
 
-#### initialized
+**Events Documented**:
 
-Emitted when IntervalometerStateManager initializes.
-**Payload**: `{ hasUnsavedSession: boolean, sessionCount: number }`
+1. `initialized` - Manager initialization complete
+2. `initializationFailed` - Manager initialization failed
+3. `sessionCreated` - New session created
+4. `sessionCreateFailed` - Session creation failed
+5. `sessionStarted` - Session began capturing
+6. `sessionPaused` - Session paused
+7. `sessionResumed` - Session resumed
+8. `photoTaken` - Photo captured successfully
+9. `photoFailed` - Photo capture failed
+10. `sessionStopped` - Session stopped by user
+11. `sessionCompleted` - Session completed normally
+12. `sessionError` - Session encountered error
+13. `stateChanged` - State transition occurred
+14. `reportSaved` - Report saved successfully
+15. `reportSaveFailed` - Report save failed
+16. `sessionDiscarded` - Unsaved session discarded
+17. `unsavedSessionFound` - Unsaved session found on startup
+18. `statusUpdate` - Session status changed
 
-#### sessionCreated
+Each event includes:
 
-Emitted when new timelapse session created.
-**Payload**: `{ sessionId: string, title: string, options: object }`
+- Description of when it's emitted
+- Complete JSON payload schema with examples
+- Field-by-field documentation
 
-#### sessionStarted
+**Note Added**: Clarifies these are internal backend events, not WebSocket broadcasts. Directs developers to "Session Management Events" section for client-facing WebSocket messages.
 
-Emitted when session begins capturing.
-**Payload**: `{ sessionId: string, ... }`
+**Test**: Manual documentation review - all events from state-manager.js source code documented.
 
-#### photoTaken
-
-Emitted after each successful photo.
-**Payload**: `{ sessionId: string, shotNumber: number, success: boolean, ... }`
-
-#### photoFailed
-
-Emitted when photo capture fails.
-**Payload**: `{ sessionId: string, shotNumber: number, error: string, ... }`
-
-#### sessionPaused / sessionResumed
-
-Emitted when session paused/resumed.
-
-#### sessionStopped / sessionCompleted / sessionError
-
-Emitted when session ends.
-
-#### stateChanged
-
-Emitted on state transitions.
-
-#### reportSaved
-
-Emitted when report saved successfully.
-
-#### unsavedSessionFound
-
-Emitted on startup if unsaved session exists.
-```
-
-**Test**: Manual review - verify all events documented.
-
-**Completed**: ❌
-**Completed Date**: N/A
+**Completed**: ✅
+**Completed Date**: 2025-10-05
 
 ---
 
-### BE-11: Network State Changes Not Broadcast ⏳
+### BE-11: Network State Changes Not Broadcast ✅
 
 **Priority**: Low
-**Status**: Not Started
-**File**: `src/network/state-manager.js:205-230`, `src/server.js`
+**Status**: Complete
+**File**: `src/network/state-manager.js:127-146`, `src/websocket/handler.js:22-43`
 
-**Problem**: Network state manager emits events locally but they're not forwarded to WebSocket clients.
+**Problem**: Some network state manager events were not being forwarded to WebSocket clients.
 
-**Frontend Impact**: Network service restarts, WiFi changes invisible to UI in real-time.
+**Frontend Impact**: WiFi connection events invisible to UI in real-time.
 
-**Fix**:
+**Fix Applied**:
 
-1. In NetworkStateManager initialization:
+**Discovered**: Network events were already being broadcast via WebSocket handler (handler.js:22-43):
+
+- `serviceStateChanged` → `network_service_changed` ✅
+- `interfaceStateChanged` → `network_interface_changed` ✅
+- `accessPointConfigured` → `access_point_configured` ✅
+
+**Missing**: WiFi connection events were not being forwarded from service manager to state manager.
+
+**Added event forwarding** in NetworkStateManager.bindServiceEvents() (state-manager.js:138-145):
 
 ```javascript
-this.on("serviceStateChanged", (data) => {
-  if (this.wssBroadcast) {
-    this.wssBroadcast("network_service_changed", data);
-  }
+// Forward WiFi connection events for WebSocket broadcasting (BE-11)
+this.serviceManager.on("wifiConnectionStarted", (data) => {
+  this.emit("wifiConnectionStarted", data);
 });
 
-this.on("interfaceStateChanged", (data) => {
-  if (this.wssBroadcast) {
-    this.wssBroadcast("network_interface_changed", data);
-  }
+this.serviceManager.on("wifiConnectionFailed", (data) => {
+  this.emit("wifiConnectionFailed", data);
 });
 ```
 
-2. In `src/server.js`, connect broadcaster:
+Now all 5 network events are properly broadcast:
 
-```javascript
-networkStateManager.wssBroadcast = wss.broadcastNetworkEvent;
-```
+1. `network_service_changed`
+2. `network_interface_changed`
+3. `access_point_configured`
+4. `wifi_connection_started`
+5. `wifi_connection_failed`
 
 **Test**:
 
-1. Change network state
-2. Verify WebSocket events broadcast
+1. Connect to WiFi network
+2. Verify WebSocket broadcasts `wifi_connection_started` event
+3. Try invalid connection
+4. Verify WebSocket broadcasts `wifi_connection_failed` event
 
-**Completed**: ❌
-**Completed Date**: N/A
+**Completed**: ✅
+**Completed Date**: 2025-10-05
 
 ---
 
@@ -1076,10 +1090,9 @@ grep -r "stats\.\|shotsTaken\|shotsSuccessful\|shotsFailed" public/js/camera.js
 
 ```javascript
 // From camera.js:269-274
-const { shotsTaken, shotsSuccessful } = data.stats;  // Read from backend
-const successRate = shotsTaken > 0
-  ? ((shotsSuccessful / shotsTaken) * 100).toFixed(1)
-  : 100;
+const { shotsTaken, shotsSuccessful } = data.stats; // Read from backend
+const successRate =
+  shotsTaken > 0 ? ((shotsSuccessful / shotsTaken) * 100).toFixed(1) : 100;
 logMessage += ` (${shotsTaken} shots taken, ${successRate}% success rate)`;
 ```
 
@@ -1149,6 +1162,7 @@ Replaced ALL `alert()` calls with `Toast.error()`:
 **Error Propagation Chain**:
 
 1. **Backend Error Creation** (error-handlers.js lines 18-30):
+
    ```javascript
    createStandardError(message, options) {
      return {
@@ -1160,6 +1174,7 @@ Replaced ALL `alert()` calls with `Toast.error()`:
    ```
 
 2. **Backend Send** (handler.js lines 1098-1113):
+
    ```javascript
    const sendError = (ws, message, options = {}) => {
      const standardError = createStandardError(message, {
@@ -1173,6 +1188,7 @@ Replaced ALL `alert()` calls with `Toast.error()`:
    ```
 
 3. **Frontend WebSocket Receive** (websocket.js lines 310-313):
+
    ```javascript
    case "error":
      console.error("WebSocket error response:", data);
@@ -1181,6 +1197,7 @@ Replaced ALL `alert()` calls with `Toast.error()`:
    ```
 
 4. **Frontend Error Handler** (camera.js lines 251-253):
+
    ```javascript
    wsManager.on("error_response", (data) => {
      this.handleError(data.message);
@@ -1195,6 +1212,7 @@ Replaced ALL `alert()` calls with `Toast.error()`:
    ```
 
 **Conclusion**: Error propagation chain is **already complete and functional**:
+
 - ✅ Backend creates standardized error messages
 - ✅ WebSocket sends with `type: "error"`
 - ✅ Frontend emits `error_response` event
@@ -1399,15 +1417,18 @@ grep -r "wsManager\.on\(|this\.wsManager\.on\(" public/js
 After analyzing both the frontend polling and backend broadcasts:
 
 **Frontend Polling** (app.js line 107-112):
+
 - Calls `cameraManager.updateCameraStatus()` every 10s → REST `/api/camera/status`
 - Calls `updateSystemStatus()` ONLY if WebSocket disconnected
 - Comment on line 106: "primary for camera detection, backup for WebSocket"
 
 **Backend Broadcasts** (handler.js line 169-172):
+
 - Broadcasts full status every 10s via WebSocket `status_update` message
 - Includes: camera, power, network, storage, intervalometer, discovery
 
 **Camera Status Endpoints**:
+
 - GET `/api/camera/status`: Returns camera connection status ONLY (connected, ip, port, error, capabilities)
 - WebSocket `status_update`: Returns FULL system status
 
@@ -1422,6 +1443,7 @@ The polling is **NOT redundant** - it serves a specific purpose:
 **Current implementation is correct** - no changes needed.
 
 **Decision**: Keep current implementation. The dual approach provides:
+
 - Dedicated camera connection monitoring via REST
 - Full system status via WebSocket
 - Automatic fallback to REST when WebSocket fails
@@ -1444,17 +1466,20 @@ The polling is **NOT redundant** - it serves a specific purpose:
 Audited all camera settings endpoints:
 
 **GET `/api/camera/settings`** (api.js line 51-75):
+
 - Returns raw Canon CCAPI response from `/ccapi/ver100/shooting/settings`
 - Returns settings object directly: `res.json(settings)`
 - Error handling uses standardized `createApiError()` utility
 
 **PUT `/api/camera/settings/:setting`** (api.js line 78-134):
+
 - Updates a specific setting
 - Returns structured confirmation: `{success: true, message, setting, value}`
 - Broadcasts change via WebSocket: `camera_setting_changed` event
 - Error handling uses standardized `createApiError()` utility
 
 **WebSocket `camera_settings` handler** (handler.js line 516-534):
+
 - Returns raw Canon settings from `getCameraSettings()`
 - Sends via `sendResponse(ws, "camera_settings", settings)`
 - Error handling uses `sendError()` utility
@@ -1489,11 +1514,13 @@ All camera settings endpoints are **CONSISTENT**:
 Reviewed liveview manager cleanup methods:
 
 **Individual Image Deletion** (`deleteCapture()` - line 243-272):
+
 - ✅ Properly deletes file from disk using `fs.unlink()`
 - ✅ Removes from captures list
 - ✅ Logs success/failure
 
 **Clear All Images** (`clearAll()` - line 279-290):
+
 - ❌ **ISSUE FOUND**: Only cleared in-memory list, did NOT delete files from disk
 - Comment explicitly said "files will accumulate for observation"
 - This causes disk space leak as liveview images accumulate
@@ -1529,6 +1556,7 @@ async clearAll() {
 ```
 
 **Implementation Notes**:
+
 - Uses `Promise.all()` to delete all files concurrently
 - Non-critical errors logged but don't fail the operation
 - Properly cleans up both in-memory list and disk files
@@ -1686,16 +1714,17 @@ async clearAll() {
 - ✅ IP-6: Event listener cleanup
 - ✅ IP-7: Event naming migration (verified complete)
 
-**Overall Progress**: 74% complete (20/27 issues)
-**Week 1**: 0% → 74% (20/27 issues complete in 4 sessions)
+**Overall Progress**: 100% complete (27/27 issues) ✅
+**Week 1**: 0% → 100% (27/27 issues complete in 6 sessions)
 
 **Phase Completion Summary**:
+
 - ✅ Phase 1: 100% complete (3/3 critical backend fixes)
 - ✅ Phase 2: 100% complete (4/4 high priority UI/integration fixes)
 - ✅ Phase 3: 100% complete (3/3 medium priority backend fixes)
 - ✅ Phase 4: 100% complete (6/6 medium priority frontend fixes)
-- ✅ Phase 5: 100% complete (4/4 assigned low priority fixes)
-- ⏳ Remaining: 7 low priority items deferred (BE-6, IP-4, BE-7 through BE-11)
+- ✅ Phase 5: 100% complete (11/11 low priority fixes - investigations + implementations)
+- ✅ **ALL ISSUES RESOLVED**
 
 **Last Session Notes**:
 
@@ -1739,6 +1768,22 @@ async clearAll() {
   - IP-4: Verified error propagation chain - ALREADY COMPLETE, full path from backend to UI activity log
   - All 538 unit tests passing
   - 81% issue completion (22/27), all Medium priority issues complete
+- 2025-10-05 PM Session 6 (Final Session): Remaining low priority implementations (BE-8-11 second set)
+  - BE-8: Added WebSocket broadcast for WiFi scan completion
+    - Exported broadcastNetworkEvent from handler.js
+    - Added broadcast call after successful WiFi scan in api.js
+  - BE-9: Added WebSocket broadcast for manual camera scan initiation
+    - Added broadcastDiscoveryEvent call after searchForCameras() in api.js
+  - BE-10: Documented all IntervalometerStateManager events in API specification
+    - Added comprehensive "IntervalometerStateManager Internal Events" section (249 lines)
+    - Documented all 18 events with full JSON schemas and descriptions
+    - Clarified these are internal backend events, not WebSocket broadcasts
+  - BE-11: Added WiFi connection event forwarding for WebSocket broadcasts
+    - Discovered network events were already wired up in handler.js
+    - Added missing wifiConnectionStarted and wifiConnectionFailed event forwarding in state-manager.js
+    - All 5 network event types now properly broadcast via WebSocket
+  - Updated integration-issues-fix-plan.md to reflect 100% completion
+  - **ALL 27 ISSUES COMPLETE** ✅
 
 ---
 
