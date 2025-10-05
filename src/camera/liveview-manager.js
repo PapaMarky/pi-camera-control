@@ -273,7 +273,7 @@ export class LiveViewManager {
 
   /**
    * Clear all captures
-   * Note: For MVP, this clears the list and optionally deletes files
+   * Deletes all liveview image files from disk to prevent disk space leak (IP-10)
    * @returns {Promise<void>}
    */
   async clearAll() {
@@ -281,11 +281,24 @@ export class LiveViewManager {
       count: this.captures.length,
     });
 
-    // Optional: Delete files from disk
-    // For now, just clear the list (files will accumulate for observation)
+    // Delete all files from disk (IP-10: prevent disk space leak)
+    const deletePromises = this.captures.map(async (capture) => {
+      try {
+        await fs.unlink(capture.filepath);
+        logger.debug("Deleted liveview image", { filepath: capture.filepath });
+      } catch (error) {
+        logger.warn("Failed to delete liveview image file (non-critical)", {
+          filepath: capture.filepath,
+          error: error.message,
+        });
+      }
+    });
+
+    await Promise.all(deletePromises);
+
     this.captures = [];
     this.captureId = 1;
 
-    logger.info("All live view captures cleared");
+    logger.info("All live view captures cleared and files deleted");
   }
 }
