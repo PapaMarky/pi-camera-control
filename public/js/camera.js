@@ -252,13 +252,8 @@ class CameraManager {
       this.handleError(data.message);
     });
 
-    // Intervalometer events (API responses)
-    wsManager.on("intervalometer_start", (data) => {
-      this.log("Intervalometer started successfully", "success");
-      this.updateIntervalometerUI(data.status);
-    });
-
     // Intervalometer broadcast events (for all clients)
+    // Note: Using ONLY broadcast events, not API response events, to avoid duplicate UI updates
     wsManager.on("intervalometer_started", (data) => {
       this.log("Intervalometer started successfully", "success");
       // Restore the start button
@@ -268,7 +263,17 @@ class CameraManager {
     });
 
     wsManager.on("intervalometer_stopped", (data) => {
-      this.log("Intervalometer stopped", "info");
+      // Create detailed stop message from broadcast data
+      let logMessage = "Intervalometer stopped";
+      if (data.stats) {
+        const { shotsTaken, shotsSuccessful } = data.stats;
+        const successRate =
+          shotsTaken > 0
+            ? ((shotsSuccessful / shotsTaken) * 100).toFixed(1)
+            : 100;
+        logMessage += ` (${shotsTaken} shots taken, ${successRate}% success rate)`;
+      }
+      this.log(logMessage, "info");
       this.refreshIntervalometerStatus();
     });
 
@@ -334,22 +339,6 @@ class CameraManager {
       this.stopIntervalometerStatusUpdates();
       // Then update UI to completed state
       this.updateIntervalometerUI({ state: "completed", stats: data.stats });
-    });
-
-    wsManager.on("intervalometer_stop", (data) => {
-      // Create detailed stop message
-      let logMessage = "Intervalometer stopped";
-      if (data.status && data.status.stats) {
-        const { shotsTaken, shotsSuccessful } = data.status.stats;
-        const successRate =
-          shotsTaken > 0
-            ? ((shotsSuccessful / shotsTaken) * 100).toFixed(1)
-            : 100;
-        logMessage += ` (${shotsTaken} shots taken, ${successRate}% success rate)`;
-      }
-      this.log(logMessage, "info");
-
-      this.updateIntervalometerUI(data.status || { state: "stopped", ...data });
     });
 
     // Welcome message
@@ -1682,9 +1671,11 @@ WebSocket: ${wsManager.connected ? "Connected" : "Disconnected"}
     } else if (cardName === "network-settings") {
       this.populateCameraConfigForm();
     } else if (cardName === "utilities") {
-      if (window.utilitiesManager) {
-        window.utilitiesManager.initialize();
+      // Initialize UtilitiesManager if not already created (prevents race condition with DOMContentLoaded)
+      if (!window.utilitiesManager) {
+        window.utilitiesManager = new UtilitiesManager();
       }
+      window.utilitiesManager.initialize();
     } else if (cardName === "timelapse-reports") {
       // Load timelapse reports when the card is shown
       if (window.timelapseUI) {

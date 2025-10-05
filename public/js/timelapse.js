@@ -73,10 +73,7 @@ class TimelapseUI {
     // WebSocket event handlers
     if (this.wsManager) {
       // Report data responses
-      this.wsManager.on("timelapse_reports_response", (data) => {
-        this.handleReportsResponse(data);
-      });
-
+      // Use ONLY broadcast event to avoid duplicate UI updates
       this.wsManager.on("timelapse_reports", (data) => {
         this.handleReportsResponse(data);
       });
@@ -661,7 +658,7 @@ class TimelapseUI {
     const title = titleInput.value.trim();
 
     if (!title) {
-      alert("Please enter a title for this session.");
+      Toast.error("Please enter a title for this session.");
       titleInput.focus();
       return;
     }
@@ -826,7 +823,7 @@ class TimelapseUI {
       window.cameraManager.log(message, "error");
     } else {
       console.error(message);
-      alert(message);
+      Toast.error(message);
     }
   }
 

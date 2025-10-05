@@ -146,7 +146,7 @@ class TestShotUI {
       this.renderGallery();
     } catch (error) {
       console.error("TestShotUI: Capture failed:", error);
-      alert(`Failed to capture: ${error.message}`);
+      Toast.error(`Failed to capture: ${error.message}`);
     } finally {
       // Restore button
       btn.disabled = false;
@@ -162,6 +162,12 @@ class TestShotUI {
     }
 
     try {
+      // Show loading state using UIStateManager
+      window.uiStateManager.setInProgress("clear-liveview-btn", {
+        progressText: "Clearing...",
+        timeout: 10000,
+      });
+
       const response = await fetch("/api/camera/liveview/clear", {
         method: "DELETE",
       });
@@ -173,10 +179,14 @@ class TestShotUI {
 
       this.captures = [];
       this.renderGallery();
+      this.updateButtonStates(); // Update button states after clearing
       console.log("TestShotUI: All captures cleared");
     } catch (error) {
       console.error("TestShotUI: Clear failed:", error);
-      alert(`Failed to clear: ${error.message}`);
+      Toast.error(`Failed to clear: ${error.message}`);
+    } finally {
+      // Restore button state
+      window.uiStateManager.restore("clear-liveview-btn");
     }
   }
 
@@ -203,7 +213,7 @@ class TestShotUI {
       console.log("TestShotUI: Image deleted", id);
     } catch (error) {
       console.error("TestShotUI: Delete failed:", error);
-      alert(`Failed to delete: ${error.message}`);
+      Toast.error(`Failed to delete: ${error.message}`);
     }
   }
 
@@ -459,7 +469,7 @@ class TestShotUI {
       console.log("TestShotUI: All settings applied successfully");
     } catch (error) {
       console.error("TestShotUI: Failed to apply settings:", error);
-      alert(`Failed to apply settings: ${error.message}`);
+      Toast.error(`Failed to apply settings: ${error.message}`);
     } finally {
       if (applyBtn) {
         applyBtn.disabled = true;
@@ -530,7 +540,7 @@ class TestShotUI {
       }
     } catch (error) {
       console.error("TestShotUI: Test photo capture failed:", error);
-      alert(`Failed to capture test photo: ${error.message}`);
+      Toast.error(`Failed to capture test photo: ${error.message}`);
     } finally {
       // Restore buttons
       this.isCapturing = false;
@@ -776,7 +786,7 @@ class TestShotUI {
       console.log("TestShotUI: Test photo deleted", photoId);
     } catch (error) {
       console.error("TestShotUI: Delete failed:", error);
-      alert(`Failed to delete photo: ${error.message}`);
+      Toast.error(`Failed to delete photo: ${error.message}`);
     }
   }
 }
