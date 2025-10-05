@@ -779,6 +779,9 @@ class CameraManager {
         // Clear form validation states
         ipInput.setCustomValidity("");
         portInput.setCustomValidity("");
+
+        // Update camera status display after successful configuration
+        setTimeout(() => this.updateCameraStatus(), 1000);
       } else {
         this.handleError(`Configuration update failed: ${result.error}`);
       }
@@ -1680,6 +1683,11 @@ WebSocket: ${wsManager.connected ? "Connected" : "Disconnected"}
       // Load timelapse reports when the card is shown
       if (window.timelapseUI) {
         window.timelapseUI.loadReports();
+      }
+    } else if (cardName === "test-shot") {
+      // Auto-load camera settings when switching to Test Shot card
+      if (window.testShotUI && this.status.connected) {
+        window.testShotUI.loadSettings();
       }
     }
 

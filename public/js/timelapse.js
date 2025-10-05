@@ -7,6 +7,7 @@ class TimelapseUI {
     this.wsManager = wsManager;
     this.currentReport = null;
     this.unsavedSession = null;
+    this.boundHandlers = new Map(); // Track bound handlers for cleanup
 
     this.initialize();
   }
@@ -72,50 +73,72 @@ class TimelapseUI {
 
     // WebSocket event handlers
     if (this.wsManager) {
+      // Helper to register and track handlers
+      const registerHandler = (event, handler) => {
+        this.boundHandlers.set(event, handler);
+        this.wsManager.on(event, handler);
+      };
+
       // Report data responses
       // Use ONLY broadcast event to avoid duplicate UI updates
-      this.wsManager.on("timelapse_reports", (data) => {
+      registerHandler("timelapse_reports", (data) => {
         this.handleReportsResponse(data);
       });
 
-      this.wsManager.on("timelapse_report_response", (data) => {
+      registerHandler("timelapse_report_response", (data) => {
         this.handleReportResponse(data);
       });
 
       // Session events
-      this.wsManager.on("session_completed", (data) => {
+      registerHandler("session_completed", (data) => {
         this.handleSessionCompleted(data);
       });
 
-      this.wsManager.on("session_stopped", (data) => {
+      registerHandler("session_stopped", (data) => {
         this.handleSessionStopped(data);
       });
 
-      this.wsManager.on("session_error", (data) => {
+      registerHandler("session_error", (data) => {
         this.handleSessionError(data);
       });
 
-      this.wsManager.on("unsaved_session_found", (data) => {
+      registerHandler("unsaved_session_found", (data) => {
         this.handleUnsavedSessionFound(data);
       });
 
-      this.wsManager.on("report_saved", (data) => {
+      registerHandler("report_saved", (data) => {
         this.loadReports(); // Refresh the list after saving
       });
 
-      this.wsManager.on("session_saved", (data) => {
+      registerHandler("session_saved", (data) => {
         this.handleSessionSaved(); // Hide completion page and show success
       });
 
-      this.wsManager.on("report_deleted", (data) => {
+      registerHandler("report_deleted", (data) => {
         this.loadReports(); // Refresh the list after deleting
       });
 
       // Handle session discard response
-      this.wsManager.on("session_discarded", (data) => {
+      registerHandler("session_discarded", (data) => {
         this.handleSessionDiscarded();
       });
     }
+  }
+
+  /**
+   * Cleanup method to remove all event listeners
+   * Should be called before destroying the UI manager instance
+   */
+  destroy() {
+    console.log("TimelapseUI: Cleaning up event listeners");
+
+    // Remove all WebSocket event handlers
+    for (const [event, handler] of this.boundHandlers) {
+      this.wsManager.off(event, handler);
+    }
+    this.boundHandlers.clear();
+
+    console.log("TimelapseUI: Cleanup complete");
   }
 
   /**
