@@ -1426,8 +1426,8 @@ Broadcast when a timelapse session report is saved (automatically or manually):
         "imagesCaptured": 100,
         "imagesSuccessful": 98,
         "imagesFailed": 2,
-        "firstImageName": "IMG_0001.JPG",
-        "lastImageName": "IMG_0100.JPG"
+        "firstImageName": "100CANON/IMG_0001.JPG",
+        "lastImageName": "100CANON/IMG_0100.JPG"
       }
     }
   }
@@ -1439,8 +1439,8 @@ Broadcast when a timelapse session report is saved (automatically or manually):
 - `imagesCaptured`: Total number of photos attempted during the session
 - `imagesSuccessful`: Number of successfully captured photos
 - `imagesFailed`: Number of failed photo captures
-- `firstImageName`: Filename of the first successfully captured image (e.g., "IMG_0001.JPG"), or `null` if no images were captured. Extracted from the CCAPI file path.
-- `lastImageName`: Filename of the last successfully captured image (e.g., "IMG_0100.JPG"), or `null` if no images were captured. Useful for video generation scripts to identify the image range.
+- `firstImageName`: Filename of the first successfully captured image with parent directory (e.g., "100CANON/IMG_0001.JPG"), or `null` if no images were captured. Extracted from the CCAPI file path. The parent directory helps identify which camera folder the images are stored in.
+- `lastImageName`: Filename of the last successfully captured image with parent directory (e.g., "100CANON/IMG_0100.JPG"), or `null` if no images were captured. Useful for video generation scripts to identify the image range and folder location.
 
 **Automatic Saving Behavior:**
 

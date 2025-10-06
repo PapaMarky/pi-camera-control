@@ -100,9 +100,9 @@ describe("Timelapse Image Filename Tracking", () => {
       const status = session.getStatus();
 
       // EXPECTED: Fields should be reset and then updated with first captured image
-      // After taking the first shot, both should be "IMG_0001.JPG"
-      expect(status.stats.firstImageName).toBe("IMG_0001.JPG");
-      expect(status.stats.lastImageName).toBe("IMG_0001.JPG");
+      // After taking the first shot, both should be "100CANON/IMG_0001.JPG"
+      expect(status.stats.firstImageName).toBe("100CANON/IMG_0001.JPG");
+      expect(status.stats.lastImageName).toBe("100CANON/IMG_0001.JPG");
     });
   });
 
@@ -127,8 +127,8 @@ describe("Timelapse Image Filename Tracking", () => {
       const status = session.getStatus();
 
       // EXPECTED: First image filename should be extracted from CCAPI path
-      expect(status.stats.firstImageName).toBe("IMG_0042.JPG");
-      expect(status.stats.lastImageName).toBe("IMG_0042.JPG");
+      expect(status.stats.firstImageName).toBe("100CANON/IMG_0042.JPG");
+      expect(status.stats.lastImageName).toBe("100CANON/IMG_0042.JPG");
     });
 
     test("extracts filename correctly from various path formats", async () => {
@@ -141,15 +141,15 @@ describe("Timelapse Image Filename Tracking", () => {
       const testPaths = [
         {
           path: "/ccapi/ver110/contents/sd/100CANON/IMG_1234.JPG",
-          expected: "IMG_1234.JPG",
+          expected: "100CANON/IMG_1234.JPG",
         },
         {
           path: "/ccapi/ver110/contents/sd/100CANON/CR3_5678.CR3",
-          expected: "CR3_5678.CR3",
+          expected: "100CANON/CR3_5678.CR3",
         },
         {
           path: "/ccapi/ver110/contents/sd/DCIM/100EOS/IMG_0001.JPG",
-          expected: "IMG_0001.JPG",
+          expected: "100EOS/IMG_0001.JPG",
         },
       ];
 
@@ -212,10 +212,10 @@ describe("Timelapse Image Filename Tracking", () => {
       const status = session.getStatus();
 
       // EXPECTED: First image should remain unchanged
-      expect(status.stats.firstImageName).toBe("IMG_0010.JPG");
+      expect(status.stats.firstImageName).toBe("100CANON/IMG_0010.JPG");
 
       // EXPECTED: Last image should be the most recent
-      expect(status.stats.lastImageName).toBe("IMG_0012.JPG");
+      expect(status.stats.lastImageName).toBe("100CANON/IMG_0012.JPG");
 
       // Verify shot count
       expect(status.stats.shotsTaken).toBe(3);
@@ -250,8 +250,8 @@ describe("Timelapse Image Filename Tracking", () => {
       // EXPECTED: Report should include image filenames in results
       expect(report.results).toHaveProperty("firstImageName");
       expect(report.results).toHaveProperty("lastImageName");
-      expect(report.results.firstImageName).toBe("IMG_9999.JPG");
-      expect(report.results.lastImageName).toBe("IMG_9999.JPG");
+      expect(report.results.firstImageName).toBe("100CANON/IMG_9999.JPG");
+      expect(report.results.lastImageName).toBe("100CANON/IMG_9999.JPG");
     });
 
     test("includes null values when no images captured", async () => {
@@ -333,8 +333,8 @@ describe("Timelapse Image Filename Tracking", () => {
       const status = session.getStatus();
 
       // EXPECTED: Should use first file in addedcontents array (typically JPG)
-      expect(status.stats.firstImageName).toBe("IMG_0100.JPG");
-      expect(status.stats.lastImageName).toBe("IMG_0100.JPG");
+      expect(status.stats.firstImageName).toBe("100CANON/IMG_0100.JPG");
+      expect(status.stats.lastImageName).toBe("100CANON/IMG_0100.JPG");
     });
   });
 });
