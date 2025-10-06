@@ -388,6 +388,26 @@ class TimelapseUI {
               <span class="info-label">Completion:</span>
               <span class="info-value">${report.metadata.completionReason}</span>
             </div>
+            ${
+              report.results.firstImageName
+                ? `
+            <div class="info-item">
+              <span class="info-label">First Image:</span>
+              <span class="info-value copyable" title="Click to copy">${this.escapeHtml(report.results.firstImageName)}</span>
+            </div>
+            `
+                : ""
+            }
+            ${
+              report.results.lastImageName
+                ? `
+            <div class="info-item">
+              <span class="info-label">Last Image:</span>
+              <span class="info-value copyable" title="Click to copy">${this.escapeHtml(report.results.lastImageName)}</span>
+            </div>
+            `
+                : ""
+            }
           </div>
         </div>
         
@@ -429,6 +449,29 @@ class TimelapseUI {
         </div>
       </div>
     `;
+
+    // Add click-to-copy functionality for copyable elements
+    setTimeout(() => {
+      contentElement.querySelectorAll(".copyable").forEach((element) => {
+        element.style.cursor = "pointer";
+        element.addEventListener("click", () => {
+          const text = element.textContent;
+          navigator.clipboard
+            .writeText(text)
+            .then(() => {
+              // Show brief visual feedback
+              const originalText = element.textContent;
+              element.textContent = "✓ Copied!";
+              setTimeout(() => {
+                element.textContent = originalText;
+              }, 1000);
+            })
+            .catch((err) => {
+              console.error("Failed to copy:", err);
+            });
+        });
+      });
+    }, 0);
   }
 
   /**
