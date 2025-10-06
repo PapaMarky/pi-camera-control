@@ -20,6 +20,7 @@ import { createApiRouter } from "./routes/api.js";
 import { createWebSocketHandler } from "./websocket/handler.js";
 import timeSyncService from "./timesync/service.js";
 import { emitDiscoveryEvent } from "./utils/event-migration.js";
+import { NetworkHealthMonitor } from "./network/health-monitor.js";
 
 // Load environment variables
 dotenv.config();
@@ -41,6 +42,14 @@ class CameraControlServer {
 
     this.powerManager = new PowerManager();
     this.networkManager = new NetworkStateManager();
+
+    // Initialize network health monitor (auto-detects wlan0 vs ap0)
+    // Pass function to get last camera IP from connection history
+    this.healthMonitor = new NetworkHealthMonitor(
+      60000, // Check every 60 seconds
+      () => this.discoveryManager.getLastSuccessfulIP(),
+    );
+    this.setupHealthMonitorHandlers();
 
     // Initialize centralized intervalometer state manager
     this.intervalometerStateManager = new IntervalometerStateManager();
@@ -101,6 +110,9 @@ class CameraControlServer {
         info: primaryCamera.info,
       });
 
+      // Update health monitor with camera IP
+      this.healthMonitor.setCameraIP(primaryCamera.info.ipAddress);
+
       // Trigger camera time sync when primary camera changes (new camera connected)
       await timeSyncService.handleCameraConnection();
     });
@@ -108,6 +120,26 @@ class CameraControlServer {
     this.discoveryManager.on("primaryCameraDisconnected", () => {
       logger.warn("Primary camera disconnected");
       this.broadcastDiscoveryEvent("primaryCameraDisconnected", {});
+    });
+  }
+
+  setupHealthMonitorHandlers() {
+    this.healthMonitor.on("interface-recovered", async ({ cameraIP }) => {
+      logger.info(
+        `Network interface recovered, attempting to reconnect to camera at ${cameraIP}`,
+      );
+      try {
+        await this.discoveryManager.connectToIp(cameraIP);
+        logger.info(`Successfully reconnected to camera at ${cameraIP}`);
+      } catch (error) {
+        logger.error(
+          `Failed to reconnect to camera after interface recovery: ${error.message}`,
+        );
+      }
+    });
+
+    this.healthMonitor.on("recovery-failed", ({ error }) => {
+      logger.error(`Network interface recovery failed: ${error}`);
     });
   }
 
@@ -342,6 +374,14 @@ class CameraControlServer {
         );
       } else {
         logger.info("Network manager initialized successfully");
+      }
+
+      // Start network health monitor (only on Linux/Pi)
+      if (process.platform === "linux") {
+        this.healthMonitor.start();
+        logger.info("Network health monitor started");
+      } else {
+        logger.debug("Network health monitor disabled (not running on Linux)");
       }
 
       // Initialize intervalometer state manager
