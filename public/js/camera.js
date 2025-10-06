@@ -1244,21 +1244,13 @@ class CameraManager {
       const state = data.intervalometer.state;
       console.log("Intervalometer state detected:", state);
 
-      // Only update UI from status_update if session is actively running
-      // Session completion is handled by dedicated session_completed event
-      if (state === "running" || state === "paused") {
-        console.log(
-          "Updating intervalometer status from status_update:",
-          data.intervalometer,
-        );
-        this.updateIntervalometerUI(data.intervalometer);
-      } else {
-        console.log(
-          "Ignoring completed/stopped session from status_update (state:",
-          state,
-          ")",
-        );
-      }
+      // Update UI for all states to support state restoration
+      // TimelapseUI will prevent duplicate completion screens
+      console.log(
+        "Updating intervalometer status from status_update:",
+        data.intervalometer,
+      );
+      this.updateIntervalometerUI(data.intervalometer);
     } else {
       console.log(
         "No intervalometer data in welcome/status message. Data keys:",
@@ -1754,13 +1746,41 @@ WebSocket: ${wsManager.connected ? "Connected" : "Disconnected"}
       console.log("Showing intervalometer progress view");
       this.showIntervalometerProgress();
       this.startIntervalometerStatusUpdates();
+      this.updateProgressDisplay(status);
+    } else if (
+      status.state === "stopped" ||
+      status.state === "completed" ||
+      status.state === "error"
+    ) {
+      console.log(
+        `Session in ${status.state} state, checking if completion screen should be shown`,
+      );
+      this.stopIntervalometerStatusUpdates();
+
+      // Check if TimelapseUI should show completion screen
+      if (
+        window.timelapseUI &&
+        window.timelapseUI.shouldShowCompletionForSession(status.state)
+      ) {
+        console.log("TimelapseUI indicates completion screen should be shown");
+        // Try to restore completion screen if it's not already visible
+        const restored = window.timelapseUI.restoreCompletionScreenIfNeeded();
+        if (restored) {
+          console.log("Completion screen restored successfully");
+        } else {
+          console.log(
+            "Completion screen already visible or no unsaved session to restore",
+          );
+        }
+      } else {
+        console.log("No completion screen needed, showing setup view");
+        this.showIntervalometerSetup();
+      }
     } else {
-      console.log("Showing intervalometer setup view");
+      console.log("Unknown state, showing intervalometer setup view");
       this.showIntervalometerSetup();
       this.stopIntervalometerStatusUpdates();
     }
-
-    this.updateProgressDisplay(status);
   }
 
   updateIntervalometerView() {
@@ -2013,7 +2033,12 @@ WebSocket: ${wsManager.connected ? "Connected" : "Disconnected"}
     switch (options.stopCondition) {
       case "stop-at":
         if (options.stopTime) {
-          return `Stop at ${new Date(options.stopTime).toLocaleTimeString()}`;
+          // Simplified format: Just show time without seconds (e.g., "5:13 PM" instead of "Stop at 5:13:00 PM")
+          const stopDate = new Date(options.stopTime);
+          return stopDate.toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          });
         }
         return "ERROR: stop-at selected but no stopTime";
 
@@ -2024,7 +2049,7 @@ WebSocket: ${wsManager.connected ? "Connected" : "Disconnected"}
         return "ERROR: stop-after selected but no totalShots";
 
       case "unlimited":
-        return "Unlimited";
+        return "Unlimited (manual stop)";
 
       default:
         return `ERROR: Unknown stopCondition: ${options.stopCondition}`;

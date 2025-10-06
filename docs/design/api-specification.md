@@ -1380,12 +1380,22 @@ Broadcast when a timelapse session report is saved (automatically or manually):
       "results": {
         "imagesCaptured": 100,
         "imagesSuccessful": 98,
-        "imagesFailed": 2
+        "imagesFailed": 2,
+        "firstImageName": "IMG_0001.JPG",
+        "lastImageName": "IMG_0100.JPG"
       }
     }
   }
 }
 ```
+
+**Report Results Fields:**
+
+- `imagesCaptured`: Total number of photos attempted during the session
+- `imagesSuccessful`: Number of successfully captured photos
+- `imagesFailed`: Number of failed photo captures
+- `firstImageName`: Filename of the first successfully captured image (e.g., "IMG_0001.JPG"), or `null` if no images were captured. Extracted from the CCAPI file path.
+- `lastImageName`: Filename of the last successfully captured image (e.g., "IMG_0100.JPG"), or `null` if no images were captured. Useful for video generation scripts to identify the image range.
 
 **Automatic Saving Behavior:**
 

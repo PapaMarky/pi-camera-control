@@ -8,6 +8,7 @@ class TimelapseUI {
     this.currentReport = null;
     this.unsavedSession = null;
     this.boundHandlers = new Map(); // Track bound handlers for cleanup
+    this.isCompletionScreenVisible = false; // Track if completion screen is currently displayed
 
     this.initialize();
   }
@@ -115,6 +116,10 @@ class TimelapseUI {
       });
 
       registerHandler("report_deleted", (data) => {
+        // If we're currently viewing the deleted report, navigate back to list
+        if (this.currentReport && this.currentReport.id === data.id) {
+          this.showReportsList();
+        }
         this.loadReports(); // Refresh the list after deleting
       });
 
@@ -383,6 +388,26 @@ class TimelapseUI {
               <span class="info-label">Completion:</span>
               <span class="info-value">${report.metadata.completionReason}</span>
             </div>
+            ${
+              report.results.firstImageName
+                ? `
+            <div class="info-item">
+              <span class="info-label">First Image:</span>
+              <span class="info-value copyable" title="Click to copy">${this.escapeHtml(report.results.firstImageName)}</span>
+            </div>
+            `
+                : ""
+            }
+            ${
+              report.results.lastImageName
+                ? `
+            <div class="info-item">
+              <span class="info-label">Last Image:</span>
+              <span class="info-value copyable" title="Click to copy">${this.escapeHtml(report.results.lastImageName)}</span>
+            </div>
+            `
+                : ""
+            }
           </div>
         </div>
         
@@ -424,6 +449,29 @@ class TimelapseUI {
         </div>
       </div>
     `;
+
+    // Add click-to-copy functionality for copyable elements
+    setTimeout(() => {
+      contentElement.querySelectorAll(".copyable").forEach((element) => {
+        element.style.cursor = "pointer";
+        element.addEventListener("click", () => {
+          const text = element.textContent;
+          navigator.clipboard
+            .writeText(text)
+            .then(() => {
+              // Show brief visual feedback
+              const originalText = element.textContent;
+              element.textContent = "✓ Copied!";
+              setTimeout(() => {
+                element.textContent = originalText;
+              }, 1000);
+            })
+            .catch((err) => {
+              console.error("Failed to copy:", err);
+            });
+        });
+      });
+    }, 0);
   }
 
   /**
@@ -528,24 +576,45 @@ class TimelapseUI {
    * Handle session completed event
    */
   handleSessionCompleted(data) {
-    this.unsavedSession = data;
-    this.showSessionCompletion(data, "completed");
+    // Only show completion screen if not already visible (prevent duplicates)
+    if (!this.isCompletionScreenVisible) {
+      this.unsavedSession = data;
+      this.showSessionCompletion(data, "completed");
+    } else {
+      console.log(
+        "Completion screen already visible, ignoring duplicate session_completed event",
+      );
+    }
   }
 
   /**
    * Handle session stopped event
    */
   handleSessionStopped(data) {
-    this.unsavedSession = data;
-    this.showSessionCompletion(data, "stopped");
+    // Only show completion screen if not already visible (prevent duplicates)
+    if (!this.isCompletionScreenVisible) {
+      this.unsavedSession = data;
+      this.showSessionCompletion(data, "stopped");
+    } else {
+      console.log(
+        "Completion screen already visible, ignoring duplicate session_stopped event",
+      );
+    }
   }
 
   /**
    * Handle session error event
    */
   handleSessionError(data) {
-    this.unsavedSession = data;
-    this.showSessionCompletion(data, "error");
+    // Only show completion screen if not already visible (prevent duplicates)
+    if (!this.isCompletionScreenVisible) {
+      this.unsavedSession = data;
+      this.showSessionCompletion(data, "error");
+    } else {
+      console.log(
+        "Completion screen already visible, ignoring duplicate session_error event",
+      );
+    }
   }
 
   /**
@@ -579,7 +648,7 @@ class TimelapseUI {
         </div>
         <h4>${sessionData.title || "Untitled Session"}</h4>
       </div>
-      
+
       <div class="completion-stats">
         <div class="completion-stat">
           <span class="stat-label">Duration:</span>
@@ -617,6 +686,12 @@ class TimelapseUI {
     // Show the completion card and hide others
     this.hideAllCards();
     completionCard.style.display = "block";
+
+    // Mark completion screen as visible
+    this.isCompletionScreenVisible = true;
+    console.log(
+      "Completion screen displayed, isCompletionScreenVisible = true",
+    );
 
     // Switch to this card in the menu
     this.switchToCard("session-completion");
@@ -803,6 +878,65 @@ class TimelapseUI {
   hideSessionCompletion() {
     const completionCard = document.getElementById("session-completion-card");
     completionCard.style.display = "none";
+
+    // Mark completion screen as no longer visible
+    this.isCompletionScreenVisible = false;
+    console.log("Completion screen hidden, isCompletionScreenVisible = false");
+  }
+
+  /**
+   * Check if completion screen should be shown based on session state
+   * Returns true if completion screen is already visible or should be restored
+   */
+  shouldShowCompletionForSession(sessionState) {
+    // If completion screen is already visible, keep it visible
+    if (this.isCompletionScreenVisible) {
+      console.log("Completion screen already visible, maintaining state");
+      return true;
+    }
+
+    // If we have an unsaved session, we should show completion screen
+    if (this.unsavedSession) {
+      console.log("Unsaved session exists, should show completion screen");
+      return true;
+    }
+
+    // Check if state indicates a completed/stopped session
+    if (
+      sessionState === "stopped" ||
+      sessionState === "completed" ||
+      sessionState === "error"
+    ) {
+      console.log(
+        `Session state is ${sessionState}, should check for completion data`,
+      );
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Restore completion screen if there's an unsaved session
+   * Called when navigating back to intervalometer card
+   */
+  restoreCompletionScreenIfNeeded() {
+    if (this.unsavedSession && !this.isCompletionScreenVisible) {
+      console.log(
+        "Restoring completion screen for unsaved session:",
+        this.unsavedSession,
+      );
+      // Determine type based on reason
+      const type = this.unsavedSession.reason?.toLowerCase().includes("error")
+        ? "error"
+        : this.unsavedSession.reason?.toLowerCase().includes("stopped")
+          ? "stopped"
+          : "completed";
+
+      this.showSessionCompletion(this.unsavedSession, type);
+      return true;
+    }
+    return false;
   }
 
   // Helper methods for UI management
@@ -906,7 +1040,12 @@ class TimelapseUI {
     switch (options.stopCondition) {
       case "stop-at":
         if (options.stopTime) {
-          return `Stop at ${new Date(options.stopTime).toLocaleTimeString()}`;
+          // Simplified format: Just show time without seconds (e.g., "5:13 PM" instead of "Stop at 5:13:00 PM")
+          const stopDate = new Date(options.stopTime);
+          return stopDate.toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          });
         }
         return "ERROR: stop-at selected but no stopTime";
 

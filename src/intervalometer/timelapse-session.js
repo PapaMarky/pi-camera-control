@@ -67,6 +67,8 @@ export class TimelapseSession extends EventEmitter {
       maxOvertimeSeconds: 0, // Worst case overtime
       lastShotDuration: 0, // Duration of most recent shot in seconds
       totalShotDurationSeconds: 0, // Total time spent on all successful shots
+      firstImageName: null, // Filename of first captured image
+      lastImageName: null, // Filename of most recent captured image
     };
 
     // Session control
@@ -230,6 +232,8 @@ export class TimelapseSession extends EventEmitter {
       maxOvertimeSeconds: 0,
       lastShotDuration: 0,
       totalShotDurationSeconds: 0,
+      firstImageName: null,
+      lastImageName: null,
     };
 
     // Recalculate totalShots based on actual start time if using stopTime
@@ -466,11 +470,26 @@ export class TimelapseSession extends EventEmitter {
       const shotEndTime = Date.now();
       const shotDuration = (shotEndTime - shotStartTime) / 1000; // Convert to seconds
 
+      // Extract filename from CCAPI path (e.g., "/ccapi/ver110/contents/sd/100CANON/IMG_0025.JPG" -> "IMG_0025.JPG")
+      const filename = filePath ? filePath.split("/").pop() : null;
+
       // Update stats
       this.stats.shotsTaken++;
       this.stats.shotsSuccessful++;
       this.stats.lastShotDuration = shotDuration;
       this.stats.totalShotDurationSeconds += shotDuration;
+
+      // Track first and last image filenames
+      if (!this.stats.firstImageName && filename) {
+        this.stats.firstImageName = filename;
+        logger.debug(`First image captured: ${filename}`, {
+          sessionId: this.id,
+          title: this.title,
+        });
+      }
+      if (filename) {
+        this.stats.lastImageName = filename;
+      }
 
       // Detect overtime
       if (shotDuration > this.options.interval) {

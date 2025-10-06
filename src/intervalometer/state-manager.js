@@ -553,6 +553,8 @@ export class IntervalometerStateManager extends EventEmitter {
         imagesSuccessful: status.stats.shotsSuccessful,
         imagesFailed: status.stats.shotsFailed,
         errors: status.stats.errors || [],
+        firstImageName: status.stats.firstImageName || null,
+        lastImageName: status.stats.lastImageName || null,
       },
       metadata: {
         completionReason: completionData?.reason || "Unknown",

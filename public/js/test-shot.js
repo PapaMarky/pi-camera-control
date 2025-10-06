@@ -41,12 +41,41 @@ class TestShotUI {
     try {
       // Setup event handlers
       this.setupEventHandlers();
+      this.setupWebSocketListeners();
       this.updateButtonStates(); // Enable buttons if camera connected
 
       console.log("TestShotUI: Initialized successfully");
     } catch (error) {
       console.error("TestShotUI: Initialization failed:", error);
     }
+  }
+
+  setupWebSocketListeners() {
+    console.log("TestShotUI: Setting up WebSocket listeners");
+
+    // Listen for camera status updates to enable/disable buttons
+    this.wsManager.on("status_update", (data) => {
+      console.log("TestShotUI: Received status_update event", data);
+      this.updateButtonStates();
+
+      // Also update refresh settings button based on camera connection
+      const refreshBtn = document.getElementById("refresh-settings-btn");
+      if (refreshBtn) {
+        const isConnected =
+          window.cameraManager &&
+          window.cameraManager.status &&
+          window.cameraManager.status.connected;
+        refreshBtn.disabled = !isConnected;
+      }
+    });
+
+    // Listen for camera connection events
+    this.wsManager.on("welcome", (data) => {
+      console.log("TestShotUI: Received welcome event", data);
+      this.updateButtonStates();
+    });
+
+    console.log("TestShotUI: WebSocket listeners set up successfully");
   }
 
   updateButtonStates() {
