@@ -556,7 +556,14 @@ class TimelapseUI {
   async deleteReportById(reportId) {
     try {
       if (this.wsManager && this.wsManager.isConnected()) {
+        // Send delete request via WebSocket
         this.wsManager.send("delete_timelapse_report", { id: reportId });
+
+        // Navigate immediately if we're currently viewing this report
+        // The report_deleted event will refresh the list after backend confirms deletion
+        if (this.currentReport && this.currentReport.id === reportId) {
+          this.showReportsList();
+        }
       } else {
         const response = await fetch(`/api/timelapse/reports/${reportId}`, {
           method: "DELETE",
