@@ -456,8 +456,9 @@ class TimelapseUI {
         element.style.cursor = "pointer";
         element.addEventListener("click", () => {
           const text = element.textContent;
-          navigator.clipboard
-            .writeText(text)
+          // Use clipboard helper with fallback for non-secure contexts
+          window
+            .copyToClipboard(text)
             .then(() => {
               // Show brief visual feedback
               const originalText = element.textContent;
