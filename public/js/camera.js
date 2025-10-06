@@ -2,6 +2,22 @@ class CameraManager {
   // Constants for polling and timeouts
   static STATUS_POLL_INTERVAL_MS = 1000; // Poll intervalometer status every 1 second
 
+  // CCAPI ver100 battery level mappings (shared across all battery displays)
+  static BATTERY_LEVEL_MAP = {
+    full: { percent: "100%", compact: "100%" },
+    high: { percent: "75%", compact: "75%" },
+    half: { percent: "50%", compact: "50%" },
+    quarter: { percent: "25%", compact: "25%" },
+    low: { percent: "10%", compact: "10%" },
+    // Charging states
+    charge: { percent: "Charging", compact: "⚡" },
+    chargestop: { percent: "Charge Stopped", compact: "⏸" },
+    chargecomp: { percent: "Fully Charged", compact: "✓" },
+    // Special states
+    unknown: { percent: "Unknown", compact: "?" },
+    none: { percent: "No Battery", compact: "-" },
+  };
+
   constructor() {
     this.status = {
       connected: false,
@@ -578,16 +594,10 @@ class CameraManager {
           if (!isNaN(numericLevel)) {
             displayText = `${numericLevel}%`;
           } else {
-            // Convert text levels to approximate percentages
-            const levelMap = {
-              full: "100%",
-              high: "75%",
-              medium: "50%",
-              low: "25%",
-              critical: "10%",
-            };
-            displayText =
-              levelMap[battery.level.toLowerCase()] || battery.level;
+            // Use shared CCAPI battery level map
+            const mapping =
+              CameraManager.BATTERY_LEVEL_MAP[battery.level.toLowerCase()];
+            displayText = mapping ? mapping.percent : battery.level;
           }
         }
       }
@@ -630,16 +640,13 @@ class CameraManager {
               { preserveState: false },
             );
           } else {
-            const levelMap = {
-              full: "100%",
-              high: "75%",
-              medium: "50%",
-              low: "25%",
-              critical: "10%",
-            };
+            // Use shared CCAPI battery level map (compact format for header)
+            const mapping =
+              CameraManager.BATTERY_LEVEL_MAP[battery.level.toLowerCase()];
+            const displayValue = mapping ? mapping.compact : battery.level;
             window.uiStateManager.updateContent(
               "battery-level-header",
-              levelMap[battery.level.toLowerCase()] || battery.level,
+              displayValue,
               { preserveState: false },
             );
           }
@@ -659,7 +666,7 @@ class CameraManager {
         } else {
           batteryElement.className = "text-success";
         }
-      } else if (battery.level === "low" || battery.level === "critical") {
+      } else if (battery.level === "low" || battery.level === "quarter") {
         batteryElement.className = "text-danger";
       } else {
         // Default to success for unknown levels
@@ -1164,6 +1171,7 @@ class CameraManager {
     let powerData = null;
     let networkData = null;
     let storageData = null;
+    let temperatureData = null;
 
     if (data && typeof data === "object") {
       console.log(
@@ -1180,17 +1188,25 @@ class CameraManager {
         console.log("No network data in message. Full data:", data);
       }
 
-      // Welcome messages and status updates both have camera/power/network/storage properties
-      if (data.camera || data.power || data.network || data.storage) {
+      // Welcome messages and status updates both have camera/power/network/storage/temperature properties
+      if (
+        data.camera ||
+        data.power ||
+        data.network ||
+        data.storage ||
+        data.temperature !== undefined
+      ) {
         cameraData = data.camera;
         powerData = data.power;
         networkData = data.network;
         storageData = data.storage;
+        temperatureData = data.temperature;
         console.log("Extracted data:", {
           cameraData: !!cameraData,
           powerData: !!powerData,
           networkData: !!networkData,
           storageData: !!storageData,
+          temperatureData: temperatureData,
         });
       }
       // Or if data IS the camera data directly
@@ -1207,6 +1223,9 @@ class CameraManager {
 
       this.updateCameraStatusDisplay(cameraData);
     }
+
+    // Update camera temperature display (always call to handle null/undefined)
+    this.updateCameraTemperatureDisplay(temperatureData);
 
     // Update power status if we have power data
     if (powerData) {
@@ -1374,6 +1393,75 @@ class CameraManager {
 
     // Show free space
     storageLevelHeader.textContent = `${freeGB}G`;
+  }
+
+  /**
+   * Update camera temperature display in header
+   * Replaces camera icon with warning/fire icon based on temperature status
+   * @param {string|null} temperature - Temperature status from backend ("normal", "warning", "disablerelease", etc.)
+   */
+  updateCameraTemperatureDisplay(temperature) {
+    console.log("Temperature data received:", temperature);
+
+    const cameraStatusHeader = document.getElementById("camera-status-header");
+    if (!cameraStatusHeader) return;
+
+    const statusIconElement = cameraStatusHeader.querySelector(".status-icon");
+    if (!statusIconElement) return;
+
+    // Temperature severity mapping
+    const getSeverity = (temp) => {
+      if (!temp || temp === "normal") {
+        return "ok";
+      }
+
+      const tempLower = String(temp).toLowerCase();
+
+      // Critical states (disable* = shooting prohibited or functionality disabled)
+      if (tempLower.includes("disable")) {
+        return "critical";
+      }
+
+      // Warning states (all other non-normal states)
+      return "warning";
+    };
+
+    const severity = getSeverity(temperature);
+
+    // Icon mapping
+    const icons = {
+      ok: "📷", // Camera icon (green)
+      warning: "⚠️", // Warning triangle (yellow)
+      critical: "🔥", // Fire icon (red)
+    };
+
+    // Color classes
+    const colorClasses = {
+      ok: "text-success",
+      warning: "text-warning",
+      critical: "text-danger",
+    };
+
+    // Update icon
+    statusIconElement.textContent = icons[severity];
+
+    // Update color class
+    statusIconElement.className = "status-icon " + colorClasses[severity];
+
+    // Update tooltip to reflect temperature status
+    if (temperature && temperature !== "normal") {
+      const tooltipText =
+        severity === "critical"
+          ? "Camera Temperature Critical"
+          : "Camera Temperature Warning";
+      cameraStatusHeader.setAttribute("title", tooltipText);
+    } else {
+      cameraStatusHeader.setAttribute("title", "Camera Status");
+    }
+
+    console.log(
+      `Temperature display updated: severity=${severity}, icon=${icons[severity]}`,
+    );
   }
 
   updateUI() {

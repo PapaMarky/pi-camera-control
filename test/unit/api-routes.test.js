@@ -65,6 +65,9 @@ describe("API Routes Unit Tests", () => {
         level: 85,
         status: "good",
       })),
+      getCameraTemperature: jest.fn(async () => ({
+        status: "normal",
+      })),
       getDeviceInformation: jest.fn(async () => ({
         model: "EOS R50",
         firmware: "1.0.0",
@@ -363,6 +366,93 @@ describe("API Routes Unit Tests", () => {
         expect(response.body.error).toHaveProperty(
           "message",
           "No camera available",
+        );
+      });
+    });
+
+    describe("GET /api/camera/temperature", () => {
+      test("returns camera temperature status", async () => {
+        const response = await request(app)
+          .get("/api/camera/temperature")
+          .expect(200);
+
+        expect(response.body).toEqual({
+          status: "normal",
+        });
+
+        expect(
+          mockCameraController.instance.getCameraTemperature,
+        ).toHaveBeenCalled();
+      });
+
+      test("returns 503 when no camera available", async () => {
+        mockCameraController.mockReturnValue(null);
+
+        const response = await request(app)
+          .get("/api/camera/temperature")
+          .expect(503);
+
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "No camera available",
+        );
+        expect(response.body.error).toHaveProperty("code", "CAMERA_OFFLINE");
+      });
+
+      test("returns 500 when temperature fetch fails", async () => {
+        mockCameraController.instance.getCameraTemperature.mockRejectedValue(
+          new Error("Camera temperature endpoint not available"),
+        );
+
+        const response = await request(app)
+          .get("/api/camera/temperature")
+          .expect(500);
+
+        expect(response.body).toHaveProperty("error");
+        expect(response.body).toHaveProperty("timestamp");
+        expect(response.body.error).toHaveProperty(
+          "message",
+          "Camera temperature endpoint not available",
+        );
+        expect(response.body.error).toHaveProperty("code", "SYSTEM_ERROR");
+      });
+
+      test("returns different temperature statuses correctly", async () => {
+        // Test warning status
+        mockCameraController.instance.getCameraTemperature.mockResolvedValue({
+          status: "warning",
+        });
+
+        let response = await request(app)
+          .get("/api/camera/temperature")
+          .expect(200);
+
+        expect(response.body.status).toBe("warning");
+
+        // Test critical disablerelease status
+        mockCameraController.instance.getCameraTemperature.mockResolvedValue({
+          status: "disablerelease",
+        });
+
+        response = await request(app)
+          .get("/api/camera/temperature")
+          .expect(200);
+
+        expect(response.body.status).toBe("disablerelease");
+
+        // Test combined status
+        mockCameraController.instance.getCameraTemperature.mockResolvedValue({
+          status: "warning_and_restrictionmovierecording",
+        });
+
+        response = await request(app)
+          .get("/api/camera/temperature")
+          .expect(200);
+
+        expect(response.body.status).toBe(
+          "warning_and_restrictionmovierecording",
         );
       });
     });

@@ -1,4 +1,22 @@
 
+# TODO 
+* File names in timelapse report should include directory name. (not full path)
+  * "/ccapi/ver110/contents/sd/100CANON/IMG_0042.JPG" → "100CANON/IMG_0042.JPG"
+* First image captured should be stored as both first and last. Subsequent images update last.
+* Photo time: min, ave, max
+* ~~Camera showed low battery, UI showed 100%.~~ FIXED: Using ver100/battery endpoint now
+* During timelapse:
+  * Test shot, live view and settings update should be disabled
+* Without camera:
+  * Should be able to view images in "test shot". We need to rethink the UI. Add separate "view images" function?
+* Improve time sync:
+  * allow sync from wlan
+  * If pi is reliablity gets low AND not running a timelapse, sync pi from camera.
+  * relability, high to low: client on ap, client on wan, camera, pi
+* Turn off screen
+  * Turn off viewfinder.
+
+
 rsync -avz --exclude='.git' --exclude='node_modules' --exclude='*.log' --exclude='.DS_Store' .  pi@picontrol-002.local:/home/pi/pi-camera-control/
 
 iw reg set JP
