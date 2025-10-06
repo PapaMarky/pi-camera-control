@@ -115,6 +115,10 @@ class TimelapseUI {
       });
 
       registerHandler("report_deleted", (data) => {
+        // If we're currently viewing the deleted report, navigate back to list
+        if (this.currentReport && this.currentReport.id === data.id) {
+          this.showReportsList();
+        }
         this.loadReports(); // Refresh the list after deleting
       });
 
@@ -906,7 +910,12 @@ class TimelapseUI {
     switch (options.stopCondition) {
       case "stop-at":
         if (options.stopTime) {
-          return `Stop at ${new Date(options.stopTime).toLocaleTimeString()}`;
+          // Simplified format: Just show time without seconds (e.g., "5:13 PM" instead of "Stop at 5:13:00 PM")
+          const stopDate = new Date(options.stopTime);
+          return stopDate.toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          });
         }
         return "ERROR: stop-at selected but no stopTime";
 

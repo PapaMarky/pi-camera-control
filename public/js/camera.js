@@ -2013,7 +2013,12 @@ WebSocket: ${wsManager.connected ? "Connected" : "Disconnected"}
     switch (options.stopCondition) {
       case "stop-at":
         if (options.stopTime) {
-          return `Stop at ${new Date(options.stopTime).toLocaleTimeString()}`;
+          // Simplified format: Just show time without seconds (e.g., "5:13 PM" instead of "Stop at 5:13:00 PM")
+          const stopDate = new Date(options.stopTime);
+          return stopDate.toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          });
         }
         return "ERROR: stop-at selected but no stopTime";
 
@@ -2024,7 +2029,7 @@ WebSocket: ${wsManager.connected ? "Connected" : "Disconnected"}
         return "ERROR: stop-after selected but no totalShots";
 
       case "unlimited":
-        return "Unlimited";
+        return "Unlimited (manual stop)";
 
       default:
         return `ERROR: Unknown stopCondition: ${options.stopCondition}`;
