@@ -200,6 +200,11 @@ class TimelapseUI {
 
     loadingElement.style.display = "none";
 
+    const reportCount = data.reports ? data.reports.length : 0;
+
+    // Update heading with count
+    this.updateReportsHeadingCount(reportCount);
+
     if (data.reports && data.reports.length > 0) {
       emptyElement.style.display = "none";
       listElement.style.display = "block";
@@ -998,6 +1003,17 @@ class TimelapseUI {
       window.cameraManager.log(message, "success");
     } else {
       console.log(message);
+    }
+  }
+
+  /**
+   * Update the reports list heading with the current count
+   * @param {number} count - Number of reports
+   */
+  updateReportsHeadingCount(count) {
+    const headingElement = document.getElementById("reports-list-heading");
+    if (headingElement) {
+      headingElement.textContent = `Saved Reports (${count})`;
     }
   }
 
