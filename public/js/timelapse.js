@@ -200,6 +200,11 @@ class TimelapseUI {
 
     loadingElement.style.display = "none";
 
+    const reportCount = data.reports ? data.reports.length : 0;
+
+    // Update heading with count
+    this.updateReportsHeadingCount(reportCount);
+
     if (data.reports && data.reports.length > 0) {
       emptyElement.style.display = "none";
       listElement.style.display = "block";
@@ -456,8 +461,9 @@ class TimelapseUI {
         element.style.cursor = "pointer";
         element.addEventListener("click", () => {
           const text = element.textContent;
-          navigator.clipboard
-            .writeText(text)
+          // Use clipboard helper with fallback for non-secure contexts
+          window
+            .copyToClipboard(text)
             .then(() => {
               // Show brief visual feedback
               const originalText = element.textContent;
@@ -555,7 +561,14 @@ class TimelapseUI {
   async deleteReportById(reportId) {
     try {
       if (this.wsManager && this.wsManager.isConnected()) {
+        // Send delete request via WebSocket
         this.wsManager.send("delete_timelapse_report", { id: reportId });
+
+        // Navigate immediately if we're currently viewing this report
+        // The report_deleted event will refresh the list after backend confirms deletion
+        if (this.currentReport && this.currentReport.id === reportId) {
+          this.showReportsList();
+        }
       } else {
         const response = await fetch(`/api/timelapse/reports/${reportId}`, {
           method: "DELETE",
@@ -990,6 +1003,17 @@ class TimelapseUI {
       window.cameraManager.log(message, "success");
     } else {
       console.log(message);
+    }
+  }
+
+  /**
+   * Update the reports list heading with the current count
+   * @param {number} count - Number of reports
+   */
+  updateReportsHeadingCount(count) {
+    const headingElement = document.getElementById("reports-list-heading");
+    if (headingElement) {
+      headingElement.textContent = `Saved Reports (${count})`;
     }
   }
 

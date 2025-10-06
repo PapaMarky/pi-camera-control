@@ -127,6 +127,19 @@ export function createWebSocketHandler(
       }
     }
 
+    // Get temperature status if camera is connected
+    let temperatureStatus = null;
+    if (currentCameraController && currentCameraController.connected) {
+      try {
+        const temperatureInfo =
+          await currentCameraController.getCameraTemperature();
+        temperatureStatus = temperatureInfo.status;
+      } catch (error) {
+        logger.debug("Failed to get temperature status for broadcast:", error);
+        // Don't set temperatureStatus if we fail - frontend will handle null
+      }
+    }
+
     const status = {
       type: "status_update",
       timestamp: new Date().toISOString(),
@@ -138,6 +151,7 @@ export function createWebSocketHandler(
       },
       network: networkStatus,
       storage: storageStatus,
+      temperature: temperatureStatus,
       intervalometer: server.activeIntervalometerSession
         ? server.activeIntervalometerSession.getStatus()
         : null,
@@ -251,6 +265,19 @@ export function createWebSocketHandler(
         }
       }
 
+      // Get temperature status if camera is connected
+      let temperatureStatus = null;
+      if (currentCameraController && currentCameraController.connected) {
+        try {
+          const temperatureInfo =
+            await currentCameraController.getCameraTemperature();
+          temperatureStatus = temperatureInfo.status;
+        } catch (error) {
+          logger.debug("Failed to get temperature status for welcome:", error);
+          // Don't set temperatureStatus if we fail - frontend will handle null
+        }
+      }
+
       const initialStatus = {
         type: "welcome",
         timestamp: new Date().toISOString(),
@@ -260,6 +287,7 @@ export function createWebSocketHandler(
         power: powerManager.getStatus(),
         network: networkStatus,
         storage: storageStatus,
+        temperature: temperatureStatus,
         intervalometer: server.activeIntervalometerSession
           ? server.activeIntervalometerSession.getStatus()
           : null,

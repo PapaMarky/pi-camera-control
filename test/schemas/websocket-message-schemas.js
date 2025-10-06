@@ -77,6 +77,7 @@ const MessageSchemas = {
         usedMB: "number?",
         percentUsed: "number?",
       },
+      temperature: "string?",
       intervalometer: "object?",
       timesync: "object?",
       clientId: "string",
@@ -114,6 +115,7 @@ const MessageSchemas = {
         usedMB: "number?",
         percentUsed: "number?",
       },
+      temperature: "string?",
       intervalometer: {
         running: "boolean?",
         state: "string?",

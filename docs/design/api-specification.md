@@ -135,6 +135,35 @@ Returns SD card storage information from the camera.
 
 **Note:** Uses Canon CCAPI v1.10+ endpoint `/ccapi/ver110/devicestatus/storage`. All size values are rounded to nearest megabyte. The `usedBytes` field is calculated as `maxsize - spacesize` from the CCAPI response.
 
+#### Get Camera Temperature
+
+```http
+GET /api/camera/temperature
+```
+
+Returns camera temperature status (status-based, not degrees Celsius).
+
+**Response:**
+
+```json
+{
+  "status": "normal"
+}
+```
+
+**Possible Status Values:**
+
+- `normal` - Normal operating temperature
+- `warning` - Temperature warning
+- `frameratedown` - Reduced frame rate due to heat
+- `disableliveview` - Live View disabled
+- `disablerelease` - **Shooting prohibited** (CRITICAL for intervalometer)
+- `stillqualitywarning` - Image quality degraded
+- `restrictionmovierecording` - Movie recording restricted
+- Combined states: `warning_and_restrictionmovierecording`, etc.
+
+**Note:** Uses Canon CCAPI v1.00 endpoint `/ccapi/ver100/devicestatus/temperature`. The `disablerelease` status is critical for intervalometer sessions as it indicates shooting is temporarily prohibited due to overheating. Frontend should warn users when temperature status is anything other than `normal`.
+
 #### Take Photo
 
 ```http
@@ -904,6 +933,14 @@ graph LR
       "wlan0": { "connected": true, "network": "HomeWiFi" }
     }
   },
+  "storage": {
+    "mounted": true,
+    "totalMB": 30517,
+    "freeMB": 7629,
+    "usedMB": 22888,
+    "percentUsed": 75
+  },
+  "temperature": "normal",
   "intervalometer": null,
   "timesync": {
     "pi": {
@@ -953,7 +990,8 @@ graph LR
     "freeMB": 7629,
     "usedMB": 22888,
     "percentUsed": 75
-  }
+  },
+  "temperature": "normal"
 }
 ```
 
@@ -965,6 +1003,13 @@ graph LR
 - `usedMB` (number): Used space in megabytes
 - `percentUsed` (number): Percentage used (0-100)
 - Field is `null` when camera is not connected or storage info unavailable
+
+**Temperature Field Details:**
+
+- `temperature` (string|null): Camera temperature status
+- Possible values: `"normal"`, `"warning"`, `"frameratedown"`, `"disableliveview"`, `"disablerelease"`, `"stillqualitywarning"`, `"restrictionmovierecording"`, or combined states
+- Field is `null` when camera is not connected or temperature info unavailable
+- **CRITICAL**: `"disablerelease"` indicates shooting is prohibited due to overheating
 
 ````
 
@@ -1381,8 +1426,8 @@ Broadcast when a timelapse session report is saved (automatically or manually):
         "imagesCaptured": 100,
         "imagesSuccessful": 98,
         "imagesFailed": 2,
-        "firstImageName": "IMG_0001.JPG",
-        "lastImageName": "IMG_0100.JPG"
+        "firstImageName": "100CANON/IMG_0001.JPG",
+        "lastImageName": "100CANON/IMG_0100.JPG"
       }
     }
   }
@@ -1394,8 +1439,8 @@ Broadcast when a timelapse session report is saved (automatically or manually):
 - `imagesCaptured`: Total number of photos attempted during the session
 - `imagesSuccessful`: Number of successfully captured photos
 - `imagesFailed`: Number of failed photo captures
-- `firstImageName`: Filename of the first successfully captured image (e.g., "IMG_0001.JPG"), or `null` if no images were captured. Extracted from the CCAPI file path.
-- `lastImageName`: Filename of the last successfully captured image (e.g., "IMG_0100.JPG"), or `null` if no images were captured. Useful for video generation scripts to identify the image range.
+- `firstImageName`: Filename of the first successfully captured image with parent directory (e.g., "100CANON/IMG_0001.JPG"), or `null` if no images were captured. Extracted from the CCAPI file path. The parent directory helps identify which camera folder the images are stored in.
+- `lastImageName`: Filename of the last successfully captured image with parent directory (e.g., "100CANON/IMG_0100.JPG"), or `null` if no images were captured. Useful for video generation scripts to identify the image range and folder location.
 
 **Automatic Saving Behavior:**
 

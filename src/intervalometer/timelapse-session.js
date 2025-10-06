@@ -470,8 +470,11 @@ export class TimelapseSession extends EventEmitter {
       const shotEndTime = Date.now();
       const shotDuration = (shotEndTime - shotStartTime) / 1000; // Convert to seconds
 
-      // Extract filename from CCAPI path (e.g., "/ccapi/ver110/contents/sd/100CANON/IMG_0025.JPG" -> "IMG_0025.JPG")
-      const filename = filePath ? filePath.split("/").pop() : null;
+      // Extract filename with parent directory from CCAPI path
+      // (e.g., "/ccapi/ver110/contents/sd/100CANON/IMG_0025.JPG" -> "100CANON/IMG_0025.JPG")
+      const parts = filePath ? filePath.split("/") : [];
+      const filename =
+        parts.length >= 2 ? parts.slice(-2).join("/") : parts.pop() || null;
 
       // Update stats
       this.stats.shotsTaken++;

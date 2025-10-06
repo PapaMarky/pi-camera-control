@@ -107,15 +107,25 @@ await this.client.get(`${this.baseUrl}/ccapi/ver100/deviceinformation`);
 
 - Method: GET
 - Response: `{ "name": string, "kind": string, "level": string, "quality": string }`
+- Level values: "low", "quarter", "half", "high", "full", "unknown", "charge", "chargestop", "chargecomp", "none"
 - Note: Cannot get detailed info when battery grip attached
 
-**Our Implementation:** ✅ CORRECT
+**Our Implementation:** ✅ CORRECT (Updated 2025-10-06)
 
-- Location: `src/camera/controller.js:243`
+- Location: `src/camera/controller.js:366-418`
+- **Uses ver100 ONLY** (no fallback to ver110)
 
 ```javascript
 await this.client.get(`${this.baseUrl}/ccapi/ver100/devicestatus/battery`);
 ```
+
+**Implementation Note:** ⚠️ CAMERA-SPECIFIC DECISION
+
+- **Canon EOS R50 Issue:** ver110/batterylist returns incorrect battery percentage ("100" when camera shows half)
+- **Solution:** Use ver100/battery exclusively for R50 - returns accurate descriptive levels
+- Response wrapped in `batterylist` array for consistency: `{ batterylist: [batteryData] }`
+- This decision prioritizes accurate battery reporting over battery grip support
+- Since R50 does not support battery grip, this is the correct trade-off
 
 #### 4.4.5 - Battery Information List
 
@@ -125,21 +135,14 @@ await this.client.get(`${this.baseUrl}/ccapi/ver100/devicestatus/battery`);
 
 - Method: GET
 - Returns: Array of battery information (supports battery grip)
+- Level values: "0" to "100" (percentage as string) or "unknown"
 
-**Our Implementation:** ✅ CORRECT
+**Our Implementation:** ❌ NOT USED (Changed 2025-10-06)
 
-- Location: `src/camera/controller.js:236`
-- Uses ver110 (correct version for batterylist)
-
-```javascript
-await this.client.get(`${this.baseUrl}/ccapi/ver110/devicestatus/batterylist`);
-```
-
-**Implementation Note:** ✅ GOOD PRACTICE
-
-- Code tries batterylist first (ver110)
-- Falls back to battery endpoint (ver100) if ver110 unavailable
-- This handles both battery grip and single battery scenarios
+- **Previously used**, now REMOVED due to R50 reporting bug
+- ver110/batterylist returns incorrect data on Canon EOS R50
+- Example: Returns `{"level":"100"}` when camera displays "half"
+- **Current approach:** Use ver100/battery only (see 4.4.4 above)
 
 ---
 
@@ -320,20 +323,19 @@ timeout: 15000,  // 15 seconds for shutter release only
 
 ### API Versions Used
 
-| Endpoint           | Version Used | Alternatives   | Choice Rationale                |
-| ------------------ | ------------ | -------------- | ------------------------------- |
-| Shutter control    | ver100       | None           | Only version available          |
-| Device information | ver100       | None           | Only version available          |
-| Battery            | ver100       | None           | Fallback from batterylist       |
-| Battery list       | ver110       | ver100/battery | Supports battery grip           |
-| Date/time          | ver100       | None           | Only version available          |
-| Shooting settings  | ver100       | ver110         | ver100 sufficient for our needs |
+| Endpoint           | Version Used | Alternatives       | Choice Rationale                                      |
+| ------------------ | ------------ | ------------------ | ----------------------------------------------------- |
+| Shutter control    | ver100       | None               | Only version available                                |
+| Device information | ver100       | None               | Only version available                                |
+| Battery            | ver100       | ver110/batterylist | R50: ver110 returns incorrect data, ver100 accurate   |
+| Date/time          | ver100       | None               | Only version available                                |
+| Shooting settings  | ver100       | ver110             | ver100 sufficient for our needs                       |
 
-**Implementation Quality:** ✅ GOOD
+**Implementation Quality:** ✅ GOOD (Updated 2025-10-06)
 
-- Uses ver110 for batterylist (newer version with more features)
-- Falls back gracefully to ver100 when ver110 unavailable
+- Battery endpoint uses ver100 exclusively (camera-specific decision for R50 accuracy)
 - All other endpoints use ver100 (maximum compatibility)
+- No ver110 endpoints used (not needed for R50 feature set)
 
 ---
 
@@ -491,16 +493,15 @@ The suggested enhancements are documentation improvements that would make the co
 
 ### Endpoints We Use
 
-| Endpoint                                              | Version | Method  | Purpose               | Location               |
-| ----------------------------------------------------- | ------- | ------- | --------------------- | ---------------------- |
-| `/ccapi/`                                             | N/A     | GET     | Capability discovery  | controller.js:94, 481  |
-| `/ccapi/ver100/shooting/control/shutterbutton`        | ver100  | POST    | Take photo (simple)   | controller.js:348      |
-| `/ccapi/ver100/shooting/control/shutterbutton/manual` | ver100  | POST    | Take photo (manual)   | controller.js:348, 397 |
-| `/ccapi/ver100/deviceinformation`                     | ver100  | GET     | Camera model/serial   | controller.js:198      |
-| `/ccapi/ver100/devicestatus/battery`                  | ver100  | GET     | Battery info (single) | controller.js:243      |
-| `/ccapi/ver110/devicestatus/batterylist`              | ver110  | GET     | Battery info (list)   | controller.js:236      |
-| `/ccapi/ver100/functions/datetime`                    | ver100  | GET/PUT | Date/time sync        | controller.js:591, 621 |
-| `/ccapi/ver100/shooting/settings`                     | ver100  | GET     | Shooting parameters   | controller.js:165, 511 |
+| Endpoint                                              | Version | Method  | Purpose                  | Location               |
+| ----------------------------------------------------- | ------- | ------- | ------------------------ | ---------------------- |
+| `/ccapi/`                                             | N/A     | GET     | Capability discovery     | controller.js:94, 481  |
+| `/ccapi/ver100/shooting/control/shutterbutton`        | ver100  | POST    | Take photo (simple)      | controller.js:348      |
+| `/ccapi/ver100/shooting/control/shutterbutton/manual` | ver100  | POST    | Take photo (manual)      | controller.js:348, 397 |
+| `/ccapi/ver100/deviceinformation`                     | ver100  | GET     | Camera model/serial      | controller.js:198      |
+| `/ccapi/ver100/devicestatus/battery`                  | ver100  | GET     | Battery info (R50 only)  | controller.js:366-418  |
+| `/ccapi/ver100/functions/datetime`                    | ver100  | GET/PUT | Date/time sync           | controller.js:591, 621 |
+| `/ccapi/ver100/shooting/settings`                     | ver100  | GET     | Shooting parameters      | controller.js:165, 511 |
 
 ### Endpoints Available But Not Yet Used
 

@@ -369,55 +369,51 @@ export class CameraController {
     }
 
     try {
-      // CCAPI 4.4.5: Try the more detailed battery list first (supports battery grip)
+      // CCAPI 4.4.4: Use ver100/battery for accurate battery level
+      // Note: Canon EOS R50 returns incorrect percentage data from ver110/batterylist
+      // but returns correct descriptive levels (half, full, etc.) from ver100/battery
       const response = await this.client.get(
-        `${this.baseUrl}/ccapi/ver110/devicestatus/batterylist`,
+        `${this.baseUrl}/ccapi/ver100/devicestatus/battery`,
       );
-      return response.data;
+      logger.info(
+        "Battery data from ver100/battery:",
+        JSON.stringify(response.data),
+      );
+
+      // Wrap in batterylist array format for consistency with other endpoints
+      return { batterylist: [response.data] };
     } catch (error) {
-      try {
-        // CCAPI 4.4.4: Fallback to basic battery info (single battery)
-        const response = await this.client.get(
-          `${this.baseUrl}/ccapi/ver100/devicestatus/battery`,
-        );
-        return { batterylist: [response.data] };
-      } catch (fallbackError) {
-        // Extract Canon API error details
-        const statusCode = fallbackError.response?.status || "unknown";
-        const apiMessage =
-          fallbackError.response?.data?.message || fallbackError.message;
+      // Extract Canon API error details
+      const statusCode = error.response?.status || "unknown";
+      const apiMessage = error.response?.data?.message || error.message;
 
-        logger.error(
-          `Failed to get camera battery - Status: ${statusCode}, API Message: "${apiMessage}"`,
-        );
+      logger.error(
+        `Failed to get camera battery - Status: ${statusCode}, API Message: "${apiMessage}"`,
+      );
 
-        // Log full response for Canon API errors (400, 503)
-        if (fallbackError.response?.data && [400, 503].includes(statusCode)) {
-          logger.debug(
-            "Canon API error response:",
-            fallbackError.response.data,
-          );
-        }
-
-        // If we get a network error, handle disconnection
-        if (
-          fallbackError.code === "EHOSTUNREACH" ||
-          fallbackError.code === "ECONNREFUSED" ||
-          fallbackError.code === "ETIMEDOUT"
-        ) {
-          logger.warn(
-            "Camera network error detected during battery check, handling disconnection",
-          );
-          this.handleDisconnection(fallbackError);
-        }
-
-        const cleanError = new Error(
-          apiMessage || "Failed to get camera battery",
-        );
-        cleanError.status = statusCode;
-        cleanError.statusText = fallbackError.response?.statusText;
-        throw cleanError;
+      // Log full response for Canon API errors (400, 503)
+      if (error.response?.data && [400, 503].includes(statusCode)) {
+        logger.debug("Canon API error response:", error.response.data);
       }
+
+      // If we get a network error, handle disconnection
+      if (
+        error.code === "EHOSTUNREACH" ||
+        error.code === "ECONNREFUSED" ||
+        error.code === "ETIMEDOUT"
+      ) {
+        logger.warn(
+          "Camera network error detected during battery check, handling disconnection",
+        );
+        this.handleDisconnection(error);
+      }
+
+      const cleanError = new Error(
+        apiMessage || "Failed to get camera battery",
+      );
+      cleanError.status = statusCode;
+      cleanError.statusText = error.response?.statusText;
+      throw cleanError;
     }
   }
 
@@ -948,6 +944,69 @@ export class CameraController {
       }
 
       return null;
+    }
+  }
+
+  /**
+   * Get camera temperature status
+   *
+   * CCAPI Reference: 4.4.2 - Temperature status
+   * Endpoint: GET /ccapi/ver100/devicestatus/temperature
+   * Response: { "status": string }
+   *
+   * Possible status values:
+   * - "normal" - Normal operating temperature
+   * - "warning" - Temperature warning
+   * - "frameratedown" - Reduced frame rate due to heat
+   * - "disableliveview" - Live View disabled
+   * - "disablerelease" - Shooting prohibited (CRITICAL for intervalometer)
+   * - "stillqualitywarning" - Image quality degraded
+   * - "restrictionmovierecording" - Movie recording restricted
+   * - Plus combined states like "warning_and_restrictionmovierecording"
+   *
+   * @returns {Promise<Object>} Temperature status object { status: string }
+   */
+  async getCameraTemperature() {
+    if (!this.connected) {
+      throw new Error("Camera not connected");
+    }
+
+    try {
+      const response = await this.client.get(
+        `${this.baseUrl}/ccapi/ver100/devicestatus/temperature`,
+      );
+      logger.debug("Camera temperature status:", response.data);
+      return response.data;
+    } catch (error) {
+      // Extract Canon API error details
+      const statusCode = error.response?.status || "unknown";
+      const apiMessage = error.response?.data?.message || error.message;
+
+      logger.error(
+        `Failed to get camera temperature - Status: ${statusCode}, API Message: "${apiMessage}"`,
+      );
+
+      // Log full response for Canon API errors (400, 503) for debugging
+      if (error.response?.data && [400, 503].includes(error.response.status)) {
+        logger.debug("Canon API error response:", error.response.data);
+      }
+
+      // If we get a network error, handle disconnection
+      if (
+        error.code === "EHOSTUNREACH" ||
+        error.code === "ECONNREFUSED" ||
+        error.code === "ETIMEDOUT"
+      ) {
+        logger.warn("Camera network error detected during temperature check");
+        this.handleDisconnection(error);
+      }
+
+      const cleanError = new Error(
+        apiMessage || "Failed to get camera temperature",
+      );
+      cleanError.status = statusCode;
+      cleanError.statusText = error.response?.statusText;
+      throw cleanError;
     }
   }
 

@@ -187,6 +187,33 @@ export function createApiRouter(
     }
   });
 
+  // Camera temperature status
+  router.get("/camera/temperature", async (req, res) => {
+    try {
+      const currentController = getCameraController();
+      if (!currentController) {
+        return res.status(503).json(
+          createApiError("No camera available", {
+            code: ErrorCodes.CAMERA_OFFLINE,
+            component: Components.API_ROUTER,
+            operation: "getCameraTemperature",
+          }),
+        );
+      }
+      const temperature = await currentController.getCameraTemperature();
+      res.json(temperature);
+    } catch (error) {
+      logger.error("Failed to get camera temperature:", error);
+      res.status(500).json(
+        createApiError(error.message, {
+          code: ErrorCodes.SYSTEM_ERROR,
+          component: Components.API_ROUTER,
+          operation: "getCameraTemperature",
+        }),
+      );
+    }
+  });
+
   // Get camera datetime with timezone and DST information
   router.get("/camera/datetime", async (req, res) => {
     try {
