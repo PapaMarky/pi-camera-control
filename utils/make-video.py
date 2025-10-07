@@ -73,6 +73,7 @@ if config.json:
 
     # Extract image info from firstImageName (e.g., "100CANON/IMG_0001.JPG")
     first_image = report['results']['firstImageName']
+    last_image = report['results']['lastImageName']
 
     # Get parent directory from the JSON file's location
     json_dir = os.path.dirname(os.path.abspath(config.json))
@@ -92,9 +93,20 @@ if config.json:
     # Remove leading dot from extension
     ext = ext.lstrip('.')
 
+    # Extract just the filenames (without directory) for filtering
+    first_image_basename = os.path.basename(first_image)
+    last_image_basename = os.path.basename(last_image)
+
     # Set derived values
     config.type = ext
     config.source = os.path.join(json_dir, image_dir)
+
+    # Store filter info for file loop (None means no filtering in legacy mode)
+    config.first_image_filter = first_image_basename
+    config.last_image_filter = last_image_basename
+
+    # Store report for sanity checks
+    config.report = report
 
     # Generate output filename: <title>-fps<fps>.mp4
     safe_title = report['title'].replace('/', '_').replace('\\', '_')
@@ -106,7 +118,10 @@ if config.json:
     print(f'  Image type: {config.type}')
     print(f'  Output file: {config.output}')
     print(f'  First image: {first_image}')
-    print(f'  Last image: {report["results"]["lastImageName"]}')
+    print(f'  Last image: {last_image}')
+    print(f'  Filtering to range: {first_image_basename} to {last_image_basename}')
+    if 'imagesSuccessful' in report.get('results', {}):
+        print(f'  Expected images (from JSON): {report["results"]["imagesSuccessful"]}')
 
 else:
     # Legacy mode: require --source and --type
@@ -116,6 +131,11 @@ else:
     if not config.type:
         print('ERROR: --type is required when not using --json')
         sys.exit(1)
+
+    # No filtering in legacy mode
+    config.first_image_filter = None
+    config.last_image_filter = None
+    config.report = None
 
 IMAGE_DIR = config.source
 
@@ -132,6 +152,37 @@ if not os.path.isdir(IMAGE_DIR):
 
 filelist = glob.glob(os.path.join(IMAGE_DIR, f'*.{config.type}') )
 filelist.sort()
+
+# Filter filelist to only include images in the timelapse range (JSON mode)
+if config.first_image_filter is not None:
+    print(f'Filtering {len(filelist)} files to range: {config.first_image_filter} to {config.last_image_filter}')
+    filtered_list = []
+    in_range = False
+    for file in filelist:
+        filename = os.path.basename(file)
+
+        # Start including files when we reach first image
+        if not in_range and filename == config.first_image_filter:
+            in_range = True
+
+        # Include file if we're in range
+        if in_range:
+            filtered_list.append(file)
+
+        # Stop after last image
+        if filename == config.last_image_filter:
+            break
+
+    filelist = filtered_list
+    print(f'  Filtered to {len(filelist)} files')
+
+    # Sanity check: compare filtered count to expected count from JSON
+    if config.report and 'results' in config.report and 'imagesSuccessful' in config.report['results']:
+        expected = config.report['results']['imagesSuccessful']
+        if len(filelist) != expected:
+            print(f'WARNING: Filtered file count ({len(filelist)}) does not match expected count from JSON ({expected})')
+            print(f'  This may indicate missing files or incorrect firstImageName/lastImageName in the report')
+
 total = len(filelist)
 
 if len(filelist) < 1:
@@ -139,10 +190,14 @@ if len(filelist) < 1:
     sys.exit(1)
 
 img1 = cv2.imread(filelist[0])
-
+if img1 is None:
+    print(f'ERROR: Could not load first image: {filelist[0]}')
+    sys.exit(1)
 
 height, width, _ = img1.shape
 print(f'Image Size: {width} x {height} ({total} frames)')
+print(f'First frame: {os.path.basename(filelist[0])}')
+print(f'Last frame: {os.path.basename(filelist[-1])}')
 # dark_contours = None
 # if darkframe is not None:
 #     dh, dw, _ = darkframe.shape
@@ -153,39 +208,68 @@ print(f'Image Size: {width} x {height} ({total} frames)')
 
 img1 = None
 
-# choose codec according to format needed
-#fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-#fourcc = cv2.VideoWriter_fourcc(*'avc1')
-#video = cv2.VideoWriter('video.avi', fourcc, 1, (width, height))
-
-
 fps = config.fps
+capSize = (width, height)
 
-capSize = (width,height) # this is the size of my source video
-fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v') # note the lower case
-video = cv2.VideoWriter()
-success = video.open(config.output,fourcc,fps,capSize,True)
+# Choose codec based on image size
+# QuickTime has poor support for mp4v at high resolutions (>3000px)
+# Use H.264 (avc1) for large images, mp4v for smaller ones
+use_h264 = width > 3000 or height > 3000
+
+if use_h264:
+    print(f'Using H.264 codec (image size {width}x{height} requires QuickTime-compatible codec)')
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
+    video = cv2.VideoWriter()
+    success = video.open(config.output, fourcc, fps, capSize, True)
+
+    if not success:
+        print('WARNING: H.264 codec failed, falling back to mp4v')
+        print('  Note: mp4v videos at this resolution may not play in QuickTime')
+        fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+        video = cv2.VideoWriter()
+        success = video.open(config.output, fourcc, fps, capSize, True)
+else:
+    print(f'Using mp4v codec (image size {width}x{height})')
+    fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+    video = cv2.VideoWriter()
+    success = video.open(config.output, fourcc, fps, capSize, True)
+
+if not success:
+    print('ERROR: Failed to create video writer')
+    sys.exit(1)
 
 start = datetime.now()
 count = 0
 
 skipped = 0
 loop_start = datetime.now()
+
 for file in filelist:
+    filename = os.path.basename(file)
+
+    count += 1
+
+    # Skip frames based on --skip parameter
     if skipped < config.skip:
         skipped += 1
-        count += 1
         continue
     skipped = 0
+
     img = cv2.imread(file)
     if img is None:
         print(f'Could not load {file}')
         continue
+
+    # Check image size matches expected dimensions
+    img_height, img_width, _ = img.shape
+    if img_height != height or img_width != width:
+        print(f'WARNING: Skipping {filename} - size mismatch: {img_width}x{img_height} (expected {width}x{height})')
+        continue
+
 #    if darkframe is not None:
 #        img = apply_darkframe(img, dark_contours)
     video.write(img)
 
-    count += 1
     now = datetime.now()
     elapsed = now - start
     if elapsed.total_seconds() > 10:
