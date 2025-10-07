@@ -243,7 +243,7 @@ describe("Timelapse Image Filename Tracking", () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // Generate report
-      const report = stateManager.generateSessionReport(session, {
+      const report = await stateManager.generateSessionReport(session, {
         reason: "Test completion",
       });
 
@@ -275,7 +275,7 @@ describe("Timelapse Image Filename Tracking", () => {
       }
 
       // Generate report even with no successful shots
-      const report = stateManager.generateSessionReport(session, {
+      const report = await stateManager.generateSessionReport(session, {
         reason: "Session failed",
       });
 

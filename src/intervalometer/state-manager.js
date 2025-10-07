@@ -458,7 +458,7 @@ export class IntervalometerStateManager extends EventEmitter {
       }
 
       // Generate report
-      const report = this.generateSessionReport(
+      const report = await this.generateSessionReport(
         session,
         this.unsavedSession?.completionData,
       );
@@ -521,7 +521,7 @@ export class IntervalometerStateManager extends EventEmitter {
   /**
    * Generate session report
    */
-  generateSessionReport(session, completionData = null) {
+  async generateSessionReport(session, completionData = null) {
     const status = session.getStatus();
     const metadata = session.getMetadata();
     const now = new Date();
@@ -529,6 +529,29 @@ export class IntervalometerStateManager extends EventEmitter {
     // Determine report status from sessionData.state (set by updateSessionState)
     const sessionData = this.sessionHistory.get(session.id);
     const reportStatus = sessionData ? sessionData.state : status.state;
+
+    // Fetch camera settings if not already captured
+    let cameraSettings = metadata.cameraSettings;
+    if (!cameraSettings) {
+      try {
+        const cameraController = await session.getCurrentCameraController();
+        if (cameraController) {
+          logger.info("Fetching camera settings for report (not captured during session)", {
+            sessionId: session.id
+          });
+          cameraSettings = await cameraController.getCameraSettings();
+        }
+      } catch (error) {
+        logger.warn("Failed to fetch camera settings for report", {
+          sessionId: session.id,
+          error: error.message
+        });
+      }
+    }
+
+    // Strip ability fields from camera settings (keep only values)
+    const { stripAbilityFields } = await import('../utils/camera-settings.js');
+    const strippedSettings = stripAbilityFields(cameraSettings);
 
     return {
       id: `report-${session.id}`,
@@ -547,7 +570,7 @@ export class IntervalometerStateManager extends EventEmitter {
           : null,
       },
       cameraInfo: metadata.cameraInfo || null,
-      cameraSettings: metadata.cameraSettings || null,
+      cameraSettings: strippedSettings,
       results: {
         imagesCaptured: status.stats.shotsTaken,
         imagesSuccessful: status.stats.shotsSuccessful,
