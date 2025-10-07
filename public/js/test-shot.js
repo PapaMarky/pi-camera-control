@@ -370,8 +370,18 @@ class TestShotUI {
     // Clear existing content
     displayDiv.innerHTML = "";
 
+    // Get current WB value (check pending changes first, then settings)
+    const currentWbValue =
+      this.pendingChanges["wb"] ||
+      (this.settings.wb ? this.settings.wb.value : null);
+
     // Create DOM elements instead of HTML strings to avoid escaping issues
     editableSettings.forEach(([key, data]) => {
+      // Skip colortemperature - it will be rendered conditionally after WB
+      if (key === "colortemperature") {
+        return;
+      }
+
       const currentValue = this.pendingChanges[key] || data.value;
       const hasChange = this.pendingChanges.hasOwnProperty(key);
 
@@ -402,6 +412,11 @@ class TestShotUI {
       // Add change handler
       select.addEventListener("change", (e) => {
         this.onSettingChange(key, e.target.value);
+
+        // If this is WB setting, re-render to show/hide colortemperature
+        if (key === "wb") {
+          this.renderSettings();
+        }
       });
 
       container.appendChild(label);
@@ -415,7 +430,119 @@ class TestShotUI {
       }
 
       displayDiv.appendChild(container);
+
+      // If this is WB setting and value is "colortemp", render colortemperature control
+      if (
+        key === "wb" &&
+        currentWbValue === "colortemp" &&
+        this.settings.colortemperature
+      ) {
+        this.renderColorTemperatureControl(displayDiv);
+      }
     });
+  }
+
+  renderColorTemperatureControl(displayDiv) {
+    const data = this.settings.colortemperature;
+    if (!data || !data.ability) {
+      console.error("ColorTemperature data or ability missing", data);
+      Toast.error("Color temperature settings not available from camera");
+      return;
+    }
+
+    // Validate that ability has the required range structure
+    if (
+      typeof data.ability.min !== "number" ||
+      typeof data.ability.max !== "number" ||
+      typeof data.ability.step !== "number"
+    ) {
+      console.error(
+        "ColorTemperature ability missing required fields (min/max/step):",
+        data.ability,
+      );
+      Toast.error(
+        `Camera color temperature data is invalid. Expected min/max/step numbers, got: ${JSON.stringify(data.ability)}`,
+      );
+      return;
+    }
+
+    const currentValue = this.pendingChanges["colortemperature"] || data.value;
+    const hasChange = this.pendingChanges.hasOwnProperty("colortemperature");
+
+    // Use exact values from camera - no fallbacks
+    const min = data.ability.min;
+    const max = data.ability.max;
+    const step = data.ability.step;
+    console.log(
+      `ColorTemperature range: min=${min}, max=${max}, step=${step}, current=${currentValue}`,
+    );
+
+    const container = document.createElement("div");
+    container.style.cssText = `display: flex; flex-direction: column; gap: 0.5rem; ${hasChange ? "background: rgba(255, 193, 7, 0.1); padding: 0.5rem; border-radius: 4px;" : ""}`;
+
+    const label = document.createElement("label");
+    label.style.cssText =
+      "font-weight: 600; font-size: 0.875rem; text-transform: uppercase;";
+    label.textContent = "COLOR TEMPERATURE";
+
+    const controlWrapper = document.createElement("div");
+    controlWrapper.style.cssText =
+      "display: flex; gap: 1rem; align-items: center;";
+
+    // Slider
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.id = "setting-colortemperature-slider";
+    slider.min = min;
+    slider.max = max;
+    slider.step = step;
+    slider.value = currentValue;
+    slider.style.cssText = "flex: 1;";
+
+    // Numeric input
+    const input = document.createElement("input");
+    input.type = "number";
+    input.id = "setting-colortemperature-value";
+    input.min = min;
+    input.max = max;
+    input.step = step;
+    input.value = currentValue;
+    input.style.cssText =
+      "width: 80px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.875rem;";
+
+    // Kelvin label
+    const kelvinLabel = document.createElement("span");
+    kelvinLabel.textContent = "K";
+    kelvinLabel.style.cssText = "font-weight: 600;";
+
+    // Synchronize slider and input
+    slider.addEventListener("input", (e) => {
+      const value = parseInt(e.target.value, 10);
+      input.value = value;
+      this.onSettingChange("colortemperature", value);
+    });
+
+    input.addEventListener("input", (e) => {
+      const value = parseInt(e.target.value, 10);
+      slider.value = value;
+      this.onSettingChange("colortemperature", value);
+    });
+
+    controlWrapper.appendChild(slider);
+    controlWrapper.appendChild(input);
+    controlWrapper.appendChild(kelvinLabel);
+
+    container.appendChild(label);
+    container.appendChild(controlWrapper);
+
+    if (hasChange) {
+      const modifiedLabel = document.createElement("span");
+      modifiedLabel.style.cssText = "color: #ffc107; font-size: 0.75rem;";
+      modifiedLabel.textContent = "● Modified";
+      container.appendChild(modifiedLabel);
+    }
+
+    displayDiv.appendChild(container);
   }
 
   escapeHtml(text) {
@@ -440,8 +567,19 @@ class TestShotUI {
       this.pendingChanges[key] = value;
     }
 
-    // Update UI
-    this.renderSettings();
+    // If WB changed away from "colortemp", clear colortemperature pending change
+    if (key === "wb" && value !== "colortemp") {
+      delete this.pendingChanges["colortemperature"];
+    }
+
+    // For colortemperature changes, update the modified indicator without full re-render
+    // This prevents losing element focus during slider/input interaction
+    if (key === "colortemperature") {
+      this.updateModifiedIndicator(key);
+    } else {
+      // Full re-render for other settings (to handle WB -> colortemp visibility)
+      this.renderSettings();
+    }
 
     // Show/hide Apply button
     const applyBtn = document.getElementById("apply-settings-btn");
@@ -452,6 +590,43 @@ class TestShotUI {
       } else {
         applyBtn.style.display = "none";
         applyBtn.disabled = true;
+      }
+    }
+  }
+
+  updateModifiedIndicator(key) {
+    // Find the container for this setting
+    const container = document
+      .getElementById(`setting-${key}-slider`)
+      ?.closest("div[style*='flex-direction: column']");
+    if (!container) return;
+
+    const hasChange = this.pendingChanges.hasOwnProperty(key);
+
+    // Update container styling
+    if (hasChange) {
+      container.style.background = "rgba(255, 193, 7, 0.1)";
+      container.style.padding = "0.5rem";
+      container.style.borderRadius = "4px";
+
+      // Add modified label if not present (use class name for reliable selection)
+      let modifiedLabel = container.querySelector(".setting-modified-label");
+      if (!modifiedLabel) {
+        modifiedLabel = document.createElement("span");
+        modifiedLabel.className = "setting-modified-label";
+        modifiedLabel.style.cssText = "color: #ffc107; font-size: 0.75rem;";
+        modifiedLabel.textContent = "● Modified";
+        container.appendChild(modifiedLabel);
+      }
+    } else {
+      container.style.background = "";
+      container.style.padding = "";
+      container.style.borderRadius = "";
+
+      // Remove modified label
+      const modifiedLabel = container.querySelector(".setting-modified-label");
+      if (modifiedLabel) {
+        modifiedLabel.remove();
       }
     }
   }
