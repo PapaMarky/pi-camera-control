@@ -1,19 +1,23 @@
 
 # TODO 
-* Photo time: min, ave, max
-* During timelapse:
-  * Test shot, live view and settings update should be disabled (they could interfere with the timelapse)
-* Without camera connected:
-  * Should be able to view images in "test shot". We need to rethink the UI. Add separate "view images" function?
+* When AWB(?) is colortemperature, I should be able to select the color temperature to use.
+  * FIND THE ccapi endpoints
 * Improve time sync:
   * allow sync from wlan
   * If pi is reliablity gets low AND not running a timelapse, sync pi from camera.
   * relability, high to low: client on ap, client on wan, camera, pi
-* Turn off screen
-  * Turn off viewfinder.
-* When AWB(?) is colortemperature, I should be able to select the color temperature to use.
-  * FIND THE ccapi endpoints
+* Camera controls
+  * Turn off / on screen
+  * Turn off / on viewfinder.
+* Photo time: min, ave, max
+  * More info about how long photos are taking when setting up for timelapse.
+* During timelapse:
+  * Test shot, live view and settings update should be disabled (they could interfere with the timelapse)
+* Without camera connected:
+  * Should be able to view images in "test shot". We need to rethink the UI. Add separate "view images" function?
 * First image captured should be stored as both first and last. Subsequent images update last.
+
+## Completed
 * ~~File names in timelapse report should include directory name. (not full path)~~ FIXED
   * "/ccapi/ver110/contents/sd/100CANON/IMG_0042.JPG" → "100CANON/IMG_0042.JPG"
 * ~~Camera showed low battery, UI showed 100%.~~ FIXED: Using ver100/battery endpoint now
