@@ -9,16 +9,16 @@
  * @returns {Object} Settings with only value fields
  */
 export function stripAbilityFields(settings) {
-  if (!settings || typeof settings !== 'object') {
+  if (!settings || typeof settings !== "object") {
     return null;
   }
 
   const stripped = {};
 
   for (const [key, data] of Object.entries(settings)) {
-    if (data && typeof data === 'object') {
+    if (data && typeof data === "object") {
       // Check if this is a setting object with value/ability structure
-      if (data.hasOwnProperty('value')) {
+      if (data.hasOwnProperty("value")) {
         // Keep only the value, discard ability
         stripped[key] = { value: data.value };
       } else {
@@ -28,7 +28,7 @@ export function stripAbilityFields(settings) {
         let hasNonAbility = false;
 
         for (const [nestedKey, nestedData] of Object.entries(data)) {
-          if (nestedKey !== 'ability') {
+          if (nestedKey !== "ability") {
             nested[nestedKey] = nestedData;
             hasNonAbility = true;
           }
