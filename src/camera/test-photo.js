@@ -2,28 +2,29 @@
  * Test Photo Service
  *
  * Handles test photo capture with EXIF metadata extraction.
- * Temporarily overrides camera quality settings for faster test photos,
+ * Supports both JPEG and RAW (CR3) file formats via exiftool-vendored.
+ * Optionally overrides camera quality settings for faster test photos,
  * then restores original settings.
  *
- * Workflow (from feature-test-shot-plan.md lines 243-256):
- * 1. Get current quality settings
- * 2. Override to smallest size/quality
+ * Workflow:
+ * 1. Get current quality settings (if useCurrentSettings=false)
+ * 2. Override to smallest size/quality (if requested)
  * 3. Start event polling
  * 4. Trigger shutter button with AF
  * 5. Wait for addedcontents event
  * 6. Stop event polling (automatic)
  * 7. Download photo from CCAPI
- * 8. Restore previous quality settings
- * 9. Extract EXIF metadata
- * 10. Rename file: YYYYMMDD_HHMMSS_<original>
- * 11. Save to /data/test-shots/photos/
+ * 8. Restore previous quality settings (if changed)
+ * 9. Save photo to temp file
+ * 10. Extract EXIF metadata using exiftool (supports JPEG, CR3, CR2, etc.)
+ * 11. Rename file: YYYYMMDD_HHMMSS_<original>
  * 12. Return metadata and file info
  */
 
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
-import exifr from "exifr";
+import { exiftool } from "exiftool-vendored";
 import { logger } from "../utils/logger.js";
 import { waitForPhotoComplete } from "../utils/event-polling.js";
 
@@ -110,10 +111,12 @@ export class TestPhotoService {
   /**
    * Capture a test photo with EXIF metadata
    *
+   * @param {boolean} [useCurrentSettings=true] - If true (default), uses camera's current quality settings.
+   *                                               If false, temporarily reduces quality to smallest JPEG for faster capture.
    * @returns {Promise<Object>} Photo metadata {id, url, filename, timestamp, exif, filepath}
    * @throws {Error} If camera not connected or capture fails
    */
-  async capturePhoto() {
+  async capturePhoto(useCurrentSettings = true) {
     // Prevent concurrent captures to avoid quality setting race conditions
     if (this.captureLock) {
       logger.error("Photo capture already in progress");
@@ -135,49 +138,63 @@ export class TestPhotoService {
     const photoId = this.photoId++;
     const timestamp = new Date().toISOString();
 
-    logger.info("Starting test photo capture", { photoId, timestamp });
+    logger.info("Starting test photo capture", {
+      photoId,
+      timestamp,
+      useCurrentSettings,
+    });
 
     let originalQuality = null;
 
     try {
-      // Step 1: Get current quality settings (Canon R50 uses ver110)
-      logger.debug("Getting current quality settings");
-      const settingsResponse = await controller.client.get(
-        `${controller.baseUrl}/ccapi/ver110/shooting/settings`,
-      );
+      // Step 1 & 2: Override quality settings (only if requested)
+      if (!useCurrentSettings) {
+        // Step 1: Get current quality settings (Canon R50 uses ver110)
+        logger.debug("Getting current quality settings");
+        const settingsResponse = await controller.client.get(
+          `${controller.baseUrl}/ccapi/ver110/shooting/settings`,
+        );
 
-      const qualityData = settingsResponse.data.stillimagequality;
-      originalQuality = qualityData.value;
-      const qualityOptions = qualityData.ability;
+        const qualityData = settingsResponse.data.stillimagequality;
+        originalQuality = qualityData.value;
+        const qualityOptions = qualityData.ability;
 
-      logger.debug("Current quality settings retrieved", {
-        currentQuality: originalQuality,
-        availableOptions: qualityOptions,
-      });
-
-      // Step 2: Override to smallest JPEG size (keep RAW unchanged)
-      // Find smallest JPEG option (prefer small2 or small1_normal)
-      const jpegOptions = qualityOptions.jpeg || [];
-      const smallestJpeg =
-        jpegOptions.find((q) => q === "small2") ||
-        jpegOptions.find((q) => q.includes("small1")) ||
-        jpegOptions[jpegOptions.length - 1];
-
-      if (smallestJpeg && smallestJpeg !== originalQuality.jpeg) {
-        const newQuality = {
-          raw: originalQuality.raw, // Keep RAW setting unchanged
-          jpeg: smallestJpeg,
-        };
-
-        logger.debug("Setting quality to smallest JPEG for test photo", {
-          from: originalQuality,
-          to: newQuality,
+        logger.debug("Current quality settings retrieved", {
+          currentQuality: originalQuality,
+          availableOptions: qualityOptions,
         });
 
-        await controller.client.put(
-          `${controller.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
-          { value: newQuality },
-        );
+        // Step 2: Override to smallest JPEG size and disable RAW for faster capture
+        // Find smallest JPEG option (prefer small2 or small1_normal)
+        const jpegOptions = qualityOptions.jpeg || [];
+        const smallestJpeg =
+          jpegOptions.find((q) => q === "small2") ||
+          jpegOptions.find((q) => q.includes("small1")) ||
+          jpegOptions[jpegOptions.length - 1];
+
+        // Override quality if we have a JPEG option and it's different from current
+        if (smallestJpeg && smallestJpeg !== originalQuality.jpeg) {
+          const newQuality = {
+            jpeg: smallestJpeg,
+            raw: "off", // Disable RAW to avoid large files for test photos
+          };
+
+          logger.debug("Reducing quality to smallest JPEG for test photo", {
+            from: originalQuality,
+            to: newQuality,
+          });
+
+          await controller.client.put(
+            `${controller.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
+            { value: newQuality },
+          );
+        } else {
+          logger.debug(
+            "Quality already at smallest JPEG or no JPEG option available",
+          );
+        }
+      } else {
+        logger.debug("Using camera's current quality settings (no override)");
       }
 
       // Step 3-6: Start polling BEFORE pressing shutter to avoid race condition
@@ -209,24 +226,16 @@ export class TestPhotoService {
         processingTimeMs,
       });
 
-      // Step 7A: Get file size for progress tracking
+      // Step 7A: Skip file size retrieval to avoid connection conflicts
+      // The controller's client has maxSockets:1 which can prevent download
       let fileSize = 0;
-      try {
-        logger.debug("Getting photo file size", { photoPath });
-        const infoResponse = await controller.client.get(
-          `${controller.baseUrl}${photoPath}?kind=info`,
-          { timeout: 5000 },
-        );
-        fileSize = infoResponse.data.filesize;
-        logger.debug("Photo size retrieved", {
-          bytes: fileSize,
-          mb: (fileSize / 1024 / 1024).toFixed(2),
-        });
-      } catch (infoError) {
-        logger.warn("Could not get file size, progress will show bytes only", {
-          error: infoError.message,
-        });
-      }
+      logger.debug("Skipping file size check to avoid connection conflict");
+
+      // Pause connection monitoring during download to prevent false disconnection
+      // Large file downloads can take 30+ seconds and camera won't respond to
+      // connection checks during this time
+      controller.pauseConnectionMonitoring();
+      logger.debug("Paused connection monitoring for photo download");
 
       // Step 7B: Download photo from CCAPI with retry for camera busy and progress tracking
       // Camera may need time to finalize file after reporting it's ready
@@ -235,10 +244,20 @@ export class TestPhotoService {
       let downloadRetry = 0;
 
       while (downloadRetry < maxDownloadRetries) {
+        // Create https agent for this download attempt
+        // MUST be destroyed after use to prevent connection leaks (FIN_WAIT2 accumulation)
+        const axios = (await import("axios")).default;
+        const https = (await import("https")).default;
+        const httpsAgent = new https.Agent({
+          rejectUnauthorized: false,
+          keepAlive: false, // Don't keep connection alive for one-time download
+        });
+
         try {
-          // Exponential backoff: 500ms, 1s, 2s, 4s, 8s
-          const delayMs = 500 * Math.pow(2, downloadRetry);
-          logger.debug(
+          // CR3 files need more time for camera to finalize
+          // Start with 2s delay, then exponential backoff: 2s, 4s, 8s, 16s, 32s
+          const delayMs = 2000 * Math.pow(2, downloadRetry);
+          logger.info(
             `Waiting ${delayMs}ms before download attempt ${downloadRetry + 1}/${maxDownloadRetries}`,
           );
           await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -246,13 +265,17 @@ export class TestPhotoService {
           logger.debug("Downloading photo from camera", {
             photoPath,
             attempt: downloadRetry + 1,
+            fileSize,
           });
 
-          const photoResponse = await controller.client.get(
+          // Use axios directly with custom config for large file downloads
+          // The controller's client has maxSockets:1 which can cause conflicts
+          const photoResponse = await axios.get(
             `${controller.baseUrl}${photoPath}`,
             {
               responseType: "arraybuffer",
-              timeout: 60000, // Increased to 60s for large RAW files
+              timeout: 120000, // 2 minutes for large CR3 files
+              httpsAgent,
               onDownloadProgress: (progressEvent) => {
                 const loaded = progressEvent.loaded;
                 const total = progressEvent.total || fileSize;
@@ -275,13 +298,22 @@ export class TestPhotoService {
           );
 
           photoData = Buffer.from(photoResponse.data);
-          logger.debug("Photo downloaded successfully", {
+          logger.info("Photo downloaded successfully", {
             size: photoData.length,
             attempts: downloadRetry + 1,
+            photoPath,
           });
           break; // Success, exit retry loop
         } catch (downloadError) {
           const isCameraBusy = downloadError.response?.status === 503;
+
+          logger.error("Download error occurred", {
+            error: downloadError.message,
+            code: downloadError.code,
+            status: downloadError.response?.status,
+            attempt: downloadRetry + 1,
+            photoPath,
+          });
 
           if (isCameraBusy && downloadRetry < maxDownloadRetries - 1) {
             logger.debug(`Camera busy (503), will retry`, {
@@ -289,34 +321,84 @@ export class TestPhotoService {
               remaining: maxDownloadRetries - downloadRetry - 1,
             });
             downloadRetry++;
+            // Agent will be destroyed below, new one created for next iteration
             continue; // Retry
           }
 
           // Out of retries or different error - throw
           throw downloadError;
+        } finally {
+          // CRITICAL: Destroy the https agent to properly close connections
+          // Without this, connections accumulate in FIN_WAIT2 state and camera refuses new connections
+          httpsAgent.destroy();
+          logger.debug("HTTPS agent destroyed for download attempt", {
+            attempt: downloadRetry + 1,
+          });
         }
       }
 
-      // Step 9: Extract EXIF metadata
-      logger.debug("Extracting EXIF metadata");
-      const exif = await exifr.parse(photoData);
-
-      logger.debug("EXIF metadata extracted", {
-        hasDate: !!exif?.DateTimeOriginal,
-        ISO: exif?.ISO,
-        ExposureTime: exif?.ExposureTime,
-        ShutterSpeed: exif?.ShutterSpeed,
-        FNumber: exif?.FNumber,
-      });
-
-      // Step 10: Rename file with timestamp
+      // Step 9: Rename file with timestamp (before EXIF extraction)
       const originalFilename = path.basename(photoPath);
+
+      // Step 10: Save to disk FIRST (exiftool reads from files, not buffers)
+      // We'll rename the file after EXIF extraction when we have the timestamp
+      const tempFilename = `temp_${Date.now()}_${originalFilename}`;
+      const tempFilepath = path.join(PHOTOS_DIR, tempFilename);
+
+      logger.debug("Saving photo to temp location for EXIF extraction", {
+        tempFilepath,
+      });
+      await fs.writeFile(tempFilepath, photoData);
+
+      // Step 11: Extract EXIF metadata from saved file
+      logger.info("Extracting EXIF metadata", { photoPath, tempFilepath });
+      let exif;
+      try {
+        logger.debug("Calling exiftool.read()");
+        const exifData = await exiftool.read(tempFilepath);
+        logger.debug("exiftool.read() completed successfully");
+
+        // Map exiftool field names to our standard format
+        exif = {
+          ISO: exifData.ISO,
+          ExposureTime: exifData.ExposureTime,
+          ShutterSpeed: exifData.ShutterSpeedValue || exifData.ShutterSpeed,
+          FNumber: exifData.FNumber || exifData.Aperture,
+          WhiteBalance: exifData.WhiteBalance,
+          DateTimeOriginal: exifData.DateTimeOriginal,
+          Model: exifData.Model,
+        };
+
+        logger.info("EXIF metadata extracted successfully", {
+          hasDate: !!exif?.DateTimeOriginal,
+          ISO: exif?.ISO,
+          ExposureTime: exif?.ExposureTime,
+          ShutterSpeed: exif?.ShutterSpeed,
+          FNumber: exif?.FNumber,
+          fileType: exifData.FileType || path.extname(photoPath),
+        });
+      } catch (exifError) {
+        // Log error but don't fail - we can still save the photo without EXIF
+        logger.error("EXIF extraction failed", {
+          photoPath,
+          tempFilepath,
+          error: exifError.message,
+          stack: exifError.stack,
+        });
+        // Create minimal EXIF object
+        exif = {};
+      }
+
+      // Step 12: Rename file with timestamp from EXIF
       const filename = this._generateFilename(originalFilename, exif);
       const filepath = path.join(PHOTOS_DIR, filename);
 
-      // Step 11: Save to disk
-      logger.debug("Saving photo to disk", { filepath });
-      await fs.writeFile(filepath, photoData);
+      // Rename temp file to final name
+      logger.debug("Renaming photo with timestamp", {
+        from: tempFilepath,
+        to: filepath,
+      });
+      await fs.rename(tempFilepath, filepath);
 
       const elapsed = Date.now() - startTime;
 
@@ -385,6 +467,13 @@ export class TestPhotoService {
       cleanError.status = statusCode;
       throw cleanError;
     } finally {
+      // Always resume connection monitoring
+      const controller = this.getController();
+      if (controller) {
+        controller.resumeConnectionMonitoring();
+        logger.debug("Resumed connection monitoring after photo operation");
+      }
+
       // Always release capture lock
       this.captureLock = false;
 
@@ -459,5 +548,19 @@ export class TestPhotoService {
     }
 
     return true;
+  }
+
+  /**
+   * Shutdown the service and cleanup resources
+   * Terminates the exiftool process pool gracefully
+   */
+  async shutdown() {
+    logger.info("Shutting down TestPhotoService");
+    try {
+      await exiftool.end();
+      logger.info("ExifTool process pool terminated");
+    } catch (error) {
+      logger.warn("Error shutting down ExifTool", { error: error.message });
+    }
   }
 }

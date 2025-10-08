@@ -12,6 +12,12 @@
  * - HTTP timeout: 35 seconds (30s CCAPI timeout + 5s margin)
  *
  * Phase 0 Research: Camera supports concurrent polling + control (347ms response)
+ *
+ * File Type Handling:
+ * - Supports both JPEG and RAW (CR3) file formats
+ * - Prefers JPEG when both are available (smaller files, faster download)
+ * - Returns CR3 when camera is in RAW-only mode
+ * - RAW+JPEG mode: Camera may emit CR3 first, JPEG in subsequent event
  */
 
 import { logger } from "./logger.js";
@@ -75,16 +81,48 @@ export async function waitForPhotoComplete(
         const addedcontents = response.data?.addedcontents;
 
         if (addedcontents && addedcontents.length > 0) {
-          // Found it! Return first file path (typically JPEG, may have RAW as second entry)
-          const filePath = addedcontents[0];
           const elapsed = Date.now() - startTime;
 
+          // Categorize files by type
+          const jpegFiles = addedcontents.filter((filePath) => {
+            const ext = filePath.split(".").pop().toLowerCase();
+            return ext === "jpg" || ext === "jpeg";
+          });
+
+          const rawFiles = addedcontents.filter((filePath) => {
+            const ext = filePath.split(".").pop().toLowerCase();
+            return ext === "cr3" || ext === "cr2" || ext === "raw";
+          });
+
           logger.info("Photo completion event received", {
-            filePath,
             totalFiles: addedcontents.length,
+            allFiles: addedcontents,
+            jpegFiles: jpegFiles.length,
+            rawFiles: rawFiles.length,
             pollCount,
             elapsed: `${elapsed}ms`,
           });
+
+          // Prefer JPEG (smaller files), but accept RAW if that's all we have
+          // This supports both RAW-only mode and RAW+JPEG mode
+          let filePath;
+          if (jpegFiles.length > 0) {
+            filePath = jpegFiles[0];
+            logger.debug("Using JPEG file", { filePath });
+          } else if (rawFiles.length > 0) {
+            filePath = rawFiles[0];
+            logger.debug("Using RAW file (no JPEG available)", { filePath });
+          } else {
+            // Unknown file type - use first file anyway
+            filePath = addedcontents[0];
+            logger.warn(
+              "Unknown file type in addedcontents, using first file",
+              {
+                filePath,
+                allFiles: addedcontents,
+              },
+            );
+          }
 
           return filePath;
         }
