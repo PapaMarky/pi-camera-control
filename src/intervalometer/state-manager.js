@@ -536,21 +536,24 @@ export class IntervalometerStateManager extends EventEmitter {
       try {
         const cameraController = await session.getCurrentCameraController();
         if (cameraController) {
-          logger.info("Fetching camera settings for report (not captured during session)", {
-            sessionId: session.id
-          });
+          logger.info(
+            "Fetching camera settings for report (not captured during session)",
+            {
+              sessionId: session.id,
+            },
+          );
           cameraSettings = await cameraController.getCameraSettings();
         }
       } catch (error) {
         logger.warn("Failed to fetch camera settings for report", {
           sessionId: session.id,
-          error: error.message
+          error: error.message,
         });
       }
     }
 
     // Strip ability fields from camera settings (keep only values)
-    const { stripAbilityFields } = await import('../utils/camera-settings.js');
+    const { stripAbilityFields } = await import("../utils/camera-settings.js");
     const strippedSettings = stripAbilityFields(cameraSettings);
 
     return {
