@@ -2,6 +2,7 @@
  * Test Photo Service Tests
  *
  * Tests for the TestPhotoService class that handles test photo capture with EXIF extraction.
+ * Supports both JPEG and RAW (CR3) file formats via exiftool-vendored library.
  * Following TDD: These tests should fail initially until implementation is complete.
  */
 
@@ -11,6 +12,7 @@ import fs from "fs/promises";
 // Mock fs operations
 jest.spyOn(fs, "mkdir").mockResolvedValue(undefined);
 jest.spyOn(fs, "writeFile").mockResolvedValue(undefined);
+jest.spyOn(fs, "rename").mockResolvedValue(undefined);
 
 // Mock event polling utility
 const mockWaitForPhotoComplete = jest.fn();
@@ -18,12 +20,13 @@ jest.unstable_mockModule("../../src/utils/event-polling.js", () => ({
   waitForPhotoComplete: mockWaitForPhotoComplete,
 }));
 
-// Mock exifr library
-const mockExifr = {
-  parse: jest.fn(),
+// Mock exiftool-vendored library
+const mockExiftool = {
+  read: jest.fn(),
+  end: jest.fn().mockResolvedValue(undefined),
 };
-jest.unstable_mockModule("exifr", () => ({
-  default: mockExifr,
+jest.unstable_mockModule("exiftool-vendored", () => ({
+  exiftool: mockExiftool,
 }));
 
 describe("TestPhotoService", () => {
@@ -50,6 +53,8 @@ describe("TestPhotoService", () => {
       },
       baseUrl: "https://192.168.12.98:443",
       connected: true,
+      pauseConnectionMonitoring: jest.fn(),
+      resumeConnectionMonitoring: jest.fn(),
     };
 
     // Mock WebSocket handler
@@ -73,7 +78,116 @@ describe("TestPhotoService", () => {
   });
 
   describe("capturePhoto()", () => {
-    test("should capture test photo with EXIF metadata successfully", async () => {
+    test("should use current camera settings when useCurrentSettings=true", async () => {
+      // Mock shutter button press
+      mockCameraController.client.post.mockResolvedValueOnce({
+        status: 200,
+        data: {},
+      });
+
+      // Mock event polling returns file path
+      mockWaitForPhotoComplete.mockResolvedValueOnce(
+        "/DCIM/100CANON/IMG_0001.JPG",
+      );
+
+      // Mock file size retrieval
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: 12345 },
+      });
+
+      // Mock download photo
+      const mockImageData = Buffer.from("fake-jpeg-data");
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: mockImageData,
+      });
+
+      // Mock EXIF extraction
+      mockExiftool.read.mockResolvedValueOnce({
+        ISO: 6400,
+        ShutterSpeed: "30",
+        FNumber: 2.8,
+        DateTimeOriginal: new Date("2025-10-02T12:30:00"),
+      });
+
+      const result = await testPhotoService.capturePhoto(true);
+
+      // Verify NO quality settings were retrieved (no GET to settings endpoint)
+      expect(mockCameraController.client.get).not.toHaveBeenCalledWith(
+        `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings`,
+      );
+
+      // Verify NO quality override (no PUT to quality endpoint)
+      expect(mockCameraController.client.put).not.toHaveBeenCalled();
+
+      // Verify shutter was pressed
+      expect(mockCameraController.client.post).toHaveBeenCalledWith(
+        `${mockCameraController.baseUrl}/ccapi/ver100/shooting/control/shutterbutton`,
+        { af: true },
+      );
+
+      // Verify photo capture completed successfully
+      expect(result.id).toBe(1);
+      expect(result.exif.ISO).toBe(6400);
+    });
+
+    test("should default to using current settings when useCurrentSettings is not specified", async () => {
+      // Mock shutter button press
+      mockCameraController.client.post.mockResolvedValueOnce({
+        status: 200,
+        data: {},
+      });
+
+      // Mock event polling returns file path
+      mockWaitForPhotoComplete.mockResolvedValueOnce(
+        "/DCIM/100CANON/IMG_0001.JPG",
+      );
+
+      // Mock file size retrieval
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: 12345 },
+      });
+
+      // Mock download photo
+      const mockImageData = Buffer.from("fake-jpeg-data");
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: mockImageData,
+      });
+
+      // Mock EXIF extraction
+      mockExiftool.read.mockResolvedValueOnce({
+        ISO: 6400,
+        ShutterSpeed: "30",
+        FNumber: 2.8,
+        DateTimeOriginal: new Date("2025-10-02T12:30:00"),
+      });
+
+      // Call without parameter (should default to true - use current settings)
+      const result = await testPhotoService.capturePhoto();
+
+      // Verify NO quality settings were retrieved (no GET to settings endpoint)
+      expect(mockCameraController.client.get).not.toHaveBeenCalledWith(
+        `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings`,
+      );
+
+      // Verify NO quality override (no PUT to quality endpoint)
+      expect(mockCameraController.client.put).not.toHaveBeenCalled();
+
+      // Verify shutter was pressed
+      expect(mockCameraController.client.post).toHaveBeenCalledWith(
+        `${mockCameraController.baseUrl}/ccapi/ver100/shooting/control/shutterbutton`,
+        { af: true },
+      );
+
+      // Verify photo capture completed successfully
+      expect(result.id).toBe(1);
+      expect(result.exif.ISO).toBe(6400);
+    });
+
+    test("should capture test photo with EXIF metadata successfully (explicit useCurrentSettings=false)", async () => {
       // Mock get current quality settings (ver110 settings response structure)
       mockCameraController.client.get.mockResolvedValueOnce({
         status: 200,
@@ -125,7 +239,7 @@ describe("TestPhotoService", () => {
       });
 
       // Mock EXIF extraction - use local time to avoid timezone issues in tests
-      mockExifr.parse.mockResolvedValueOnce({
+      mockExiftool.read.mockResolvedValueOnce({
         ISO: 6400,
         ShutterSpeed: "30",
         FNumber: 2.8,
@@ -134,7 +248,7 @@ describe("TestPhotoService", () => {
         Model: "Canon EOS R50",
       });
 
-      const result = await testPhotoService.capturePhoto();
+      const result = await testPhotoService.capturePhoto(false);
 
       // Verify quality was set to smallest (ver110 endpoint with jpeg/raw structure)
       expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
@@ -223,12 +337,12 @@ describe("TestPhotoService", () => {
       });
 
       // Mock EXIF without date
-      mockExifr.parse.mockResolvedValueOnce({
+      mockExiftool.read.mockResolvedValueOnce({
         ISO: 6400,
         // No DateTimeOriginal
       });
 
-      const result = await testPhotoService.capturePhoto();
+      const result = await testPhotoService.capturePhoto(false);
 
       // Verify filename uses download timestamp with "dl" marker
       expect(result.filename).toMatch(/^\d{8}_\d{6}_dl_IMG_0001\.JPG$/);
@@ -265,7 +379,7 @@ describe("TestPhotoService", () => {
       // Mock restore quality (should still be called)
       mockCameraController.client.put.mockResolvedValueOnce({ status: 200 });
 
-      await expect(testPhotoService.capturePhoto()).rejects.toThrow(
+      await expect(testPhotoService.capturePhoto(false)).rejects.toThrow(
         "Download failed",
       );
 
@@ -304,7 +418,7 @@ describe("TestPhotoService", () => {
         new Error("Timeout waiting for photo completion (35000ms)"),
       );
 
-      await expect(testPhotoService.capturePhoto()).rejects.toThrow(
+      await expect(testPhotoService.capturePhoto(false)).rejects.toThrow(
         "Timeout waiting for photo completion",
       );
 
@@ -316,18 +430,8 @@ describe("TestPhotoService", () => {
     });
 
     test("should increment photo ID for each capture", async () => {
-      // Setup mocks for two successful captures
+      // Setup mocks for two successful captures (using default - current settings, no quality override)
       const setupSuccessfulCapture = () => {
-        mockCameraController.client.get.mockResolvedValueOnce({
-          status: 200,
-          data: {
-            stillimagequality: {
-              value: { jpeg: "large_fine", raw: "off" },
-              ability: { jpeg: ["large_fine", "small_fine"], raw: ["off"] },
-            },
-          },
-        });
-        mockCameraController.client.put.mockResolvedValue({ status: 200 });
         mockCameraController.client.post.mockResolvedValueOnce({ status: 200 });
         mockWaitForPhotoComplete.mockResolvedValueOnce(
           "/DCIM/100CANON/IMG_0001.JPG",
@@ -342,7 +446,7 @@ describe("TestPhotoService", () => {
           status: 200,
           data: Buffer.from("fake-jpeg-data"),
         });
-        mockExifr.parse.mockResolvedValueOnce({
+        mockExiftool.read.mockResolvedValueOnce({
           ISO: 6400,
           DateTimeOriginal: new Date("2025-10-02T19:30:00.000Z"),
         });
@@ -430,12 +534,12 @@ describe("TestPhotoService", () => {
       });
 
       // Mock EXIF extraction
-      mockExifr.parse.mockResolvedValueOnce({
+      mockExiftool.read.mockResolvedValueOnce({
         ISO: 6400,
         DateTimeOriginal: new Date("2025-10-02T12:30:00"),
       });
 
-      const result = await testPhotoService.capturePhoto();
+      const result = await testPhotoService.capturePhoto(false);
 
       // Verify processingTimeMs is present
       expect(result.processingTimeMs).toBeDefined();
@@ -489,9 +593,9 @@ describe("TestPhotoService", () => {
         data: Buffer.from("fake-jpeg-data"),
       });
 
-      mockExifr.parse.mockResolvedValueOnce({ ISO: 6400 });
+      mockExiftool.read.mockResolvedValueOnce({ ISO: 6400 });
 
-      await testPhotoService.capturePhoto();
+      await testPhotoService.capturePhoto(false);
 
       // Verify kind=info was called before download
       expect(mockCameraController.client.get).toHaveBeenCalledWith(
@@ -537,9 +641,9 @@ describe("TestPhotoService", () => {
         });
       });
 
-      mockExifr.parse.mockResolvedValueOnce({ ISO: 6400 });
+      mockExiftool.read.mockResolvedValueOnce({ ISO: 6400 });
 
-      await testPhotoService.capturePhoto();
+      await testPhotoService.capturePhoto(false);
 
       // Verify WebSocket progress events were broadcast
       expect(mockWsHandler.broadcast).toHaveBeenCalledWith(
@@ -591,9 +695,9 @@ describe("TestPhotoService", () => {
         data: Buffer.from("fake-jpeg-data"),
       });
 
-      mockExifr.parse.mockResolvedValueOnce({ ISO: 6400 });
+      mockExiftool.read.mockResolvedValueOnce({ ISO: 6400 });
 
-      const result = await testPhotoService.capturePhoto();
+      const result = await testPhotoService.capturePhoto(false);
 
       // Should succeed despite info failure
       expect(result.id).toBe(1);
@@ -633,9 +737,9 @@ describe("TestPhotoService", () => {
         });
       });
 
-      mockExifr.parse.mockResolvedValueOnce({ ISO: 6400 });
+      mockExiftool.read.mockResolvedValueOnce({ ISO: 6400 });
 
-      await testPhotoService.capturePhoto();
+      await testPhotoService.capturePhoto(false);
 
       // Should not emit progress event when total is 0
       expect(mockWsHandler.broadcast).not.toHaveBeenCalledWith(
@@ -673,9 +777,9 @@ describe("TestPhotoService", () => {
         data: Buffer.from("fake-jpeg-data"),
       });
 
-      mockExifr.parse.mockResolvedValueOnce({ ISO: 6400 });
+      mockExiftool.read.mockResolvedValueOnce({ ISO: 6400 });
 
-      await testPhotoService.capturePhoto();
+      await testPhotoService.capturePhoto(false);
 
       // Verify timeout was increased to 60s
       expect(mockCameraController.client.get).toHaveBeenCalledWith(
@@ -684,6 +788,224 @@ describe("TestPhotoService", () => {
           timeout: 60000, // 60 seconds
           responseType: "arraybuffer",
         }),
+      );
+    });
+
+    test("should handle RAW-only mode by enabling JPEG and disabling RAW (useCurrentSettings=false)", async () => {
+      // Camera is in RAW-only mode (jpeg is null/undefined/off)
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          stillimagequality: {
+            value: { jpeg: null, raw: "raw" }, // RAW-only mode
+            ability: {
+              jpeg: ["large_fine", "medium_fine", "small_fine", "small2"],
+              raw: ["off", "raw"],
+            },
+          },
+        },
+      });
+
+      // Mock set quality to smallest JPEG with RAW disabled
+      mockCameraController.client.put.mockResolvedValueOnce({
+        status: 200,
+        data: {},
+      });
+
+      mockCameraController.client.post.mockResolvedValueOnce({ status: 200 });
+      mockWaitForPhotoComplete.mockResolvedValueOnce(
+        "/DCIM/100CANON/IMG_0001.JPG",
+      );
+
+      // Mock file size retrieval
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: 12345 },
+      });
+
+      // Mock download photo
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: Buffer.from("fake-jpeg-data"),
+      });
+
+      // Mock restore quality setting
+      mockCameraController.client.put.mockResolvedValueOnce({
+        status: 200,
+        data: {},
+      });
+
+      mockExiftool.read.mockResolvedValueOnce({
+        ISO: 6400,
+        DateTimeOriginal: new Date("2025-10-02T12:30:00"),
+      });
+
+      const result = await testPhotoService.capturePhoto(false);
+
+      // Verify quality was set to smallest JPEG with RAW turned off
+      expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
+        1,
+        `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
+        { value: { jpeg: "small2", raw: "off" } },
+      );
+
+      // Verify quality was restored to original RAW-only settings
+      expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
+        2,
+        `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
+        { value: { jpeg: null, raw: "raw" } },
+      );
+
+      // Verify photo capture succeeded
+      expect(result.id).toBe(1);
+    });
+
+    test("should handle RAW-only mode with jpeg='off' by enabling smallest JPEG", async () => {
+      // Camera is in RAW-only mode (jpeg is "off" string)
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          stillimagequality: {
+            value: { jpeg: "off", raw: "raw" }, // RAW-only mode with "off" string
+            ability: {
+              jpeg: ["off", "large_fine", "small2"],
+              raw: ["off", "raw"],
+            },
+          },
+        },
+      });
+
+      mockCameraController.client.put.mockResolvedValueOnce({ status: 200 });
+      mockCameraController.client.post.mockResolvedValueOnce({ status: 200 });
+      mockWaitForPhotoComplete.mockResolvedValueOnce(
+        "/DCIM/100CANON/IMG_0001.JPG",
+      );
+
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: 12345 },
+      });
+
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: Buffer.from("fake-jpeg-data"),
+      });
+
+      mockCameraController.client.put.mockResolvedValueOnce({ status: 200 });
+      mockExiftool.read.mockResolvedValueOnce({
+        ISO: 6400,
+        DateTimeOriginal: new Date("2025-10-02T12:30:00"),
+      });
+
+      await testPhotoService.capturePhoto(false);
+
+      // Verify quality was set to smallest JPEG with RAW turned off
+      expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
+        1,
+        `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
+        { value: { jpeg: "small2", raw: "off" } },
+      );
+
+      // Verify original settings were restored
+      expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
+        2,
+        `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
+        { value: { jpeg: "off", raw: "raw" } },
+      );
+    });
+
+    test("should successfully handle CR3 (RAW) files with exiftool", async () => {
+      // Use current settings (RAW-only mode)
+      mockCameraController.client.post.mockResolvedValueOnce({ status: 200 });
+      mockWaitForPhotoComplete.mockResolvedValueOnce(
+        "/DCIM/100CANON/IMG_0001.CR3", // CR3 file returned
+      );
+
+      // Mock file size
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: 25000000 }, // 25MB RAW file
+      });
+
+      // Mock download CR3 file
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: Buffer.from("fake-cr3-raw-data"),
+      });
+
+      // Mock exiftool successful extraction from CR3 file
+      mockExiftool.read.mockResolvedValueOnce({
+        ISO: 6400,
+        ExposureTime: 30,
+        ShutterSpeedValue: "30",
+        FNumber: 2.8,
+        WhiteBalance: "Auto",
+        DateTimeOriginal: new Date("2025-10-02T12:30:00"),
+        Model: "Canon EOS R50",
+        FileType: "CR3",
+      });
+
+      const result = await testPhotoService.capturePhoto(true);
+
+      // Verify CR3 file was successfully processed
+      expect(result).toBeDefined();
+      expect(result.exif.ISO).toBe(6400);
+      expect(result.exif.Model).toBe("Canon EOS R50");
+      expect(result.filename).toContain("IMG_0001.CR3");
+    });
+
+    test("should handle RAW+JPEG mode without changing RAW setting (useCurrentSettings=false)", async () => {
+      // Camera is in RAW+JPEG mode
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          stillimagequality: {
+            value: { jpeg: "large_fine", raw: "raw" }, // RAW+JPEG mode
+            ability: {
+              jpeg: ["large_fine", "medium_fine", "small2"],
+              raw: ["off", "raw"],
+            },
+          },
+        },
+      });
+
+      mockCameraController.client.put.mockResolvedValueOnce({ status: 200 });
+      mockCameraController.client.post.mockResolvedValueOnce({ status: 200 });
+      mockWaitForPhotoComplete.mockResolvedValueOnce(
+        "/DCIM/100CANON/IMG_0001.JPG",
+      );
+
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: 12345 },
+      });
+
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: Buffer.from("fake-jpeg-data"),
+      });
+
+      mockCameraController.client.put.mockResolvedValueOnce({ status: 200 });
+      mockExiftool.read.mockResolvedValueOnce({
+        ISO: 6400,
+        DateTimeOriginal: new Date("2025-10-02T12:30:00"),
+      });
+
+      await testPhotoService.capturePhoto(false);
+
+      // Verify quality was set to smallest JPEG with RAW turned OFF
+      // (to avoid downloading large RAW files)
+      expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
+        1,
+        `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
+        { value: { jpeg: "small2", raw: "off" } },
+      );
+
+      // Verify original RAW+JPEG settings were restored
+      expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
+        2,
+        `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
+        { value: { jpeg: "large_fine", raw: "raw" } },
       );
     });
   });
