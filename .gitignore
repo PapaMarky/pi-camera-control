@@ -250,7 +250,7 @@ timelapse.log
 camera_images/
 temp_images/
 screenshots/
-data/timelapse-reports/
+data/
 *.mp4
 
 # OS generated files
