@@ -10,6 +10,7 @@ class TestShotUI {
     this.settings = null; // Current camera settings
     this.pendingChanges = {}; // Track pending setting changes
     this.isCapturing = false; // Prevent concurrent test photo captures
+    this.useLowerQuality = false; // Default: use camera's current quality (not reduced)
 
     console.log("TestShotUI: Constructor called");
   }
@@ -42,6 +43,7 @@ class TestShotUI {
       // Setup event handlers
       this.setupEventHandlers();
       this.setupWebSocketListeners();
+      this.setupQualityToggle();
       this.updateButtonStates(); // Enable buttons if camera connected
 
       console.log("TestShotUI: Initialized successfully");
@@ -143,6 +145,53 @@ class TestShotUI {
 
     // Load existing test photos
     this.loadTestPhotos();
+  }
+
+  /**
+   * Setup quality toggle checkbox
+   * Loads saved preference from localStorage and attaches event listeners
+   * Checkbox CHECKED = reduce quality (useLowerQuality = true, send useCurrentSettings: false)
+   * Checkbox UNCHECKED = use camera quality (useLowerQuality = false, send useCurrentSettings: true)
+   */
+  setupQualityToggle() {
+    console.log("TestShotUI: Setting up quality toggle");
+
+    const checkbox = document.getElementById("use-lower-quality-checkbox");
+    if (!checkbox) {
+      console.log(
+        "TestShotUI: Quality checkbox not found (OK if not on page yet)",
+      );
+      return;
+    }
+
+    // Load saved preference from localStorage
+    const savedPreference = localStorage.getItem("testPhotoUseLowerQuality");
+    if (savedPreference !== null) {
+      this.useLowerQuality = savedPreference === "true";
+      checkbox.checked = this.useLowerQuality;
+      console.log(
+        "TestShotUI: Loaded quality preference from localStorage:",
+        this.useLowerQuality,
+      );
+    }
+
+    // Attach change event listener
+    checkbox.addEventListener("change", (e) => {
+      this.useLowerQuality = e.target.checked;
+      localStorage.setItem(
+        "testPhotoUseLowerQuality",
+        this.useLowerQuality.toString(),
+      );
+      console.log(
+        "TestShotUI: Quality preference changed to:",
+        this.useLowerQuality,
+        "(send useCurrentSettings:",
+        !this.useLowerQuality,
+        ")",
+      );
+    });
+
+    console.log("TestShotUI: Quality toggle setup complete");
   }
 
   async captureLiveView() {
@@ -722,9 +771,27 @@ class TestShotUI {
       this.wsManager.on("test_photo_download_progress", progressHandler);
 
       try {
+        // Prepare request body with quality setting
+        // Inverted logic: checkbox checked = reduce quality = send useCurrentSettings: false
+        // checkbox unchecked = use camera quality = send useCurrentSettings: true
+        const requestBody = {
+          useCurrentSettings: !this.useLowerQuality,
+        };
+
+        console.log(
+          "TestShotUI: Sending test photo request with useLowerQuality:",
+          this.useLowerQuality,
+          "=> useCurrentSettings:",
+          !this.useLowerQuality,
+        );
+
         // Call API
         const response = await fetch("/api/camera/photos/test", {
           method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
@@ -840,12 +907,25 @@ class TestShotUI {
           ? ` (${processingTime})`
           : "";
 
+        // Check if file is CR3/RAW (not displayable in browser)
+        const isCR3 = photo.filename.toLowerCase().endsWith('.cr3');
+        const imageDisplay = isCR3
+          ? `<div style="background: #f5f5f5; padding: 2rem; text-align: center; border: 2px dashed #ccc; border-radius: 4px;">
+               <div style="font-size: 3rem; margin-bottom: 0.5rem;">📸</div>
+               <div style="font-weight: 600; color: #666;">CR3 RAW File</div>
+               <div style="font-size: 0.875rem; color: #999; margin-top: 0.5rem;">
+                 Preview not available in browser<br>
+                 Use Download button to save file
+               </div>
+             </div>`
+          : `<img src="${photo.url}/file"
+                  style="max-width: 100%; height: auto; cursor: pointer;"
+                  onclick="window.open(this.src, '_blank')"
+                  alt="Test photo ${photo.id}">`;
+
         return `
         <div class="test-photo-card" style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
-          <img src="${photo.url}/file"
-               style="max-width: 100%; height: auto; cursor: pointer;"
-               onclick="window.open(this.src, '_blank')"
-               alt="Test photo ${photo.id}">
+          ${imageDisplay}
 
           <!-- EXIF Metadata -->
           <div class="exif-metadata" data-exif style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0,0,0,0.05); border-radius: 4px; font-size: 0.875rem;">
@@ -906,12 +986,38 @@ class TestShotUI {
 
     // White Balance
     if (exif.WhiteBalance) {
-      fields.push(`<div><strong>WB:</strong> ${exif.WhiteBalance}</div>`);
+      // Simplify verbose white balance descriptions
+      let wb = exif.WhiteBalance;
+      wb = wb.replace("Manual Temperature (Kelvin)", "Manual WB");
+      wb = wb.replace("Auto White Balance", "Auto");
+      fields.push(`<div><strong>WB:</strong> ${wb}</div>`);
     }
 
     // Capture Date
     if (exif.DateTimeOriginal) {
-      const date = new Date(exif.DateTimeOriginal);
+      let date;
+      // Handle ExifDateTime object from exiftool-vendored
+      if (exif.DateTimeOriginal.rawValue) {
+        // Convert EXIF format "2025:10:08 13:43:23" to ISO format
+        const isoString = exif.DateTimeOriginal.rawValue.replace(
+          /^(\d{4}):(\d{2}):(\d{2})/,
+          "$1-$2-$3",
+        );
+        date = new Date(isoString);
+      } else if (typeof exif.DateTimeOriginal === "string") {
+        // Fallback for string format (old exifr library)
+        date = new Date(exif.DateTimeOriginal);
+      } else {
+        // Construct from ExifDateTime fields if available
+        date = new Date(
+          exif.DateTimeOriginal.year,
+          exif.DateTimeOriginal.month - 1, // JS months are 0-indexed
+          exif.DateTimeOriginal.day,
+          exif.DateTimeOriginal.hour,
+          exif.DateTimeOriginal.minute,
+          exif.DateTimeOriginal.second,
+        );
+      }
       fields.push(
         `<div><strong>Captured:</strong> ${date.toLocaleString()}</div>`,
       );

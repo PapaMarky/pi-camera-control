@@ -20,6 +20,7 @@ export const EVENT_NAME_MIGRATIONS = {
   cameraOffline: "camera_offline",
   primaryCameraChanged: "primary_camera_changed",
   primaryCameraDisconnected: "primary_camera_disconnected",
+  cameraError: "camera_error",
 
   // Time sync events: kebab-case → snake_case
   "camera-sync": "camera_sync",

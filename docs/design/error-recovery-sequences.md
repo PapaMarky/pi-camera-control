@@ -431,6 +431,191 @@ if (error.response?.data) {
 }
 ```
 
+### HTTP 502 Gateway Error (Non-Standard CCAPI Response)
+
+**What is HTTP 502 in CCAPI Context:**
+
+HTTP 502 Gateway Error is **NOT** a standard CCAPI response defined in Canon's documentation. It indicates that the camera's HTTP service itself is in an error state, typically due to resource exhaustion after intensive operations (e.g., large file downloads).
+
+**Root Cause:**
+
+- Camera HTTP service overwhelmed by connection pool exhaustion
+- Camera still busy processing after large file operations (29MB+ RAW+JPEG downloads)
+- Camera's HTTPS server in error state, unable to process new requests
+- Typically occurs after test photo downloads with high-resolution RAW+JPEG files
+
+**Detection:**
+
+The system detects HTTP 502 errors at multiple points:
+
+```javascript
+// src/camera/controller.js:136-175 (connect method)
+if (error.response?.status === 502) {
+  logger.warn(
+    `Camera returned HTTP 502 Gateway Error (attempt ${retryAttempt + 1}/${maxRetries})`,
+  );
+  logger.warn(
+    "This is NOT a standard CCAPI response - camera HTTP service may be in error state",
+  );
+  // Retry with delay...
+}
+
+// src/camera/controller.js:256-269 (getCameraSettings and other methods)
+if (
+  error.code === "EHOSTUNREACH" ||
+  error.code === "ECONNREFUSED" ||
+  error.code === "ETIMEDOUT" ||
+  error.response?.status === 502
+) {
+  if (error.response?.status === 502) {
+    logger.warn(
+      "HTTP 502: Camera HTTP service in error state (not standard CCAPI response)",
+    );
+  }
+  this.handleDisconnection(error);
+}
+```
+
+**Recovery Strategy:**
+
+1. **Initial Connection (connect method):**
+   - Retry up to 3 times with 5-second delays
+   - Allow camera time to recover from error state
+   - After max retries, fail with user-friendly error message
+
+2. **During Operations (camera methods):**
+   - Detect 502 immediately
+   - Trigger disconnection handling
+   - Emit `camera_error` WebSocket event with detailed information
+   - Notify user with recovery instructions
+
+3. **User Notification:**
+   - WebSocket event: `camera_error` (and `cameraError` for compatibility)
+   - Error payload:
+
+   ```javascript
+   {
+     uuid: "camera-uuid",
+     code: "CAMERA_HTTP_ERROR_502",
+     message: "Camera HTTP service returned 502 error",
+     details: {
+       errorCode: "CAMERA_HTTP_502",
+       errorStatus: 502,
+       lastError: "original error message"
+     },
+     severity: "error",
+     recoveryAction: "power_cycle_camera",
+     userMessage: "Camera needs restart - try power-cycling the camera"
+   }
+   ```
+
+**Recovery Flow:**
+
+```mermaid
+sequenceDiagram
+    participant Client as Web Client
+    participant WS as WebSocket Handler
+    participant Controller as Camera Controller
+    participant StateManager as Camera State Manager
+    participant Camera as Canon Camera
+
+    Controller->>Camera: GET /ccapi/ (reconnection attempt)
+    Camera-->>Controller: HTTP 502 Gateway Error
+
+    Controller->>Controller: Retry attempt 1/3 (wait 5s)
+    Controller->>Camera: GET /ccapi/ (retry 1)
+    Camera-->>Controller: HTTP 502 Gateway Error
+
+    Controller->>Controller: Retry attempt 2/3 (wait 5s)
+    Controller->>Camera: GET /ccapi/ (retry 2)
+    Camera-->>Controller: HTTP 502 Gateway Error
+
+    Controller->>Controller: Retry attempt 3/3 (wait 5s)
+    Controller->>Camera: GET /ccapi/ (retry 3)
+    Camera-->>Controller: HTTP 502 Gateway Error
+
+    Controller->>Controller: Max retries reached
+    Controller->>Controller: handleDisconnection(error)
+    Controller->>StateManager: onDisconnect(status with error details)
+
+    StateManager->>StateManager: Detect error.status === 502
+    StateManager->>WS: Emit camera_error event
+    WS->>Client: Broadcast camera_error with details
+
+    StateManager->>WS: Emit primary_camera_disconnected
+    WS->>Client: Broadcast disconnection
+
+    Client->>Client: Show error toast with recovery instructions
+    Client->>Client: "Camera needs restart - try power-cycling the camera"
+
+    Note over Client,Camera: User power-cycles camera
+
+    Client->>WS: user_connect_to_camera
+    WS->>StateManager: connectToCamera()
+    StateManager->>Controller: connect()
+    Controller->>Camera: GET /ccapi/
+    Camera-->>Controller: 200 OK
+    Controller-->>StateManager: Connected
+    StateManager->>WS: Emit camera_connected
+    WS->>Client: Broadcast camera_connected
+```
+
+**Prevention Measures:**
+
+1. **Connection Pooling:**
+   - Use `keepAlive: true` to reuse TCP connections
+   - Limit to 1 concurrent connection (`maxSockets: 1`)
+   - Keep 1 connection in pool for reuse (`maxFreeSockets: 1`)
+   - Prevents overwhelming camera's limited HTTPS capacity
+
+2. **Connection Monitoring:**
+   - Pause connection monitoring during long operations (downloads)
+   - Prevents false disconnection during busy periods
+   - Resume monitoring after operation completes
+
+**Implementation Details:**
+
+```javascript
+// src/camera/controller.js:27-40 (Connection pooling configuration)
+this.client = axios.create({
+  timeout: 10000,
+  httpsAgent: new https.Agent({
+    rejectUnauthorized: false,
+    keepAlive: true, // Reuse TCP connections
+    keepAliveMsecs: 30000,
+    maxSockets: 1, // Limit concurrent connections
+    maxFreeSockets: 1, // Keep 1 in pool
+  }),
+});
+
+// src/camera/test-photo.js:234-235 (Pause monitoring during downloads)
+controller.pauseConnectionMonitoring();
+logger.debug("Paused connection monitoring for photo download");
+
+// src/camera/test-photo.js:395-398 (Resume in finally block)
+const controller = this.getController();
+if (controller) {
+  controller.resumeConnectionMonitoring();
+  logger.debug("Resumed connection monitoring after photo operation");
+}
+```
+
+**User Recovery Instructions:**
+
+When HTTP 502 error occurs:
+
+1. Power-cycle the camera (turn off, wait 5 seconds, turn on)
+2. Wait for camera to fully boot (10-15 seconds)
+3. Manually reconnect via UI "Connect to Camera" button
+4. If problem persists, check camera settings (ensure not in playback mode)
+
+**Known Triggers:**
+
+- Test photo capture with RAW+JPEG at highest quality (29MB+ files)
+- Multiple rapid photo downloads without delays
+- Connection pool exhaustion from creating new connections per request (fixed)
+- Camera busy state after intensive file operations
+
 ---
 
 ## 7. What Does NOT Exist

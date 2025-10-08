@@ -442,6 +442,31 @@ export class CameraStateManager extends EventEmitter {
           cameraData.info.ipAddress,
           status.lastError,
         );
+
+        // Check for HTTP 502 error and emit specific camera_error event
+        if (
+          status.errorCode === "CAMERA_HTTP_502" ||
+          status.errorStatus === 502
+        ) {
+          logger.warn("HTTP 502 error detected, emitting camera_error event");
+          this.emit("cameraError", {
+            uuid,
+            code: "CAMERA_HTTP_ERROR_502",
+            message:
+              status.userMessage || "Camera HTTP service returned 502 error",
+            details: {
+              errorCode: status.errorCode,
+              errorStatus: status.errorStatus,
+              lastError: status.lastError,
+            },
+            severity: "error",
+            recoveryAction: "power_cycle_camera",
+            userMessage:
+              status.userMessage ||
+              "Camera needs restart - try power-cycling the camera",
+          });
+        }
+
         this.emit("primaryCameraDisconnected", {
           uuid,
           reason: "connection_lost",

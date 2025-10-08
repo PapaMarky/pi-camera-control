@@ -187,21 +187,43 @@ Triggers single photo capture.
 
 ```http
 POST /api/camera/photos/test
+Content-Type: application/json
+
+{
+  "useCurrentSettings": true  // Optional: if true (default), uses camera's current quality; if false, reduces quality for faster capture
+}
 ```
 
-Captures a test photo with EXIF metadata extraction. Temporarily overrides camera quality to smallest setting for faster capture, then restores original settings.
+Captures a test photo with EXIF metadata extraction. **Supports both JPEG and RAW (CR3) file formats** via exiftool-vendored library.
+
+**Quality Override Behavior:**
+
+- **Default (`useCurrentSettings: true`)**: Uses camera's current quality settings without modification. Works with JPEG, RAW, or RAW+JPEG modes.
+- **Fast Preview (`useCurrentSettings: false`)**: Temporarily reduces camera quality to smallest JPEG for faster capture, then restores original settings. Disables RAW to avoid large file downloads (20-30MB CR3 files).
+
+**RAW File Support:**
+
+The system supports CR3 (Canon Raw 3) files in addition to JPEG:
+
+- **RAW-only mode**: Camera produces only CR3 files (~20-30MB). EXIF extraction works normally.
+- **RAW+JPEG mode**: Camera produces both CR3 and JPEG files. System prefers JPEG for faster download.
+- **JPEG-only mode**: Camera produces only JPEG files (~1-3MB).
+
+When `useCurrentSettings: false`, the system temporarily disables RAW to avoid large file downloads for test photos.
 
 **Workflow:**
 
-1. Saves current quality settings
-2. Sets quality to smallest available (e.g., small_fine)
-3. Triggers shutter with autofocus
-4. Waits for photo completion via CCAPI event polling
-5. Retrieves file size via CCAPI `kind=info` endpoint for progress tracking
-6. Downloads photo from camera with progress events via WebSocket
-7. Restores original quality settings
-8. Extracts EXIF metadata (ISO, shutter speed, aperture, etc.)
-9. Saves photo with timestamped filename: `YYYYMMDD_HHMMSS_<original>.jpg`
+1. If `useCurrentSettings` is false:
+   - Saves current quality settings
+   - Sets quality to smallest JPEG with RAW disabled to avoid large file downloads
+2. Triggers shutter with autofocus
+3. Waits for photo completion via CCAPI event polling (accepts JPEG or CR3 files)
+4. Retrieves file size via CCAPI `kind=info` endpoint for progress tracking
+5. Downloads photo from camera with progress events via WebSocket
+6. Saves photo to temporary file for EXIF extraction
+7. Extracts EXIF metadata using exiftool-vendored (supports JPEG, CR3, CR2, and 500+ RAW formats)
+8. Renames photo with timestamped filename: `YYYYMMDD_HHMMSS_<original>` (e.g., `.jpg` or `.CR3`)
+9. If quality was overridden, restores original quality settings
 
 **Download Progress Events:**
 
@@ -234,9 +256,9 @@ During photo download, the server broadcasts `test_photo_download_progress` WebS
 {
   "id": 1,
   "url": "/api/camera/photos/test/1",
-  "filename": "20251002_193000_IMG_0001.JPG",
+  "filename": "20251002_193000_IMG_0001.JPG", // or .CR3 for RAW files
   "timestamp": "2025-10-02T19:30:00.000Z",
-  "cameraPath": "100CANON/IMG_0001.JPG",
+  "cameraPath": "100CANON/IMG_0001.JPG", // or .CR3 for RAW files
   "processingTimeMs": 2340,
   "exif": {
     "ISO": 6400,
@@ -246,8 +268,8 @@ During photo download, the server broadcasts `test_photo_download_progress` WebS
     "DateTimeOriginal": "2025-10-02T19:30:00.000Z",
     "Model": "Canon EOS R50"
   },
-  "filepath": "/data/test-shots/photos/20251002_193000_IMG_0001.JPG",
-  "size": 1234567
+  "filepath": "/data/test-shots/photos/20251002_193000_IMG_0001.JPG", // or .CR3 for RAW files
+  "size": 1234567 // ~1-3MB for JPEG, ~20-30MB for CR3
 }
 ```
 
@@ -260,6 +282,7 @@ During photo download, the server broadcasts `test_photo_download_progress` WebS
 - `503 CAMERA_OFFLINE` - Camera not connected
 - `500 PHOTO_FAILED` - Capture failed (timeout, camera busy, etc.)
 - `500 PHOTO_FAILED` - Photo capture already in progress
+- `500 PHOTO_FAILED` - EXIF extraction failed (rare, photo is still saved)
 
 ##### List Test Photos
 

@@ -251,6 +251,7 @@ camera_images/
 temp_images/
 screenshots/
 data/timelapse-reports/
+*.mp4
 
 # OS generated files
 .DS_Store
