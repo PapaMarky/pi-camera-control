@@ -44,6 +44,10 @@ export class DiscoveryManager extends EventEmitter {
     this.cameraStateManager.on("cameraStatusChanged", (data) => {
       this.emit("cameraStatusChanged", data);
     });
+
+    this.cameraStateManager.on("cameraError", (data) => {
+      this.emit("cameraError", data);
+    });
   }
 
   /**

@@ -1,7 +1,10 @@
 
 # TODO 
-* When AWB(?) is colortemperature, I should be able to select the color temperature to use.
-  * FIND THE ccapi endpoints
+* Take Photo fails with RAW format.
+* Timelapse Reports
+  * Name of file should match title of timelapse
+  * Labels are below values
+  * 
 * Improve time sync:
   * allow sync from wlan
   * If pi is reliablity gets low AND not running a timelapse, sync pi from camera.
@@ -18,6 +21,8 @@
 * First image captured should be stored as both first and last. Subsequent images update last.
 
 ## Completed
+* ~~When AWB(?) is colortemperature, I should be able to select the color temperature to use.~~ FIXED
+  * FIND THE ccapi endpoints
 * ~~File names in timelapse report should include directory name. (not full path)~~ FIXED
   * "/ccapi/ver110/contents/sd/100CANON/IMG_0042.JPG" → "100CANON/IMG_0042.JPG"
 * ~~Camera showed low battery, UI showed 100%.~~ FIXED: Using ver100/battery endpoint now
@@ -102,3 +107,35 @@ a new output file.
 
 Analyse my proposal and offer one or more improved counterproposals. IMPORTANT: Each counterproposal must work with
 the limitations of the Read command and limitations of any other of claude's tools that I might not be aware of.
+
+
+"We're implementing CR3/RAW file support for the test photo feature. The code changes are complete and deployed to picontrol-002:
+
+1. ✅ Replaced exifr with exiftool-vendored
+2. ✅ Updated event-polling.js to accept CR3 files
+3. ✅ All unit tests passing (26/26)
+
+Current blocker: Photo downloads are failing with ECONNRESET/"aborted" errors after ~1-2 seconds. This affects BOTH JPEG and CR3 files, so it's not a CR3-specific issue.
+
+Test results:
+- IMG_3480.CR3 (RAW mode): FAILED with ECONNRESET
+- IMG_3483.JPG (RAW+JPEG mode): FAILED with ECONNRESET
+- IMG_3484.JPG (JPEG-only mode): FAILED with ECONNRESET
+
+What we tried:
+- ❌ Increased delays (2s, 4s, 8s exponential backoff) - still fails
+- ❌ Disabled file size check - still fails
+- ❌ Created separate axios instance - still fails
+- ❌ User reconnected camera - still fails
+- ❌ Manual curl test from Pi also fails
+
+The download URL format is: ${controller.baseUrl}${photoPath}
+Example: https://192.168.12.XXX/ccapi/ver130/contents/card1/100CANON/IMG_3484.JPG
+
+Next steps to investigate:
+1. Check if the CCAPI contents endpoint requires special handling
+2. Verify the photoPath format from addedcontents event
+3. Test downloading an old photo already on the card (not just-captured)
+4. Review if there's a session state issue after capture
+
+The camera IS connecting and taking photos successfully - it's only the download that fails.

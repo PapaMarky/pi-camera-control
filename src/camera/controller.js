@@ -24,11 +24,17 @@ export class CameraController {
     this.consecutiveFailures = 0;
     this.maxConsecutiveFailures = 3; // Allow 3 consecutive failures before disconnecting
 
-    // Create axios instance with optimized settings
+    // Create axios instance with connection pooling
+    // Canon cameras have limited HTTPS connection capacity (1-3 concurrent)
+    // Use keepAlive to reuse connections and maxSockets to prevent exhaustion
     this.client = axios.create({
       timeout: 10000,
       httpsAgent: new https.Agent({
         rejectUnauthorized: false,
+        keepAlive: true, // Reuse TCP connections instead of creating new ones
+        keepAliveMsecs: 30000, // Keep connections alive for 30 seconds
+        maxSockets: 1, // Limit to 1 concurrent connection to prevent overwhelming camera
+        maxFreeSockets: 1, // Keep 1 connection in the pool for reuse
       }),
     });
   }
@@ -96,8 +102,11 @@ export class CameraController {
    * Response: Object with API versions as keys, each containing array of available endpoints
    *
    * Also verifies shooting settings endpoint availability (CCAPI 4.9.1)
+   *
+   * @param {number} retryAttempt - Current retry attempt (for 502 errors)
+   * @param {number} maxRetries - Maximum retry attempts for 502 errors
    */
-  async connect() {
+  async connect(retryAttempt = 0, maxRetries = 3) {
     try {
       logger.info("Discovering CCAPI endpoints...");
       const response = await this.client.get(`${this.baseUrl}/ccapi/`);
@@ -129,6 +138,40 @@ export class CameraController {
 
       return true;
     } catch (error) {
+      // Handle HTTP 502 (not a standard CCAPI response - camera HTTP service error)
+      if (error.response?.status === 502) {
+        logger.warn(
+          `Camera returned HTTP 502 Gateway Error (attempt ${retryAttempt + 1}/${maxRetries})`,
+        );
+        logger.warn("Response body:", error.response?.data);
+        logger.warn(
+          "This is NOT a standard CCAPI response - camera HTTP service may be in error state",
+        );
+
+        if (retryAttempt < maxRetries - 1) {
+          const delayMs = 5000; // Wait 5 seconds before retry
+          logger.info(
+            `Waiting ${delayMs}ms for camera to recover before retry...`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          return this.connect(retryAttempt + 1, maxRetries);
+        } else {
+          logger.error(
+            "Max retries reached for HTTP 502 error. Camera may need power cycle.",
+          );
+          const camera502Error = new Error(
+            "Camera HTTP service returned 502 error. Camera may need to be power-cycled.",
+          );
+          camera502Error.code = "CAMERA_HTTP_502";
+          camera502Error.status = 502;
+          camera502Error.userMessage =
+            "Camera needs restart - try power-cycling the camera";
+          this.connected = false;
+          this.lastError = camera502Error.message;
+          throw camera502Error;
+        }
+      }
+
       this.connected = false;
       this.lastError = error.message;
       logger.error("Failed to connect to camera:", error);
@@ -209,13 +252,20 @@ export class CameraController {
         logger.debug("Canon API error response:", error.response.data);
       }
 
-      // If we get a network error, handle disconnection
+      // If we get a network error or HTTP 502, handle disconnection
       if (
         error.code === "EHOSTUNREACH" ||
         error.code === "ECONNREFUSED" ||
-        error.code === "ETIMEDOUT"
+        error.code === "ETIMEDOUT" ||
+        error.response?.status === 502
       ) {
-        logger.warn("Camera network error detected, handling disconnection");
+        if (error.response?.status === 502) {
+          logger.warn(
+            "HTTP 502: Camera HTTP service in error state (not standard CCAPI response)",
+          );
+        } else {
+          logger.warn("Camera network error detected, handling disconnection");
+        }
         this.handleDisconnection(error);
       }
 
@@ -268,13 +318,20 @@ export class CameraController {
         logger.debug("Canon API error response:", error.response.data);
       }
 
-      // If we get a network error, handle disconnection
+      // If we get a network error or HTTP 502, handle disconnection
       if (
         error.code === "EHOSTUNREACH" ||
         error.code === "ECONNREFUSED" ||
-        error.code === "ETIMEDOUT"
+        error.code === "ETIMEDOUT" ||
+        error.response?.status === 502
       ) {
-        logger.warn("Camera network error detected, handling disconnection");
+        if (error.response?.status === 502) {
+          logger.warn(
+            "HTTP 502: Camera HTTP service in error state (not standard CCAPI response)",
+          );
+        } else {
+          logger.warn("Camera network error detected, handling disconnection");
+        }
         this.handleDisconnection(error);
       }
 
@@ -328,13 +385,20 @@ export class CameraController {
         logger.debug("Canon API error response:", error.response.data);
       }
 
-      // If we get a network error, handle disconnection
+      // If we get a network error or HTTP 502, handle disconnection
       if (
         error.code === "EHOSTUNREACH" ||
         error.code === "ECONNREFUSED" ||
-        error.code === "ETIMEDOUT"
+        error.code === "ETIMEDOUT" ||
+        error.response?.status === 502
       ) {
-        logger.warn("Camera network error detected, handling disconnection");
+        if (error.response?.status === 502) {
+          logger.warn(
+            "HTTP 502: Camera HTTP service in error state (not standard CCAPI response)",
+          );
+        } else {
+          logger.warn("Camera network error detected, handling disconnection");
+        }
         this.handleDisconnection(error);
       }
 
@@ -396,15 +460,22 @@ export class CameraController {
         logger.debug("Canon API error response:", error.response.data);
       }
 
-      // If we get a network error, handle disconnection
+      // If we get a network error or HTTP 502, handle disconnection
       if (
         error.code === "EHOSTUNREACH" ||
         error.code === "ECONNREFUSED" ||
-        error.code === "ETIMEDOUT"
+        error.code === "ETIMEDOUT" ||
+        error.response?.status === 502
       ) {
-        logger.warn(
-          "Camera network error detected during battery check, handling disconnection",
-        );
+        if (error.response?.status === 502) {
+          logger.warn(
+            "HTTP 502 during battery check: Camera HTTP service in error state (not standard CCAPI response)",
+          );
+        } else {
+          logger.warn(
+            "Camera network error detected during battery check, handling disconnection",
+          );
+        }
         this.handleDisconnection(error);
       }
 
@@ -498,13 +569,20 @@ export class CameraController {
         `Failed to get storage info - Status: ${statusCode}, API Message: "${apiMessage}"`,
       );
 
-      // Handle network errors
+      // Handle network errors or HTTP 502
       if (
         error.code === "EHOSTUNREACH" ||
         error.code === "ECONNREFUSED" ||
-        error.code === "ETIMEDOUT"
+        error.code === "ETIMEDOUT" ||
+        error.response?.status === 502
       ) {
-        logger.warn("Camera network error detected during storage check");
+        if (error.response?.status === 502) {
+          logger.warn(
+            "HTTP 502 during storage check: Camera HTTP service in error state (not standard CCAPI response)",
+          );
+        } else {
+          logger.warn("Camera network error detected during storage check");
+        }
         this.handleDisconnection(error);
       }
 
@@ -826,7 +904,12 @@ export class CameraController {
     // Notify immediately if we were previously connected
     if (wasConnected && this.onDisconnect) {
       logger.info("Notifying clients of camera disconnection");
-      this.onDisconnect(this.getConnectionStatus());
+      const status = this.getConnectionStatus();
+      // Include error details for specific error handling (e.g., HTTP 502)
+      status.errorCode = error.code;
+      status.errorStatus = error.status;
+      status.userMessage = error.userMessage;
+      this.onDisconnect(status);
     }
 
     logger.warn("Camera disconnected, manual reconnection required");
@@ -991,13 +1074,20 @@ export class CameraController {
         logger.debug("Canon API error response:", error.response.data);
       }
 
-      // If we get a network error, handle disconnection
+      // If we get a network error or HTTP 502, handle disconnection
       if (
         error.code === "EHOSTUNREACH" ||
         error.code === "ECONNREFUSED" ||
-        error.code === "ETIMEDOUT"
+        error.code === "ETIMEDOUT" ||
+        error.response?.status === 502
       ) {
-        logger.warn("Camera network error detected during temperature check");
+        if (error.response?.status === 502) {
+          logger.warn(
+            "HTTP 502 during temperature check: Camera HTTP service in error state (not standard CCAPI response)",
+          );
+        } else {
+          logger.warn("Camera network error detected during temperature check");
+        }
         this.handleDisconnection(error);
       }
 

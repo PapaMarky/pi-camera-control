@@ -121,6 +121,11 @@ class CameraControlServer {
       logger.warn("Primary camera disconnected");
       this.broadcastDiscoveryEvent("primaryCameraDisconnected", {});
     });
+
+    this.discoveryManager.on("cameraError", (errorData) => {
+      logger.error("Camera error event:", errorData);
+      this.broadcastDiscoveryEvent("cameraError", errorData);
+    });
   }
 
   setupHealthMonitorHandlers() {

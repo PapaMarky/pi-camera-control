@@ -449,7 +449,11 @@ export function createApiRouter(
         );
       }
 
-      const photo = await testPhotoService.capturePhoto();
+      // Read optional useCurrentSettings parameter (defaults to true)
+      // Only false if explicitly set to false
+      const useCurrentSettings = req.body.useCurrentSettings !== false;
+
+      const photo = await testPhotoService.capturePhoto(useCurrentSettings);
       res.json(photo);
     } catch (error) {
       logger.error("Failed to capture test photo:", error);
