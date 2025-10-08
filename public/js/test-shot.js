@@ -908,7 +908,7 @@ class TestShotUI {
           : "";
 
         // Check if file is CR3/RAW (not displayable in browser)
-        const isCR3 = photo.filename.toLowerCase().endsWith('.cr3');
+        const isCR3 = photo.filename.toLowerCase().endsWith(".cr3");
         const imageDisplay = isCR3
           ? `<div style="background: #f5f5f5; padding: 2rem; text-align: center; border: 2px dashed #ccc; border-radius: 4px;">
                <div style="font-size: 3rem; margin-bottom: 0.5rem;">📸</div>
