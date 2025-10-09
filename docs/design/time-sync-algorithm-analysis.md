@@ -1,7 +1,7 @@
 # Time Synchronization Algorithm Analysis
 
 **Date:** 2025-10-08
-**Status:** Phase 2 In Progress
+**Status:** Phase 3 Complete
 **Purpose:** Analyze proposed time sync improvements for logical consistency
 
 ---
@@ -62,7 +62,39 @@
 
 **Committed:** 2025-01-09
 
-### ⏳ Phase 3: wlan0 with State Priority (NOT STARTED)
+### ✅ Phase 3: wlan0 with State Priority (COMPLETE)
+
+**Completed:**
+
+- ✅ Configuration updates in `src/timesync/state.js`:
+  - Changed AP_ONLY_AUTO_SYNC from true to false
+- ✅ Integration tests written: `test/integration/timesync-wlan0-state.test.js`
+  - 18 test cases covering wlan0 sync scenarios
+  - Tests for wlan0 connections when state is 'none'
+  - Tests for wlan0 deferring to valid ap0 state
+  - Tests for wlan0 → ap0 transition
+  - Tests for wlan0 resync with ap0 priority check
+  - Tests for wlan0 failover scenarios
+  - Tests for wlan0 state expiration
+  - Tests for mixed ap0/wlan0 scenarios
+- ✅ Updated `handleClientConnection()` in `src/timesync/service.js`
+  - Added Rule 2: wlan0 defers to valid ap0 state
+  - Added Rule 2b: Ignore duplicate wlan0 connections
+  - Simplified state setting logic with early returns
+- ✅ Updated unit test in `test/unit/timesync-service.test.js`
+  - Changed "should not request time sync from non-AP client" to Phase 3 behavior
+  - wlan0 clients now correctly auto-synced
+- ✅ Full test suite passing: **668/668 tests (100%)** ✨
+
+**Key Implementation:**
+- wlan0 clients now auto-synced when state is 'none'
+- wlan0 connections ignored when valid ap0 state exists
+- wlan0 → ap0 transition works seamlessly
+- wlan0 resync checks for ap0 availability before each resync
+- Failover cascade: ap0 → different ap0 → wlan0 → none
+- State validity window (10 min) works for both ap0 and wlan0
+
+**Committed:** 2025-01-09
 
 ### ⏳ Phase 4: Camera Sync with State (NOT STARTED)
 

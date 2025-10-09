@@ -23,7 +23,7 @@ class TimeSyncState extends EventEmitter {
       MAX_SYNC_HISTORY: 10, // Number of sync events to retain
       VARIABILITY_THRESHOLD: 500, // 0.5 second max acceptable jump
       AUTO_SYNC_ENABLED: true, // Global enable/disable
-      AP_ONLY_AUTO_SYNC: true, // Only auto-sync ap0 clients (will change to false in Phase 3)
+      AP_ONLY_AUTO_SYNC: false, // Phase 3: Enable wlan0 auto-sync
     };
 
     // State tracking
