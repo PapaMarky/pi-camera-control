@@ -866,6 +866,13 @@ class TimeSyncService {
         isSynchronized: this.isCameraSynchronized(rawStatus),
         lastSyncTime: rawStatus.lastCameraSync,
       },
+      // NEW: Include piProxyState for detailed testing visibility
+      piProxyState: this.piProxyState.getInfo(),
+      // NEW: Include connected clients count for testing visibility
+      connectedClients: {
+        ap0Count: this.connectedClients.ap0.length,
+        wlan0Count: this.connectedClients.wlan0.length,
+      },
     };
 
     logger.info("TimeSyncService: Broadcasting sync status", {
@@ -873,6 +880,10 @@ class TimeSyncService {
       piReliability: uiStatus.pi.reliability,
       piLastSyncTime: uiStatus.pi.lastSyncTime,
       cameraSynchronized: uiStatus.camera.isSynchronized,
+      piProxyState: uiStatus.piProxyState.state,
+      piProxyValid: uiStatus.piProxyState.valid,
+      ap0Clients: uiStatus.connectedClients.ap0Count,
+      wlan0Clients: uiStatus.connectedClients.wlan0Count,
       rawPiReliable: rawStatus.piReliable,
       rawLastPiSync: rawStatus.lastPiSync,
     });
@@ -929,7 +940,10 @@ class TimeSyncService {
    * Get sync status
    */
   getStatus() {
-    return this.state.getStatus();
+    const status = this.state.getStatus();
+    // Include piProxyState for frontend display
+    status.piProxyState = this.piProxyState.getInfo();
+    return status;
   }
 
   /**

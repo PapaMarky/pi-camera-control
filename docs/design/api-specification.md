@@ -1358,6 +1358,81 @@ const clients = new Set();
 
 ### Time Synchronization Events
 
+#### Time Sync Status Broadcast
+
+Broadcast periodically and after sync events to provide complete synchronization state including proxy state and connected clients.
+
+```json
+{
+  "type": "time-sync-status",
+  "data": {
+    "pi": {
+      "isSynchronized": true,
+      "reliability": "high",
+      "lastSyncTime": "2024-01-01T12:00:00.000Z"
+    },
+    "camera": {
+      "isSynchronized": true,
+      "lastSyncTime": "2024-01-01T12:00:30.000Z"
+    },
+    "piProxyState": {
+      "state": "ap0-device",
+      "valid": true,
+      "acquiredAt": "2024-01-01T12:00:00.000Z",
+      "ageSeconds": 45,
+      "clientIP": "192.168.4.2"
+    },
+    "connectedClients": {
+      "ap0Count": 1,
+      "wlan0Count": 0
+    }
+  }
+}
+```
+
+**Pi Sync Fields:**
+
+- `isSynchronized` (boolean): Whether Pi time is currently synchronized
+- `reliability` (string): Time reliability level - `"none"`, `"low"`, `"medium"`, or `"high"`
+  - `"high"`: Synced within last 5 minutes
+  - `"medium"`: Synced within last hour
+  - `"low"`: Synced within last 24 hours
+  - `"none"`: No sync or synced >24 hours ago
+- `lastSyncTime` (string|null): ISO timestamp of last Pi sync, or null if never synced
+
+**Camera Sync Fields:**
+
+- `isSynchronized` (boolean): Whether camera time is currently synchronized (within last 30 minutes)
+- `lastSyncTime` (string|null): ISO timestamp of last camera sync, or null if never synced
+
+**Pi Proxy State Fields (NEW in Phase 5):**
+
+- `state` (string): Current proxy state - `"none"`, `"ap0-device"`, or `"wlan0-device"`
+  - `"none"`: Pi is not acting as time proxy (no recent client sync OR sync >10 min ago)
+  - `"ap0-device"`: Pi is proxying time from ap0 client (synced within last 10 minutes)
+  - `"wlan0-device"`: Pi is proxying time from wlan0 client (synced within last 10 minutes)
+- `valid` (boolean): Whether current proxy state is valid (within 10-minute validity window)
+- `acquiredAt` (string|null): ISO timestamp when proxy state was acquired, or null if state is `"none"`
+- `ageSeconds` (number|null): Age of proxy state in seconds, or null if state is `"none"`
+- `clientIP` (string|null): IP address of sync source client, or null if state is `"none"`
+
+**Connected Clients Fields (NEW in Phase 5):**
+
+- `ap0Count` (number): Number of clients currently connected via ap0 interface (Pi access point)
+- `wlan0Count` (number): Number of clients currently connected via wlan0 interface (external WiFi)
+
+**Use Cases:**
+
+- Display detailed sync status in testing UI
+- Monitor proxy state validity and expiration
+- Track which clients are available for time sync
+- Debug time synchronization issues
+- Verify Phase 5 client tracking implementation
+
+**Note:** Pi can only be considered reliable when acting as a valid proxy for a client device, as the Pi's RTC does not have a battery backup. The `piProxyState` fields provide visibility into the hierarchical time sync algorithm (ap0 > wlan0 > camera > none).
+
+#### Sync Events (Legacy)
+
 ```json
 {
   "type": "event",

@@ -1490,7 +1490,36 @@ class CameraManager {
       let status = "none";
       let text = "Not Synced";
 
-      if (data.pi.isSynchronized) {
+      // Check for piProxyState information (Phase 5)
+      if (data.pi.piProxyState) {
+        const proxyState = data.pi.piProxyState;
+        const stateValid = proxyState.valid;
+        const stateName = proxyState.state;
+        const ageSeconds = proxyState.ageSeconds;
+        const clientIP = proxyState.clientIP;
+
+        if (stateName !== "none" && stateValid) {
+          // Valid proxy state - show state and time
+          status = "high"; // Valid proxy = high reliability
+          const interfaceName = stateName === "ap0-device" ? "ap0" : stateName === "wlan0-device" ? "wlan0" : stateName;
+
+          if (ageSeconds < 60) {
+            text = `${interfaceName} (${ageSeconds}s ago)`;
+          } else {
+            const minutes = Math.floor(ageSeconds / 60);
+            text = `${interfaceName} (${minutes}m ago)`;
+          }
+        } else if (stateName !== "none" && !stateValid) {
+          // Expired proxy state
+          status = "low";
+          const minutes = Math.floor(ageSeconds / 60);
+          text = `${stateName} (expired ${minutes}m ago)`;
+        } else {
+          // No proxy state
+          text = "No Proxy";
+        }
+      } else if (data.pi.isSynchronized) {
+        // Fallback to old reliability display if piProxyState not available
         status = data.pi.reliability || "low";
         text = status.charAt(0).toUpperCase() + status.slice(1);
       }
