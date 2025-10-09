@@ -17,11 +17,13 @@ class TimeSyncState extends EventEmitter {
       DRIFT_THRESHOLD: 1000, // 1 second in milliseconds
       RELIABILITY_WINDOW: 15 * 60 * 1000, // 15 minutes (reduced from 30 due to high variability)
       SYNC_CHECK_INTERVAL: 15 * 60 * 1000, // Check every 15 minutes
+      RESYNC_INTERVAL: 5 * 60 * 1000, // 5 minutes for ap0/wlan0 resync
+      STATE_VALIDITY_WINDOW: 10 * 60 * 1000, // 10 minutes for proxy state validity
       MINUTE_CHECK_INTERVAL: 60 * 1000, // 1 minute for fallback checks
       MAX_SYNC_HISTORY: 10, // Number of sync events to retain
       VARIABILITY_THRESHOLD: 500, // 0.5 second max acceptable jump
       AUTO_SYNC_ENABLED: true, // Global enable/disable
-      AP_ONLY_AUTO_SYNC: true, // Only auto-sync ap0 clients
+      AP_ONLY_AUTO_SYNC: true, // Only auto-sync ap0 clients (will change to false in Phase 3)
     };
 
     // State tracking
