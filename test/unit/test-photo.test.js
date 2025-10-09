@@ -29,6 +29,24 @@ jest.unstable_mockModule("exiftool-vendored", () => ({
   exiftool: mockExiftool,
 }));
 
+// Mock axios for photo downloads
+const mockAxios = {
+  get: jest.fn(),
+};
+jest.unstable_mockModule("axios", () => ({
+  default: mockAxios,
+}));
+
+// Mock https module for Agent creation
+const mockHttpsAgent = jest.fn().mockImplementation(() => ({
+  destroy: jest.fn(),
+}));
+jest.unstable_mockModule("https", () => ({
+  default: {
+    Agent: mockHttpsAgent,
+  },
+}));
+
 describe("TestPhotoService", () => {
   let TestPhotoService;
   let testPhotoService;
@@ -43,6 +61,12 @@ describe("TestPhotoService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Configure axios mock to return photo data
+    mockAxios.get.mockResolvedValue({
+      status: 200,
+      data: Buffer.from("fake-photo-data"),
+    });
 
     // Mock camera controller
     mockCameraController = {
@@ -219,18 +243,8 @@ describe("TestPhotoService", () => {
         "/DCIM/100CANON/IMG_0001.JPG",
       );
 
-      // Mock file size retrieval (kind=info)
-      mockCameraController.client.get.mockResolvedValueOnce({
-        status: 200,
-        data: { filesize: 12345 },
-      });
-
-      // Mock download photo
-      const mockImageData = Buffer.from("fake-jpeg-data");
-      mockCameraController.client.get.mockResolvedValueOnce({
-        status: 200,
-        data: mockImageData,
-      });
+      // Note: File size retrieval is skipped in current implementation to avoid connection conflicts
+      // Photo download now uses axios directly (mocked in beforeEach)
 
       // Mock restore quality setting
       mockCameraController.client.put.mockResolvedValueOnce({
@@ -269,12 +283,12 @@ describe("TestPhotoService", () => {
         60000,
       );
 
-      // Verify photo was downloaded with new 60s timeout
-      expect(mockCameraController.client.get).toHaveBeenCalledWith(
+      // Verify photo was downloaded via axios with 120s timeout (2 minutes for large files)
+      expect(mockAxios.get).toHaveBeenCalledWith(
         `${mockCameraController.baseUrl}/DCIM/100CANON/IMG_0001.JPG`,
         expect.objectContaining({
           responseType: "arraybuffer",
-          timeout: 60000,
+          timeout: 120000, // 2 minutes for large CR3 files
         }),
       );
 
@@ -365,16 +379,8 @@ describe("TestPhotoService", () => {
         "/DCIM/100CANON/IMG_0001.JPG",
       );
 
-      // Mock file size retrieval success
-      mockCameraController.client.get.mockResolvedValueOnce({
-        status: 200,
-        data: { filesize: 12345 },
-      });
-
-      // Mock download failure
-      mockCameraController.client.get.mockRejectedValueOnce(
-        new Error("Download failed"),
-      );
+      // Mock download failure via axios (after max retries)
+      mockAxios.get.mockRejectedValue(new Error("Download failed"));
 
       // Mock restore quality (should still be called)
       mockCameraController.client.put.mockResolvedValueOnce({ status: 200 });
@@ -560,49 +566,8 @@ describe("TestPhotoService", () => {
       expect(result.processingTimeMs).toBeLessThan(totalElapsed);
     });
 
-    test("should retrieve file size before download for progress tracking", async () => {
-      // Setup mocks for successful capture
-      mockCameraController.client.get.mockResolvedValueOnce({
-        status: 200,
-        data: {
-          stillimagequality: {
-            value: { jpeg: "large_fine", raw: "off" },
-            ability: { jpeg: ["large_fine", "small_fine"], raw: ["off"] },
-          },
-        },
-      });
-      mockCameraController.client.put.mockResolvedValue({ status: 200 });
-      mockCameraController.client.post.mockResolvedValueOnce({ status: 200 });
-      mockWaitForPhotoComplete.mockResolvedValueOnce(
-        "/DCIM/100CANON/IMG_0001.JPG",
-      );
-
-      // Mock kind=info endpoint to return file size
-      const fileSize = 5242880; // 5MB
-      mockCameraController.client.get.mockResolvedValueOnce({
-        status: 200,
-        data: {
-          filesize: fileSize,
-          name: "IMG_0001.JPG",
-        },
-      });
-
-      // Mock photo download
-      mockCameraController.client.get.mockResolvedValueOnce({
-        status: 200,
-        data: Buffer.from("fake-jpeg-data"),
-      });
-
-      mockExiftool.read.mockResolvedValueOnce({ ISO: 6400 });
-
-      await testPhotoService.capturePhoto(false);
-
-      // Verify kind=info was called before download
-      expect(mockCameraController.client.get).toHaveBeenCalledWith(
-        `${mockCameraController.baseUrl}/DCIM/100CANON/IMG_0001.JPG?kind=info`,
-        { timeout: 5000 },
-      );
-    });
+    // Note: File size retrieval test removed - implementation now skips file size
+    // to avoid connection conflicts. Download uses axios directly with no pre-download size check.
 
     test("should emit download progress events via WebSocket", async () => {
       // Setup mocks
@@ -621,15 +586,9 @@ describe("TestPhotoService", () => {
         "/DCIM/100CANON/IMG_0001.JPG",
       );
 
-      // Mock file size
+      // Mock axios download with progress events
       const fileSize = 5242880; // 5MB
-      mockCameraController.client.get.mockResolvedValueOnce({
-        status: 200,
-        data: { filesize: fileSize },
-      });
-
-      // Mock photo download with progress events
-      mockCameraController.client.get.mockImplementationOnce((url, config) => {
+      mockAxios.get.mockImplementationOnce((url, config) => {
         // Simulate progress events
         if (config.onDownloadProgress) {
           config.onDownloadProgress({ loaded: 2621440, total: fileSize }); // 50%
@@ -720,13 +679,8 @@ describe("TestPhotoService", () => {
         "/DCIM/100CANON/IMG_0001.JPG",
       );
 
-      // No file size available (info endpoint failed)
-      mockCameraController.client.get.mockRejectedValueOnce(
-        new Error("Info failed"),
-      );
-
-      // Mock photo download with progress events (no total)
-      mockCameraController.client.get.mockImplementationOnce((url, config) => {
+      // Mock axios download with progress events (no total)
+      mockAxios.get.mockImplementationOnce((url, config) => {
         if (config.onDownloadProgress) {
           // Axios may not provide 'total' if Content-Length header is missing
           config.onDownloadProgress({ loaded: 2621440, total: 0 });
@@ -748,7 +702,7 @@ describe("TestPhotoService", () => {
       );
     });
 
-    test("should increase download timeout to 60s for large RAW files", async () => {
+    test("should use 120s timeout for photo downloads (including large RAW files)", async () => {
       // Setup mocks
       mockCameraController.client.get.mockResolvedValueOnce({
         status: 200,
@@ -765,27 +719,15 @@ describe("TestPhotoService", () => {
         "/DCIM/100CANON/IMG_0001.JPG",
       );
 
-      // Mock file size
-      mockCameraController.client.get.mockResolvedValueOnce({
-        status: 200,
-        data: { filesize: 5242880 },
-      });
-
-      // Mock photo download
-      mockCameraController.client.get.mockResolvedValueOnce({
-        status: 200,
-        data: Buffer.from("fake-jpeg-data"),
-      });
-
       mockExiftool.read.mockResolvedValueOnce({ ISO: 6400 });
 
       await testPhotoService.capturePhoto(false);
 
-      // Verify timeout was increased to 60s
-      expect(mockCameraController.client.get).toHaveBeenCalledWith(
+      // Verify axios download was called with 120s timeout (2 minutes for large CR3 files)
+      expect(mockAxios.get).toHaveBeenCalledWith(
         expect.stringContaining("/DCIM/100CANON/IMG_0001.JPG"),
         expect.objectContaining({
-          timeout: 60000, // 60 seconds
+          timeout: 120000, // 2 minutes for large CR3 files
           responseType: "arraybuffer",
         }),
       );
