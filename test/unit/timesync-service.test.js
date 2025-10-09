@@ -78,15 +78,18 @@ describe("TimeSyncService", () => {
       expect(sentMessage.requestId).toBeDefined();
     });
 
-    test("should not request time sync from non-AP client", async () => {
+    test("should request time sync from wlan0 client (Phase 3)", async () => {
       await timeSyncService.handleClientConnection(
         "192.168.1.100",
         "wlan0",
         mockWs,
       );
 
-      // Should not send time-sync-request
-      expect(mockWs.send).not.toHaveBeenCalled();
+      // Phase 3: wlan0 clients should be auto-synced
+      expect(mockWs.send).toHaveBeenCalled();
+      const sentMessage = JSON.parse(mockWs.send.mock.calls[0][0]);
+      expect(sentMessage.type).toBe("time-sync-request");
+      expect(sentMessage.requestId).toBeDefined();
     });
   });
 

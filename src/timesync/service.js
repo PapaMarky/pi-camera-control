@@ -79,6 +79,38 @@ class TimeSyncService {
       return;
     }
 
+    // Rule 2: wlan0 Client Connection - Check if we should defer to valid ap0 state
+    if (
+      clientInterface === "wlan0" &&
+      this.piProxyState.state === "ap0-device" &&
+      this.piProxyState.isValid()
+    ) {
+      logger.info(
+        `TimeSync: Ignoring wlan0 connection from ${clientIP} - ap0 state is valid`,
+      );
+      this.logActivity(
+        `Device ${clientIP} connected (wlan0) - deferring to ap0 proxy`,
+        "info",
+      );
+      return;
+    }
+
+    // Rule 2b: wlan0 Client Connection - Check if already in wlan0-device state
+    if (
+      clientInterface === "wlan0" &&
+      this.piProxyState.state === "wlan0-device" &&
+      this.piProxyState.isValid()
+    ) {
+      logger.info(
+        `TimeSync: Ignoring wlan0 connection from ${clientIP} - already have wlan0 proxy`,
+      );
+      this.logActivity(
+        `Device ${clientIP} connected (wlan0) - already synchronized with another wlan0 device`,
+        "info",
+      );
+      return;
+    }
+
     // Check if auto-sync should be performed
     if (!this.state.shouldAutoSync(clientIP, clientInterface)) {
       logger.debug(
@@ -99,16 +131,14 @@ class TimeSyncService {
       "info",
     );
 
-    // Update state optimistically when initiating sync (prevents duplicate ap0 connections)
+    // Update state optimistically when initiating sync
+    // (Early returns above ensure we only reach here if sync should proceed)
     if (clientInterface === "ap0") {
       this.piProxyState.updateState("ap0-device", clientIP);
       this.startResyncTimer("ap0");
     } else if (clientInterface === "wlan0") {
-      // Only set wlan0 state if no valid ap0 state exists
-      if (!(this.piProxyState.state === "ap0-device" && this.piProxyState.isValid())) {
-        this.piProxyState.updateState("wlan0-device", clientIP);
-        this.startResyncTimer("wlan0");
-      }
+      this.piProxyState.updateState("wlan0-device", clientIP);
+      this.startResyncTimer("wlan0");
     }
 
     // Wait a moment for client to be ready (skip in test environment)
