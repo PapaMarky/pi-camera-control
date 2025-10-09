@@ -268,7 +268,7 @@ describe("TestPhotoService", () => {
       expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
         1,
         `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
-        { value: { jpeg: "small2", raw: "off" } },
+        { value: { jpeg: "small2", raw: "none" } },
       );
 
       // Verify shutter button was pressed
@@ -788,7 +788,7 @@ describe("TestPhotoService", () => {
       expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
         1,
         `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
-        { value: { jpeg: "small2", raw: "off" } },
+        { value: { jpeg: "small2", raw: "none" } },
       );
 
       // Verify quality was restored to original RAW-only settings
@@ -845,7 +845,7 @@ describe("TestPhotoService", () => {
       expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
         1,
         `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
-        { value: { jpeg: "small2", raw: "off" } },
+        { value: { jpeg: "small2", raw: "none" } },
       );
 
       // Verify original settings were restored
@@ -940,7 +940,7 @@ describe("TestPhotoService", () => {
       expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
         1,
         `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
-        { value: { jpeg: "small2", raw: "off" } },
+        { value: { jpeg: "small2", raw: "none" } },
       );
 
       // Verify original RAW+JPEG settings were restored
