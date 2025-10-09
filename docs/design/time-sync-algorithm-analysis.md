@@ -1,7 +1,7 @@
 # Time Synchronization Algorithm Analysis
 
 **Date:** 2025-10-08
-**Status:** Phase 3 Complete
+**Status:** Phase 4 Complete
 **Purpose:** Analyze proposed time sync improvements for logical consistency
 
 ---
@@ -96,7 +96,41 @@
 
 **Committed:** 2025-01-09
 
-### ⏳ Phase 4: Camera Sync with State (NOT STARTED)
+### ✅ Phase 4: Camera Sync with State (COMPLETE)
+
+**Completed:**
+
+- ✅ Implemented `syncPiFromCamera()` method in `src/timesync/service.js`
+  - Syncs Pi time from camera when proxy state is invalid
+  - Updates piProxyState to 'none' after sync (Pi not acting as proxy)
+- ✅ Updated `syncCameraTime()` to check piProxyState validity
+  - Changed from `this.state.isPiTimeReliable()` to `this.piProxyState.isValid()`
+  - Only syncs camera when Pi has valid proxy state
+- ✅ Updated `handleCameraConnection()` to implement Rule 3A and Rule 3B
+  - Rule 3A: Client available → sync Pi from client, then sync camera from Pi
+  - Rule 3B part 1: Valid proxy state → sync camera from Pi
+  - Rule 3B part 2: No valid proxy → sync Pi from camera
+- ✅ Integration tests written: `test/integration/timesync-camera-state.test.js`
+  - 14 test cases covering camera sync scenarios
+  - Tests for Rule 3A (camera with client available)
+  - Tests for Rule 3B part 1 (valid proxy state)
+  - Tests for Rule 3B part 2 (no valid proxy)
+  - Tests for state validity checks
+- ✅ Updated unit tests in `test/unit/timesync-service.test.js`
+  - Updated camera sync tests for Phase 4 behavior
+  - Added test for Rule 3B part 2 (sync Pi from camera)
+- ✅ Full test suite passing: **682/682 tests (100%)** ✨
+
+**Key Implementation:**
+- Camera sync now respects piProxyState hierarchy
+- Camera acts as fallback time source when Pi has no valid proxy
+- Three sync paths implemented:
+  1. Client available → sync via client (Rule 3A)
+  2. Valid proxy state → sync camera from Pi (Rule 3B-1)
+  3. No valid proxy → sync Pi from camera (Rule 3B-2)
+- Pi never acts as time source unless it's a valid proxy for a client
+
+**Committed:** 2025-01-09
 
 ### ⏳ Phase 5: WebSocket Client Interface Tracking (NOT STARTED)
 

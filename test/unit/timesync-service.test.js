@@ -143,15 +143,27 @@ describe("TimeSyncService", () => {
   });
 
   describe("Camera Synchronization", () => {
-    test("should sync camera time when camera connects and Pi time is reliable", async () => {
-      // Set Pi as synchronized
+    test("should sync camera time when camera connects and Pi has valid proxy state (Phase 4)", async () => {
+      // Phase 4: Connect ap0 client to establish valid proxy state
+      await timeSyncService.handleClientConnection(
+        "192.168.4.2",
+        "ap0",
+        mockWs,
+      );
+
       const clientTime = new Date();
       await timeSyncService.handleClientTimeResponse(
         "192.168.4.2",
         clientTime.toISOString(),
       );
 
-      // Mock camera as connected (using 'connected' property, not 'isConnected()' method)
+      // Verify piProxyState is valid
+      expect(timeSyncService.piProxyState.isValid()).toBe(true);
+
+      // Disconnect client (state should remain valid for 10 minutes)
+      timeSyncService.connectedClients.delete("192.168.4.2");
+
+      // Mock camera as connected
       mockCameraController.connected = true;
 
       // Mock camera time with 3 second drift
@@ -162,24 +174,37 @@ describe("TimeSyncService", () => {
       );
       mockCameraController.setCameraDateTime.mockResolvedValue(true);
 
-      // Trigger camera connection
+      // Trigger camera connection (Rule 3B part 1: valid proxy state)
       await timeSyncService.handleCameraConnection();
 
       // Should get current camera time
       expect(mockCameraController.getCameraDateTime).toHaveBeenCalled();
 
-      // Should set camera time to match Pi
+      // Should set camera time to match Pi (sync camera from Pi)
       expect(mockCameraController.setCameraDateTime).toHaveBeenCalled();
     });
 
-    test("should not sync camera when Pi time is not reliable", async () => {
-      // Pi is not synchronized (no client sync has occurred)
+    test("should sync Pi from camera when proxy state is invalid (Phase 4: Rule 3B part 2)", async () => {
+      // Pi has no valid proxy state (state is 'none')
+      expect(timeSyncService.piProxyState.state).toBe("none");
+
+      // Mock camera as connected
       mockCameraController.connected = true;
 
+      // Mock camera time (camera is ahead of Pi)
+      const now = Date.now();
+      const cameraTime = new Date(now + 3000);
+      mockCameraController.getCameraDateTime.mockResolvedValue(
+        cameraTime.toISOString(),
+      );
+
+      // Trigger camera connection (Rule 3B part 2: no valid proxy, sync Pi from camera)
       await timeSyncService.handleCameraConnection();
 
-      // Should not attempt to get or set camera time
-      expect(mockCameraController.getCameraDateTime).not.toHaveBeenCalled();
+      // Should get camera time (to sync Pi from camera)
+      expect(mockCameraController.getCameraDateTime).toHaveBeenCalled();
+
+      // Should NOT set camera time (we're syncing Pi from camera, not vice versa)
       expect(mockCameraController.setCameraDateTime).not.toHaveBeenCalled();
     });
 
