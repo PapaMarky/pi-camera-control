@@ -97,11 +97,7 @@ describe("TimeSync wlan0 Sync with PiProxyState Integration", () => {
       const wlan0ClientIP = "192.168.1.100";
 
       // Connect ap0 client first
-      await timeSyncService.handleClientConnection(
-        ap0ClientIP,
-        "ap0",
-        mockWs,
-      );
+      await timeSyncService.handleClientConnection(ap0ClientIP, "ap0", mockWs);
       jest.advanceTimersByTime(1100);
 
       // Sync with ap0
@@ -138,11 +134,7 @@ describe("TimeSync wlan0 Sync with PiProxyState Integration", () => {
       const wlan0ClientIP = "192.168.1.100";
 
       // Connect and sync with ap0
-      await timeSyncService.handleClientConnection(
-        ap0ClientIP,
-        "ap0",
-        mockWs,
-      );
+      await timeSyncService.handleClientConnection(ap0ClientIP, "ap0", mockWs);
       jest.advanceTimersByTime(1100);
       await timeSyncService.handleClientTimeResponse(
         ap0ClientIP,
@@ -207,11 +199,7 @@ describe("TimeSync wlan0 Sync with PiProxyState Integration", () => {
       mockWs2.send = jest.fn();
       mockWs2.readyState = 1;
 
-      await timeSyncService.handleClientConnection(
-        ap0ClientIP,
-        "ap0",
-        mockWs2,
-      );
+      await timeSyncService.handleClientConnection(ap0ClientIP, "ap0", mockWs2);
 
       // State should transition to ap0-device
       expect(timeSyncService.piProxyState.state).toBe("ap0-device");
@@ -236,11 +224,7 @@ describe("TimeSync wlan0 Sync with PiProxyState Integration", () => {
       mockWs2.send = jest.fn();
       mockWs2.readyState = 1;
 
-      await timeSyncService.handleClientConnection(
-        ap0ClientIP,
-        "ap0",
-        mockWs2,
-      );
+      await timeSyncService.handleClientConnection(ap0ClientIP, "ap0", mockWs2);
 
       // New timer should be set (different from wlan0 timer)
       expect(timeSyncService.resyncTimer).not.toEqual(wlan0Timer);
@@ -277,10 +261,9 @@ describe("TimeSync wlan0 Sync with PiProxyState Integration", () => {
       mockWs2.readyState = 1;
 
       // Add ap0 client to connected clients without triggering connection handler
-      timeSyncService.connectedClients.set(ap0ClientIP, {
+      timeSyncService.connectedClients.ap0.push({
+        ip: ap0ClientIP,
         ws: mockWs2,
-        interface: "ap0",
-        lastSeen: new Date(),
       });
 
       // Advance to resync time (5 minutes)
@@ -572,11 +555,7 @@ describe("TimeSync wlan0 Sync with PiProxyState Integration", () => {
       mockWs1.send = jest.fn();
       mockWs1.readyState = 1;
 
-      await timeSyncService.handleClientConnection(
-        ap0ClientIP,
-        "ap0",
-        mockWs1,
-      );
+      await timeSyncService.handleClientConnection(ap0ClientIP, "ap0", mockWs1);
       jest.advanceTimersByTime(1100);
 
       await timeSyncService.handleClientTimeResponse(

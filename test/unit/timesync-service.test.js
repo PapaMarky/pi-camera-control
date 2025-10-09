@@ -161,7 +161,7 @@ describe("TimeSyncService", () => {
       expect(timeSyncService.piProxyState.isValid()).toBe(true);
 
       // Disconnect client (state should remain valid for 10 minutes)
-      timeSyncService.connectedClients.delete("192.168.4.2");
+      timeSyncService.handleClientDisconnection("192.168.4.2");
 
       // Mock camera as connected
       mockCameraController.connected = true;

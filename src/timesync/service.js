@@ -17,7 +17,7 @@ class TimeSyncService {
     this.cameraController = null;
     this.syncCheckTimer = null;
     this.resyncTimer = null;
-    this.connectedClients = new Map(); // Track connected clients
+    this.connectedClients = { ap0: [], wlan0: [] }; // Track connected clients by interface
   }
 
   /**
@@ -65,7 +65,7 @@ class TimeSyncService {
     );
 
     // Store client info
-    this.connectedClients.set(clientIP, { interface: clientInterface, ws });
+    this.connectedClients[clientInterface].push({ ip: clientIP, ws });
 
     // Rule 1: ap0 Client Connection - Check if already in ap0-device state
     if (clientInterface === "ap0" && this.piProxyState.state === "ap0-device") {
@@ -159,14 +159,17 @@ class TimeSyncService {
    */
   handleClientDisconnection(clientIP) {
     logger.info(`Client ${clientIP} disconnected`);
-    this.connectedClients.delete(clientIP);
 
-    // Check if any AP clients remain
-    const hasApClient = Array.from(this.connectedClients.values()).some(
-      (client) => client.interface === "ap0",
+    // Remove client from both arrays
+    this.connectedClients.ap0 = this.connectedClients.ap0.filter(
+      (client) => client.ip !== clientIP,
+    );
+    this.connectedClients.wlan0 = this.connectedClients.wlan0.filter(
+      (client) => client.ip !== clientIP,
     );
 
-    if (!hasApClient) {
+    // Check if any AP clients remain
+    if (this.connectedClients.ap0.length === 0) {
       this.state.markNoClient();
     }
   }
@@ -201,16 +204,17 @@ class TimeSyncService {
 
     if (timerType === "ap0") {
       // Check if original ap0 client is still connected
-      const originalClient = Array.from(this.connectedClients.entries()).find(
-        ([ip, _client]) => ip === this.piProxyState.clientIP,
+      const originalClient = this.connectedClients.ap0.find(
+        (client) => client.ip === this.piProxyState.clientIP,
       );
 
       if (originalClient) {
-        const [clientIP, { ws }] = originalClient;
-        logger.debug(`ap0 resync: original client ${clientIP} still connected`);
+        logger.debug(
+          `ap0 resync: original client ${originalClient.ip} still connected`,
+        );
         // Update acquiredAt to keep state fresh (only when client is connected)
         this.piProxyState.acquiredAt = new Date();
-        this.requestClientTime(clientIP, ws);
+        this.requestClientTime(originalClient.ip, originalClient.ws);
       } else {
         // Original ap0 client lost - trigger failover cascade
         // DO NOT update acquiredAt - let state age naturally if no clients available
@@ -219,35 +223,27 @@ class TimeSyncService {
       }
     } else if (timerType === "wlan0") {
       // wlan0 must check for ap0 before each resync
-      const hasAp0 = Array.from(this.connectedClients.values()).some(
-        (client) => client.interface === "ap0",
-      );
-
-      if (hasAp0) {
+      if (this.connectedClients.ap0.length > 0) {
         logger.info("wlan0 resync: ap0 client available, switching to ap0");
-        const ap0Client = Array.from(this.connectedClients.entries()).find(
-          ([_ip, client]) => client.interface === "ap0",
-        );
-        if (ap0Client) {
-          const [clientIP, { ws }] = ap0Client;
-          clearInterval(this.resyncTimer);
-          this.resyncTimer = null;
-          await this.handleClientConnection(clientIP, "ap0", ws);
-        }
+        const ap0Client = this.connectedClients.ap0[0];
+        clearInterval(this.resyncTimer);
+        this.resyncTimer = null;
+        await this.handleClientConnection(ap0Client.ip, "ap0", ap0Client.ws);
         return;
       }
 
       // Check if original wlan0 client is still connected
-      const originalClient = Array.from(this.connectedClients.entries()).find(
-        ([ip, _client]) => ip === this.piProxyState.clientIP,
+      const originalClient = this.connectedClients.wlan0.find(
+        (client) => client.ip === this.piProxyState.clientIP,
       );
 
       if (originalClient) {
-        const [clientIP, { ws }] = originalClient;
-        logger.debug(`wlan0 resync: original client ${clientIP} still connected`);
+        logger.debug(
+          `wlan0 resync: original client ${originalClient.ip} still connected`,
+        );
         // Update acquiredAt to keep state fresh (only when client is connected)
         this.piProxyState.acquiredAt = new Date();
-        this.requestClientTime(clientIP, ws);
+        this.requestClientTime(originalClient.ip, originalClient.ws);
       } else {
         // Original wlan0 client lost - trigger failover cascade
         // DO NOT update acquiredAt - let state age naturally if no clients available
@@ -271,32 +267,42 @@ class TimeSyncService {
   async handleClientFailover(lostInterface) {
     if (lostInterface === "ap0") {
       // ap0 client lost during resync
-      const availableAp0 = Array.from(this.connectedClients.entries()).filter(
-        ([_ip, client]) => client.interface === "ap0",
+      const availableAp0 = this.connectedClients.ap0.filter(
+        (client) => client.ws.readyState === 1, // 1 = OPEN
       );
 
-      const availableWlan0 = Array.from(this.connectedClients.entries()).filter(
-        ([_ip, client]) => client.interface === "wlan0",
+      const availableWlan0 = this.connectedClients.wlan0.filter(
+        (client) => client.ws.readyState === 1, // 1 = OPEN
       );
 
       if (availableAp0.length > 0) {
         // Treat different ap0 client as new connection
         logger.info("ap0 client lost - failing over to different ap0 client");
-        const [clientIP, { ws }] = availableAp0[0];
+        const fallbackClient = availableAp0[0];
         // Reset state to allow new connection
         this.piProxyState.updateState("none", null);
-        await this.handleClientConnection(clientIP, "ap0", ws);
+        await this.handleClientConnection(
+          fallbackClient.ip,
+          "ap0",
+          fallbackClient.ws,
+        );
       } else if (availableWlan0.length > 0) {
         // Fallback to wlan0 as new connection
         logger.info("ap0 client lost - failing over to wlan0 client");
-        const [clientIP, { ws }] = availableWlan0[0];
+        const fallbackClient = availableWlan0[0];
         // Reset state to allow new connection
         this.piProxyState.updateState("none", null);
-        await this.handleClientConnection(clientIP, "wlan0", ws);
+        await this.handleClientConnection(
+          fallbackClient.ip,
+          "wlan0",
+          fallbackClient.ws,
+        );
       } else {
         // No clients available - cancel timer but preserve state
         // State will expire naturally after validity window (10 min)
-        logger.info("ap0 client lost - no fallback clients available, state will expire naturally");
+        logger.info(
+          "ap0 client lost - no fallback clients available, state will expire naturally",
+        );
         if (this.resyncTimer) {
           clearInterval(this.resyncTimer);
           this.resyncTimer = null;
@@ -305,21 +311,29 @@ class TimeSyncService {
       }
     } else if (lostInterface === "wlan0") {
       // wlan0 client lost during resync
-      const availableWlan0 = Array.from(this.connectedClients.entries()).filter(
-        ([_ip, client]) => client.interface === "wlan0",
+      const availableWlan0 = this.connectedClients.wlan0.filter(
+        (client) => client.ws.readyState === 1, // 1 = OPEN
       );
 
       if (availableWlan0.length > 0) {
         // Treat different wlan0 client as new connection
-        logger.info("wlan0 client lost - failing over to different wlan0 client");
-        const [clientIP, { ws }] = availableWlan0[0];
+        logger.info(
+          "wlan0 client lost - failing over to different wlan0 client",
+        );
+        const fallbackClient = availableWlan0[0];
         // Reset state to allow new connection
         this.piProxyState.updateState("none", null);
-        await this.handleClientConnection(clientIP, "wlan0", ws);
+        await this.handleClientConnection(
+          fallbackClient.ip,
+          "wlan0",
+          fallbackClient.ws,
+        );
       } else {
         // No wlan0 clients available - cancel timer but preserve state
         // State will expire naturally after validity window (10 min)
-        logger.info("wlan0 client lost - no fallback clients available, state will expire naturally");
+        logger.info(
+          "wlan0 client lost - no fallback clients available, state will expire naturally",
+        );
         if (this.resyncTimer) {
           clearInterval(this.resyncTimer);
           this.resyncTimer = null;
@@ -345,7 +359,10 @@ class TimeSyncService {
 
     // Set timeout for response
     setTimeout(() => {
-      if (this.connectedClients.has(clientIP)) {
+      const clientExists =
+        this.connectedClients.ap0.some((c) => c.ip === clientIP) ||
+        this.connectedClients.wlan0.some((c) => c.ip === clientIP);
+      if (clientExists) {
         logger.warn(`No time sync response from ${clientIP}`);
       }
     }, 5000);
@@ -374,8 +391,12 @@ class TimeSyncService {
       logger.info(`Time drift detected: ${driftMs}ms from client ${clientIP}`);
 
       // Determine client interface for state updates
-      const clientInfo = this.connectedClients.get(clientIP);
-      const clientInterface = clientInfo?.interface || "unknown";
+      const isAp0 = this.connectedClients.ap0.some((c) => c.ip === clientIP);
+      const clientInterface = isAp0
+        ? "ap0"
+        : this.connectedClients.wlan0.some((c) => c.ip === clientIP)
+          ? "wlan0"
+          : "unknown";
 
       // Check if drift exceeds threshold
       if (Math.abs(driftMs) > this.state.config.DRIFT_THRESHOLD) {
@@ -403,9 +424,15 @@ class TimeSyncService {
 
         // Update acquiredAt to reflect actual sync time
         // (State was already set optimistically in handleClientConnection)
-        if (clientInterface === "ap0" && this.piProxyState.state === "ap0-device") {
+        if (
+          clientInterface === "ap0" &&
+          this.piProxyState.state === "ap0-device"
+        ) {
           this.piProxyState.acquiredAt = new Date();
-        } else if (clientInterface === "wlan0" && this.piProxyState.state === "wlan0-device") {
+        } else if (
+          clientInterface === "wlan0" &&
+          this.piProxyState.state === "wlan0-device"
+        ) {
           this.piProxyState.acquiredAt = new Date();
         }
 
@@ -449,9 +476,15 @@ class TimeSyncService {
         this.state.recordPiSync(clientTimestamp, clientIP, driftMs);
 
         // Update acquiredAt even when no sync needed (resync scenario)
-        if (clientInterface === "ap0" && this.piProxyState.state === "ap0-device") {
+        if (
+          clientInterface === "ap0" &&
+          this.piProxyState.state === "ap0-device"
+        ) {
           this.piProxyState.acquiredAt = new Date();
-        } else if (clientInterface === "wlan0" && this.piProxyState.state === "wlan0-device") {
+        } else if (
+          clientInterface === "wlan0" &&
+          this.piProxyState.state === "wlan0-device"
+        ) {
           this.piProxyState.acquiredAt = new Date();
         }
 
@@ -694,38 +727,28 @@ class TimeSyncService {
     logger.info("Camera connected, checking time sync");
 
     // Check if any clients are connected
-    const hasAp0 = Array.from(this.connectedClients.values()).some(
-      (client) => client.interface === "ap0",
-    );
-    const hasWlan0 = Array.from(this.connectedClients.values()).some(
-      (client) => client.interface === "wlan0",
-    );
+    const hasAp0 = this.connectedClients.ap0.length > 0;
+    const hasWlan0 = this.connectedClients.wlan0.length > 0;
 
     if (hasAp0 || hasWlan0) {
       // Rule 3A: Client available - use client as time source
       logger.info("Camera connection: Client available, applying Rule 3A");
 
       // Select client (preference: ap0 > wlan0)
-      const clientEntry = hasAp0
-        ? Array.from(this.connectedClients.entries()).find(
-            ([_ip, client]) => client.interface === "ap0",
-          )
-        : Array.from(this.connectedClients.entries()).find(
-            ([_ip, client]) => client.interface === "wlan0",
-          );
+      const client = hasAp0
+        ? this.connectedClients.ap0[0]
+        : this.connectedClients.wlan0[0];
+      const clientInterface = hasAp0 ? "ap0" : "wlan0";
 
-      if (clientEntry) {
-        const [clientIP, { ws, interface: clientInterface }] = clientEntry;
-        logger.info(
-          `Syncing Pi from ${clientInterface} client ${clientIP} before camera sync`,
-        );
+      logger.info(
+        `Syncing Pi from ${clientInterface} client ${client.ip} before camera sync`,
+      );
 
-        // Request time from client (will trigger handleClientTimeResponse which updates state)
-        this.requestClientTime(clientIP, ws);
+      // Request time from client (will trigger handleClientTimeResponse which updates state)
+      this.requestClientTime(client.ip, client.ws);
 
-        // Note: Camera sync will happen in handleClientTimeResponse after Pi is synced
-        // This ensures camera gets the fresh client time via Pi proxy
-      }
+      // Note: Camera sync will happen in handleClientTimeResponse after Pi is synced
+      // This ensures camera gets the fresh client time via Pi proxy
     } else if (this.piProxyState.isValid()) {
       // Rule 3B (part 1): No client, but Pi has valid proxy state
       logger.info(
@@ -773,18 +796,14 @@ class TimeSyncService {
    */
   async performScheduledCheck() {
     // Find an AP client to sync with
-    const apClient = Array.from(this.connectedClients.entries()).find(
-      ([_ip, client]) => client.interface === "ap0",
-    );
-
-    if (apClient) {
-      const [clientIP, { ws }] = apClient;
-      logger.debug(`Performing scheduled sync check with ${clientIP}`);
+    if (this.connectedClients.ap0.length > 0) {
+      const apClient = this.connectedClients.ap0[0];
+      logger.debug(`Performing scheduled sync check with ${apClient.ip}`);
       this.logActivity(
-        `Scheduled time sync check with device ${clientIP}`,
+        `Scheduled time sync check with device ${apClient.ip}`,
         "info",
       );
-      this.requestClientTime(clientIP, ws);
+      this.requestClientTime(apClient.ip, apClient.ws);
     } else {
       // No AP client available
       this.state.markNoClient();
@@ -805,18 +824,14 @@ class TimeSyncService {
    */
   startMinuteChecks() {
     this.minuteCheckTimer = setInterval(() => {
-      const apClient = Array.from(this.connectedClients.entries()).find(
-        ([_ip, client]) => client.interface === "ap0",
-      );
-
-      if (apClient) {
+      if (this.connectedClients.ap0.length > 0) {
         // Client found, stop minute checks
         clearInterval(this.minuteCheckTimer);
         this.minuteCheckTimer = null;
 
         // Perform sync
-        const [clientIP, { ws }] = apClient;
-        this.requestClientTime(clientIP, ws);
+        const apClient = this.connectedClients.ap0[0];
+        this.requestClientTime(apClient.ip, apClient.ws);
 
         // Log recovery
         const withoutClientMs =
