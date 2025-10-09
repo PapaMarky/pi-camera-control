@@ -950,6 +950,60 @@ describe("TestPhotoService", () => {
         { value: { jpeg: "large_fine", raw: "raw" } },
       );
     });
+
+    test("should handle JPEG-only mode by NOT including 'raw' property (useCurrentSettings=false)", async () => {
+      // Camera is in JPEG-only mode (no 'raw' property in value)
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          stillimagequality: {
+            value: { jpeg: "large_fine" }, // JPEG-only mode - no 'raw' property
+            ability: {
+              jpeg: ["large_fine", "medium_fine", "small2"],
+            },
+          },
+        },
+      });
+
+      mockCameraController.client.put.mockResolvedValueOnce({ status: 200 });
+      mockCameraController.client.post.mockResolvedValueOnce({ status: 200 });
+      mockWaitForPhotoComplete.mockResolvedValueOnce(
+        "/DCIM/100CANON/IMG_0001.JPG",
+      );
+
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: { filesize: 12345 },
+      });
+
+      mockCameraController.client.get.mockResolvedValueOnce({
+        status: 200,
+        data: Buffer.from("fake-jpeg-data"),
+      });
+
+      mockCameraController.client.put.mockResolvedValueOnce({ status: 200 });
+      mockExiftool.read.mockResolvedValueOnce({
+        ISO: 6400,
+        DateTimeOriginal: new Date("2025-10-02T12:30:00"),
+      });
+
+      await testPhotoService.capturePhoto(false);
+
+      // Verify quality was set to smallest JPEG WITHOUT 'raw' property
+      // (because original settings didn't have it - JPEG-only mode)
+      expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
+        1,
+        `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
+        { value: { jpeg: "small2" } }, // NO 'raw' property!
+      );
+
+      // Verify original JPEG-only settings were restored (no 'raw' property)
+      expect(mockCameraController.client.put).toHaveBeenNthCalledWith(
+        2,
+        `${mockCameraController.baseUrl}/ccapi/ver110/shooting/settings/stillimagequality`,
+        { value: { jpeg: "large_fine" } }, // NO 'raw' property!
+      );
+    });
   });
 
   describe("listPhotos()", () => {
