@@ -928,6 +928,8 @@ class TestShotUI {
                   onclick="window.open(this.src, '_blank')"
                   alt="Test photo ${photo.id}">`;
 
+        const fileSize = this.formatFileSize(photo.size);
+
         return `
         <div class="test-photo-card" style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
           ${imageDisplay}
@@ -935,7 +937,7 @@ class TestShotUI {
           <!-- EXIF Metadata -->
           <div class="exif-metadata" data-exif style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0,0,0,0.05); border-radius: 4px; font-size: 0.875rem;">
             <div style="font-weight: 600; margin-bottom: 0.5rem;">Details</div>
-            ${photo.cameraPath ? `<div style="margin-bottom: 0.5rem;"><strong>${photo.cameraPath}${processingTimeDisplay}</strong></div>` : ""}
+            ${photo.cameraPath ? `<div style="margin-bottom: 0.5rem;"><strong>${photo.cameraPath}${processingTimeDisplay}</strong> • ${fileSize}</div>` : `<div style="margin-bottom: 0.5rem;"><strong>${fileSize}</strong></div>`}
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem;">
               ${exifDisplay}
             </div>
@@ -965,12 +967,41 @@ class TestShotUI {
   }
 
   /**
+   * Format file size for display
+   * @param {number} bytes - File size in bytes
+   * @returns {string} Formatted size (e.g., "2.3 MB" or "450 KB")
+   */
+  formatFileSize(bytes) {
+    if (bytes === undefined || bytes === null || bytes < 0) {
+      return "Unknown";
+    }
+
+    if (bytes >= 1024 * 1024) {
+      // Display as megabytes with 1 decimal place
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    } else if (bytes >= 1024) {
+      // Display as kilobytes
+      return `${Math.round(bytes / 1024)} KB`;
+    } else {
+      // Display as bytes
+      return `${bytes} bytes`;
+    }
+  }
+
+  /**
    * Format EXIF metadata for display
    * @param {Object} exif - EXIF data object
    * @returns {string} HTML string for EXIF display
    */
   formatExif(exif) {
     const fields = [];
+
+    // Image Dimensions (display first as most important)
+    if (exif.ImageWidth && exif.ImageHeight) {
+      fields.push(
+        `<div><strong>Dimensions:</strong> ${exif.ImageWidth} × ${exif.ImageHeight}</div>`,
+      );
+    }
 
     // ISO
     if (exif.ISO) {
