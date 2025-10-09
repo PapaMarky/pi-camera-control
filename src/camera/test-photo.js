@@ -181,7 +181,7 @@ export class TestPhotoService {
           // Only include 'raw' property if it exists in original settings
           // When camera is in JPEG-only mode, there is no 'raw' property
           if (originalQuality.hasOwnProperty("raw")) {
-            newQuality.raw = "off"; // Disable RAW to avoid large files for test photos
+            newQuality.raw = "none"; // Disable RAW to avoid large files (Canon uses "none", not "off")
           }
 
           logger.debug("Reducing quality to smallest JPEG for test photo", {
