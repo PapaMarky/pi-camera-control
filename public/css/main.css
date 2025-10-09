@@ -2236,3 +2236,30 @@ input:focus-visible {
     font-size: 0.8125rem;
   }
 }
+
+/* Camera Settings Display - Dark Theme for Night Shooting */
+.camera-settings-dark {
+  background-color: #000000 !important;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.camera-settings-dark .setting-container {
+  background: rgba(30, 30, 30, 0.8) !important;
+}
+
+.camera-settings-dark label {
+  color: #d0d0d0 !important;
+}
+
+.camera-settings-dark select,
+.camera-settings-dark input[type="number"],
+.camera-settings-dark input[type="range"] {
+  background-color: #1a1a1a !important;
+  color: #d0d0d0 !important;
+  border-color: #404040 !important;
+}
+
+.camera-settings-dark .setting-modified-label {
+  color: #ffc107 !important;
+}
