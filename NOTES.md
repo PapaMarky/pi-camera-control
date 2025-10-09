@@ -1,17 +1,20 @@
 # TODO
-
-- Take Photo fails with RAW format.
+- Camera controls
+  - Turn off / on screen
+  - Turn off / on viewfinder.
+- Test Photo Details
+  - image dimensions
+  - image size
 - Timelapse Reports
   - Name of file should match title of timelapse
   - Labels are below values
-  -
+- Camera Settings
+  - value backgrounds are too bright. Change to black bg, grey text.
+
 - Improve time sync:
   - allow sync from wlan
   - If pi is reliablity gets low AND not running a timelapse, sync pi from camera.
   - relability, high to low: client on ap, client on wan, camera, pi
-- Camera controls
-  - Turn off / on screen
-  - Turn off / on viewfinder.
 - Photo time: min, ave, max
   - More info about how long photos are taking when setting up for timelapse.
 - During timelapse:
@@ -21,7 +24,7 @@
 - First image captured should be stored as both first and last. Subsequent images update last.
 
 ## Completed
-
+- ~~Take Photo fails with RAW format.~~
 - ~~When AWB(?) is colortemperature, I should be able to select the color temperature to use.~~ FIXED
   - FIND THE ccapi endpoints
 - ~~File names in timelapse report should include directory name. (not full path)~~ FIXED

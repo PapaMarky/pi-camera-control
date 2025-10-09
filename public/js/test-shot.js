@@ -387,6 +387,9 @@ class TestShotUI {
     const displayDiv = document.getElementById("camera-settings-display");
     if (!displayDiv || !this.settings) return;
 
+    // Apply dark theme class for night shooting
+    displayDiv.classList.add("camera-settings-dark");
+
     // Common settings to display (top priority)
     const commonSettings = [
       "iso",
@@ -412,7 +415,7 @@ class TestShotUI {
 
     if (editableSettings.length === 0) {
       displayDiv.innerHTML =
-        '<p style="color: #666; grid-column: 1 / -1;">No editable settings available</p>';
+        '<p style="color: #d0d0d0; grid-column: 1 / -1;">No editable settings available</p>';
       return;
     }
 
@@ -435,17 +438,18 @@ class TestShotUI {
       const hasChange = this.pendingChanges.hasOwnProperty(key);
 
       const container = document.createElement("div");
-      container.style.cssText = `display: flex; flex-direction: column; gap: 0.5rem; ${hasChange ? "background: rgba(255, 193, 7, 0.1); padding: 0.5rem; border-radius: 4px;" : ""}`;
+      container.className = "setting-container";
+      container.style.cssText = `display: flex; flex-direction: column; gap: 0.5rem; ${hasChange ? "background: rgba(255, 193, 7, 0.15); padding: 0.5rem; border-radius: 4px;" : ""}`;
 
       const label = document.createElement("label");
       label.style.cssText =
-        "font-weight: 600; font-size: 0.875rem; text-transform: uppercase;";
+        "font-weight: 600; font-size: 0.875rem; text-transform: uppercase; color: #d0d0d0;";
       label.textContent = key;
 
       const select = document.createElement("select");
       select.id = `setting-${key}`;
       select.style.cssText =
-        "padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.875rem;";
+        "padding: 0.5rem; border: 1px solid #404040; border-radius: 4px; font-size: 0.875rem; background-color: #1a1a1a; color: #d0d0d0;";
 
       // Add options
       data.ability.forEach((val) => {
@@ -527,11 +531,12 @@ class TestShotUI {
     );
 
     const container = document.createElement("div");
-    container.style.cssText = `display: flex; flex-direction: column; gap: 0.5rem; ${hasChange ? "background: rgba(255, 193, 7, 0.1); padding: 0.5rem; border-radius: 4px;" : ""}`;
+    container.className = "setting-container";
+    container.style.cssText = `display: flex; flex-direction: column; gap: 0.5rem; ${hasChange ? "background: rgba(255, 193, 7, 0.15); padding: 0.5rem; border-radius: 4px;" : ""}`;
 
     const label = document.createElement("label");
     label.style.cssText =
-      "font-weight: 600; font-size: 0.875rem; text-transform: uppercase;";
+      "font-weight: 600; font-size: 0.875rem; text-transform: uppercase; color: #d0d0d0;";
     label.textContent = "COLOR TEMPERATURE";
 
     const controlWrapper = document.createElement("div");
@@ -557,12 +562,12 @@ class TestShotUI {
     input.step = step;
     input.value = currentValue;
     input.style.cssText =
-      "width: 80px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.875rem;";
+      "width: 80px; padding: 0.5rem; border: 1px solid #404040; border-radius: 4px; font-size: 0.875rem; background-color: #1a1a1a; color: #d0d0d0;";
 
     // Kelvin label
     const kelvinLabel = document.createElement("span");
     kelvinLabel.textContent = "K";
-    kelvinLabel.style.cssText = "font-weight: 600;";
+    kelvinLabel.style.cssText = "font-weight: 600; color: #d0d0d0;";
 
     // Synchronize slider and input
     slider.addEventListener("input", (e) => {
