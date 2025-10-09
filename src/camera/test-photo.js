@@ -176,8 +176,13 @@ export class TestPhotoService {
         if (smallestJpeg && smallestJpeg !== originalQuality.jpeg) {
           const newQuality = {
             jpeg: smallestJpeg,
-            raw: "off", // Disable RAW to avoid large files for test photos
           };
+
+          // Only include 'raw' property if it exists in original settings
+          // When camera is in JPEG-only mode, there is no 'raw' property
+          if (originalQuality.hasOwnProperty("raw")) {
+            newQuality.raw = "off"; // Disable RAW to avoid large files for test photos
+          }
 
           logger.debug("Reducing quality to smallest JPEG for test photo", {
             from: originalQuality,
