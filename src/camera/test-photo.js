@@ -372,6 +372,8 @@ export class TestPhotoService {
           WhiteBalance: exifData.WhiteBalance,
           DateTimeOriginal: exifData.DateTimeOriginal,
           Model: exifData.Model,
+          ImageWidth: exifData.ImageWidth,
+          ImageHeight: exifData.ImageHeight,
         };
 
         logger.info("EXIF metadata extracted successfully", {
@@ -426,6 +428,8 @@ export class TestPhotoService {
           WhiteBalance: exif?.WhiteBalance,
           DateTimeOriginal: exif?.DateTimeOriginal,
           Model: exif?.Model,
+          ImageWidth: exif?.ImageWidth,
+          ImageHeight: exif?.ImageHeight,
         },
         filepath,
         size: photoData.length,

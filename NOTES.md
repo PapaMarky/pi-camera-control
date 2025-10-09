@@ -1,15 +1,13 @@
 # TODO
-- Camera controls
-  - Turn off / on screen
-  - Turn off / on viewfinder.
 - Test Photo Details
   - image dimensions
   - image size
+- Camera controls
+  - Turn off / on screen
+  - Turn off / on viewfinder.
 - Timelapse Reports
   - Name of file should match title of timelapse
   - Labels are below values
-- Camera Settings
-  - value backgrounds are too bright. Change to black bg, grey text.
 
 - Improve time sync:
   - allow sync from wlan
@@ -24,6 +22,8 @@
 - First image captured should be stored as both first and last. Subsequent images update last.
 
 ## Completed
+- Camera Settings
+  ~~- value backgrounds are too bright. Change to black bg, grey text.~~ FIXED
 - ~~Take Photo fails with RAW format.~~
 - ~~When AWB(?) is colortemperature, I should be able to select the color temperature to use.~~ FIXED
   - FIND THE ccapi endpoints
