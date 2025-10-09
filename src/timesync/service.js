@@ -550,7 +550,78 @@ class TimeSyncService {
   }
 
   /**
+   * Sync Pi time from camera (Rule 3B - part 2)
+   * Used when Pi has no valid proxy state and camera RTC is more reliable
+   */
+  async syncPiFromCamera() {
+    const cameraController =
+      typeof this.cameraController === "function"
+        ? this.cameraController()
+        : this.cameraController;
+
+    if (!cameraController?.connected) {
+      logger.debug("Camera not connected, skipping sync");
+      return false;
+    }
+
+    try {
+      // Get camera time
+      const cameraTime = await cameraController.getCameraDateTime();
+      if (!cameraTime) {
+        logger.error("Could not get camera time");
+        return false;
+      }
+
+      const cameraTimestamp = new Date(cameraTime);
+      const piTime = new Date();
+      const driftMs = piTime.getTime() - cameraTimestamp.getTime();
+
+      logger.info(`Pi drift from camera: ${driftMs}ms`);
+
+      // Only sync if drift exceeds threshold
+      if (Math.abs(driftMs) > this.state.config.DRIFT_THRESHOLD) {
+        const driftSeconds = (driftMs / 1000).toFixed(1);
+        logger.info(
+          `Syncing Pi from camera (camera RTC more reliable than Pi without proxy)`,
+        );
+        this.logActivity(
+          `Syncing Pi time from camera - Pi has no valid proxy (drift: ${driftSeconds}s)`,
+          "warning",
+        );
+
+        // Sync Pi from camera
+        const syncSuccess = await this.syncPiTime(cameraTimestamp, null);
+
+        if (syncSuccess) {
+          // Update piProxyState to 'none' - Pi is not acting as proxy, just has camera time
+          this.piProxyState.updateState("none", null);
+          this.logActivity(
+            `Pi time synchronized from camera (was ${driftSeconds}s off)`,
+            "success",
+          );
+
+          // Broadcast sync status
+          this.broadcastSyncStatus();
+          return true;
+        } else {
+          this.logActivity(
+            `Failed to sync Pi from camera - system may not support time changes`,
+            "error",
+          );
+        }
+      } else {
+        logger.debug(`Pi-camera drift within threshold: ${driftMs}ms`);
+      }
+    } catch (error) {
+      logger.error("Error syncing Pi from camera:", error);
+    }
+
+    return false;
+  }
+
+  /**
    * Sync camera time from Pi
+   * Only syncs if Pi has valid proxy state (Phase 4: piProxyState-based check)
    */
   async syncCameraTime() {
     // Get current camera controller instance
@@ -564,8 +635,11 @@ class TimeSyncService {
       return false;
     }
 
-    if (!this.state.isPiTimeReliable()) {
-      logger.warn("Pi time not reliable, skipping camera sync");
+    // Phase 4: Check piProxyState validity instead of generic Pi reliability
+    if (!this.piProxyState.isValid()) {
+      logger.warn(
+        "Pi proxy state not valid, cannot sync camera (use camera as source instead)",
+      );
       return false;
     }
 
@@ -613,13 +687,68 @@ class TimeSyncService {
   }
 
   /**
-   * Handle camera connection
+   * Handle camera connection (Phase 4: State-based sync)
+   * Implements Rule 3A and Rule 3B from time sync algorithm
    */
   async handleCameraConnection() {
     logger.info("Camera connected, checking time sync");
 
-    // Always sync camera on connection for timezone changes
-    await this.syncCameraTime();
+    // Check if any clients are connected
+    const hasAp0 = Array.from(this.connectedClients.values()).some(
+      (client) => client.interface === "ap0",
+    );
+    const hasWlan0 = Array.from(this.connectedClients.values()).some(
+      (client) => client.interface === "wlan0",
+    );
+
+    if (hasAp0 || hasWlan0) {
+      // Rule 3A: Client available - use client as time source
+      logger.info("Camera connection: Client available, applying Rule 3A");
+
+      // Select client (preference: ap0 > wlan0)
+      const clientEntry = hasAp0
+        ? Array.from(this.connectedClients.entries()).find(
+            ([_ip, client]) => client.interface === "ap0",
+          )
+        : Array.from(this.connectedClients.entries()).find(
+            ([_ip, client]) => client.interface === "wlan0",
+          );
+
+      if (clientEntry) {
+        const [clientIP, { ws, interface: clientInterface }] = clientEntry;
+        logger.info(
+          `Syncing Pi from ${clientInterface} client ${clientIP} before camera sync`,
+        );
+
+        // Request time from client (will trigger handleClientTimeResponse which updates state)
+        this.requestClientTime(clientIP, ws);
+
+        // Note: Camera sync will happen in handleClientTimeResponse after Pi is synced
+        // This ensures camera gets the fresh client time via Pi proxy
+      }
+    } else if (this.piProxyState.isValid()) {
+      // Rule 3B (part 1): No client, but Pi has valid proxy state
+      logger.info(
+        `Camera connection: No client but Pi proxy state valid (${this.piProxyState.state}), syncing camera from Pi`,
+      );
+      this.logActivity(
+        `Camera connected - syncing from Pi (Pi has valid ${this.piProxyState.state} proxy)`,
+        "info",
+      );
+
+      await this.syncCameraTime();
+    } else {
+      // Rule 3B (part 2): No client, Pi proxy state invalid - use camera as source
+      logger.info(
+        "Camera connection: No client and Pi proxy state invalid, syncing Pi from camera",
+      );
+      this.logActivity(
+        "Camera connected - syncing Pi from camera (no valid proxy state)",
+        "info",
+      );
+
+      await this.syncPiFromCamera();
+    }
   }
 
   /**
