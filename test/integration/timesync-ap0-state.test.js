@@ -274,11 +274,14 @@ describe("TimeSync ap0 Sync with PiProxyState Integration", () => {
         "America/Los_Angeles",
       );
 
-      // State should be valid at 9 minutes 59 seconds
+      // Disconnect client so resync timer doesn't refresh state
+      timeSyncService.handleClientDisconnection(clientIP);
+
+      // State should be valid at 9 minutes 59 seconds after disconnect
       jest.advanceTimersByTime(9 * 60 * 1000 + 59000);
       expect(timeSyncService.piProxyState.isValid()).toBe(true);
 
-      // State should be invalid at 10 minutes
+      // State should be invalid at 10 minutes after disconnect
       jest.advanceTimersByTime(2000);
       expect(timeSyncService.piProxyState.isValid()).toBe(false);
     });

@@ -1,14 +1,4 @@
 # TODO
-- Test Photo Details
-  - image dimensions
-  - image size
-- Camera controls
-  - Turn off / on screen
-  - Turn off / on viewfinder.
-- Timelapse Reports
-  - Name of file should match title of timelapse
-  - Labels are below values
-
 - Improve time sync:
   - allow sync from wlan
   - If pi is reliablity gets low AND not running a timelapse, sync pi from camera.
@@ -20,8 +10,19 @@
 - Without camera connected:
   - Should be able to view images in "test shot". We need to rethink the UI. Add separate "view images" function?
 - First image captured should be stored as both first and last. Subsequent images update last.
+- Timelapse Reports
+  - Name of file should match title of timelapse
+  - Labels are below values
+
 
 ## Completed
+- Camera controls
+  - NOT SUPPORTED BY R50
+    - Turn off / on screen
+    - Turn off / on viewfinder.
+- ~~Test Photo Details~~ FIXED
+  - image dimensions
+  - image size
 - Camera Settings
   ~~- value backgrounds are too bright. Change to black bg, grey text.~~ FIXED
 - ~~Take Photo fails with RAW format.~~

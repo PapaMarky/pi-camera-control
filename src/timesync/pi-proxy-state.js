@@ -13,17 +13,18 @@
  * does not have a battery." The Pi can only be reliable as a proxy.
  */
 
-const VALIDITY_WINDOW = 10 * 60 * 1000; // 10 minutes in milliseconds
+const DEFAULT_VALIDITY_WINDOW = 10 * 60 * 1000; // 10 minutes in milliseconds
 
 export class PiProxyState {
-  constructor() {
+  constructor(validityWindow = DEFAULT_VALIDITY_WINDOW) {
     this.state = "none"; // 'none' | 'ap0-device' | 'wlan0-device'
     this.acquiredAt = null; // Date when state was acquired
     this.clientIP = null; // IP of sync source (if applicable)
+    this.validityWindow = validityWindow; // Configurable for testing
   }
 
   /**
-   * Check if current state is valid (within 10-minute window)
+   * Check if current state is valid (within validity window)
    *
    * @returns {boolean} true if state is valid, false otherwise
    */
@@ -32,7 +33,7 @@ export class PiProxyState {
     if (!this.acquiredAt) return false;
 
     const ageMs = Date.now() - this.acquiredAt.getTime();
-    return ageMs < VALIDITY_WINDOW;
+    return ageMs < this.validityWindow;
   }
 
   /**
