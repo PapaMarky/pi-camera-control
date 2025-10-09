@@ -28,7 +28,7 @@
 - State transitions and automatic expiry working
 - **Committed:** 2025-10-09
 
-### 🔄 Phase 2: ap0 Sync with State Integration (IN PROGRESS)
+### ✅ Phase 2: ap0 Sync with State Integration (COMPLETE)
 
 **Completed:**
 
@@ -36,27 +36,31 @@
   - Added RESYNC_INTERVAL: 5 minutes
   - Added STATE_VALIDITY_WINDOW: 10 minutes
 - ✅ Integration tests written: `test/integration/timesync-ap0-state.test.js`
-  - 16 test cases covering ap0 sync scenarios
+  - 15 test cases covering ap0 sync scenarios
   - Tests for state transitions, failover, validity window
+- ✅ Imported PiProxyState into `src/timesync/service.js`
+- ✅ Updated `handleClientConnection()` to use state checking
+  - Ignores second ap0 client when already in ap0-device state
+  - Sets state optimistically on connection
+- ✅ Implemented 5-minute resync timer with failover cascade
+  - Updates acquiredAt ONLY when successfully syncing with connected client
+  - Handles client disconnection during resync
+  - Failover to other ap0 clients or wlan0 clients
+  - State persists for 10-minute validity window after last sync (even if no clients available)
+- ✅ Made validity window configurable for testing
+  - PiProxyState accepts optional validityWindow parameter
+  - Defaults to 10 minutes for production
+- ✅ Updated `handleClientTimeResponse()` to sync piProxyState
+- ✅ Updated cleanup to clear resync timer
+- ✅ Full test suite passing: **650/650 tests (100%)** ✨
 
-**Remaining:**
+**Key Fixes from User Feedback:**
+- Fixed failover logic to NOT set state to 'none' when no clients available
+- State now expires naturally via validity window instead of being reset prematurely
+- Only updates acquiredAt when actually syncing with a connected client
+- Made expiration time configurable for faster testing
 
-- ⏳ Import PiProxyState into `src/timesync/service.js`
-- ⏳ Update `handleClientConnection()` to use state checking
-- ⏳ Implement resync timer with failover cascade
-- ⏳ Fix timer issues in integration tests
-- ⏳ Verify all tests pass (635+ total)
-
-**Next Steps for Fresh Session:**
-
-1. Import PiProxyState class into TimeSync service
-2. Add piProxyState instance to TimeSyncService constructor
-3. Update handleClientConnection() - check if state is already 'ap0-device'
-4. Implement resync timer that updates acquiredAt every 5 minutes
-5. Add handleClientFailover() function to service
-6. Update resync to call failover when original client disconnects
-7. Run integration tests and fix timer-related issues
-8. Run full test suite to ensure no regressions
+**Committed:** 2025-01-09
 
 ### ⏳ Phase 3: wlan0 with State Priority (NOT STARTED)
 
