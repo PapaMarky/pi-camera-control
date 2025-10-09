@@ -335,6 +335,93 @@ describe("TimeSyncService", () => {
       );
       expect(hasActivityLog).toBe(true);
     });
+
+    test("should broadcast enhanced time-sync-status with piProxyState and connectedClients", async () => {
+      // Clear any previous calls
+      mockWsManager.broadcast.mockClear();
+
+      // Connect ap0 client
+      await timeSyncService.handleClientConnection(
+        "192.168.4.2",
+        "ap0",
+        mockWs,
+      );
+
+      // Connect wlan0 client
+      const mockWs2 = { send: jest.fn() };
+      await timeSyncService.handleClientConnection(
+        "192.168.1.100",
+        "wlan0",
+        mockWs2,
+      );
+
+      // Perform sync from ap0 client
+      const clientTime = new Date();
+      await timeSyncService.handleClientTimeResponse(
+        "192.168.4.2",
+        clientTime.toISOString(),
+        "America/Los_Angeles",
+      );
+
+      // Find time-sync-status broadcast
+      const calls = mockWsManager.broadcast.mock.calls;
+      const syncStatusCall = calls.find(
+        (call) => call[0]?.type === "time-sync-status",
+      );
+
+      expect(syncStatusCall).toBeDefined();
+
+      const message = syncStatusCall[0];
+
+      // Verify existing structure is preserved
+      expect(message).toHaveProperty("type", "time-sync-status");
+      expect(message).toHaveProperty("data");
+      expect(message.data).toHaveProperty("pi");
+      expect(message.data).toHaveProperty("camera");
+
+      // Verify pi sync status structure
+      expect(message.data.pi).toMatchObject({
+        isSynchronized: expect.any(Boolean),
+        reliability: expect.stringMatching(/^(none|low|medium|high)$/),
+        lastSyncTime: expect.any(String),
+      });
+
+      // Verify camera sync status structure
+      expect(message.data.camera).toHaveProperty("isSynchronized");
+      expect(message.data.camera).toHaveProperty("lastSyncTime");
+      expect(typeof message.data.camera.isSynchronized).toBe("boolean");
+      // lastSyncTime can be null or ISO timestamp string
+      if (message.data.camera.lastSyncTime !== null) {
+        expect(typeof message.data.camera.lastSyncTime).toBe("string");
+      }
+
+      // Verify NEW piProxyState field
+      expect(message.data).toHaveProperty("piProxyState");
+      expect(message.data.piProxyState).toMatchObject({
+        state: expect.stringMatching(/^(none|ap0-device|wlan0-device)$/),
+        valid: expect.any(Boolean),
+        acquiredAt: expect.anything(), // Can be null or ISO timestamp
+        ageSeconds: expect.anything(), // Can be null or number
+        clientIP: expect.anything(), // Can be null or IP string
+      });
+
+      // Verify NEW connectedClients field
+      expect(message.data).toHaveProperty("connectedClients");
+      expect(message.data.connectedClients).toMatchObject({
+        ap0Count: expect.any(Number),
+        wlan0Count: expect.any(Number),
+      });
+
+      // Verify specific values based on test setup
+      expect(message.data.piProxyState.state).toBe("ap0-device");
+      expect(message.data.piProxyState.valid).toBe(true);
+      expect(message.data.piProxyState.clientIP).toBe("192.168.4.2");
+      expect(message.data.piProxyState.ageSeconds).toBeGreaterThanOrEqual(0);
+
+      // We connected one ap0 and one wlan0 client
+      expect(message.data.connectedClients.ap0Count).toBe(1);
+      expect(message.data.connectedClients.wlan0Count).toBe(1);
+    });
   });
 
   describe("Scheduled Synchronization", () => {
