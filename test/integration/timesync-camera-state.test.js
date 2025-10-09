@@ -144,11 +144,7 @@ describe("TimeSync Camera Sync with PiProxyState Integration", () => {
       mockWs2.send = jest.fn();
       mockWs2.readyState = 1;
 
-      await timeSyncService.handleClientConnection(
-        ap0ClientIP,
-        "ap0",
-        mockWs2,
-      );
+      await timeSyncService.handleClientConnection(ap0ClientIP, "ap0", mockWs2);
       jest.advanceTimersByTime(1100);
 
       // Camera connects - should prefer ap0
@@ -259,9 +255,7 @@ describe("TimeSync Camera Sync with PiProxyState Integration", () => {
       expect(timeSyncService.piProxyState.isValid()).toBe(false);
 
       // Mock camera time
-      mockCamera.getCameraDateTime.mockResolvedValue(
-        new Date().toISOString(),
-      );
+      mockCamera.getCameraDateTime.mockResolvedValue(new Date().toISOString());
 
       // Camera connects with invalid proxy state - should sync Pi from camera instead
       await timeSyncService.handleCameraConnection();
@@ -284,9 +278,7 @@ describe("TimeSync Camera Sync with PiProxyState Integration", () => {
       const piTime = new Date(cameraTime.getTime() - 3000);
       jest.setSystemTime(piTime);
 
-      mockCamera.getCameraDateTime.mockResolvedValue(
-        cameraTime.toISOString(),
-      );
+      mockCamera.getCameraDateTime.mockResolvedValue(cameraTime.toISOString());
 
       // Camera connects with no valid state - should sync Pi from camera
       await timeSyncService.handleCameraConnection();
@@ -324,9 +316,7 @@ describe("TimeSync Camera Sync with PiProxyState Integration", () => {
 
       // Mock camera time (Pi is behind)
       const cameraTime = new Date();
-      mockCamera.getCameraDateTime.mockResolvedValue(
-        cameraTime.toISOString(),
-      );
+      mockCamera.getCameraDateTime.mockResolvedValue(cameraTime.toISOString());
 
       // Camera connects with expired state - should sync Pi from camera
       await timeSyncService.handleCameraConnection();
@@ -344,9 +334,7 @@ describe("TimeSync Camera Sync with PiProxyState Integration", () => {
       const piTime = new Date(cameraTime.getTime() - 500); // Only 500ms drift
       jest.setSystemTime(piTime);
 
-      mockCamera.getCameraDateTime.mockResolvedValue(
-        cameraTime.toISOString(),
-      );
+      mockCamera.getCameraDateTime.mockResolvedValue(cameraTime.toISOString());
 
       // Camera connects - should check but not sync
       await timeSyncService.handleCameraConnection();
@@ -391,9 +379,7 @@ describe("TimeSync Camera Sync with PiProxyState Integration", () => {
       const baseTime = new Date("2025-01-09T12:00:00Z");
       const cameraTime = new Date(baseTime.getTime() + 3000);
 
-      mockCamera.getCameraDateTime.mockResolvedValue(
-        cameraTime.toISOString(),
-      );
+      mockCamera.getCameraDateTime.mockResolvedValue(cameraTime.toISOString());
       mockCamera.setCameraDateTime.mockResolvedValue(true);
 
       // Set system time to base time

@@ -215,6 +215,7 @@ describe("TimeSync ap0 Sync with PiProxyState Integration", () => {
       // Connect second client (should be ignored due to existing ap0-device state)
       const mockWs2 = new EventEmitter();
       mockWs2.send = jest.fn();
+      mockWs2.readyState = 1; // OPEN
       await timeSyncService.handleClientConnection(client2, "ap0", mockWs2);
 
       // Disconnect first client

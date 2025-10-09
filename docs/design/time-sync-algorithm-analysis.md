@@ -55,6 +55,7 @@
 - ✅ Full test suite passing: **650/650 tests (100%)** ✨
 
 **Key Fixes from User Feedback:**
+
 - Fixed failover logic to NOT set state to 'none' when no clients available
 - State now expires naturally via validity window instead of being reset prematurely
 - Only updates acquiredAt when actually syncing with a connected client
@@ -87,6 +88,7 @@
 - ✅ Full test suite passing: **668/668 tests (100%)** ✨
 
 **Key Implementation:**
+
 - wlan0 clients now auto-synced when state is 'none'
 - wlan0 connections ignored when valid ap0 state exists
 - wlan0 → ap0 transition works seamlessly
@@ -122,6 +124,7 @@
 - ✅ Full test suite passing: **682/682 tests (100%)** ✨
 
 **Key Implementation:**
+
 - Camera sync now respects piProxyState hierarchy
 - Camera acts as fallback time source when Pi has no valid proxy
 - Three sync paths implemented:
@@ -132,7 +135,42 @@
 
 **Committed:** 2025-01-09
 
-### ⏳ Phase 5: WebSocket Client Interface Tracking (NOT STARTED)
+### ✅ Phase 5: WebSocket Client Interface Tracking (COMPLETE)
+
+**Completed:**
+
+- ✅ Refactored `connectedClients` from Map to interface-specific arrays
+  - Changed from: `Map<clientIP, {interface, ws}>`
+  - Changed to: `{ ap0: [{ip, ws}], wlan0: [{ip, ws}] }`
+- ✅ Updated `handleClientConnection()` to push to appropriate array
+- ✅ Updated `handleClientDisconnection()` to filter both arrays
+- ✅ Updated `handleResyncTimer()` to use array operations
+- ✅ Updated `handleClientFailover()` to use array filtering with WebSocket state checks
+- ✅ Updated all client existence checks to use array operations
+- ✅ Updated camera connection logic to use simple length checks
+- ✅ Simplified scheduled checks to use direct array access
+- ✅ Fixed WebSocket readyState checking (now uses constant `1` for OPEN)
+- ✅ Updated integration tests to work with new structure
+- ✅ Full test suite passing: **682/682 tests (100%)** ✨
+
+**Key Changes:**
+
+- Structure now matches design document specification (lines 499-518)
+- Cleaner checks: `this.connectedClients.ap0.length > 0` vs `Array.from(...).some(...)`
+- More explicit interface separation
+- Direct array access eliminates Map conversion overhead
+- All functionality identical, only internal structure changed
+
+**Files Modified:**
+
+- `src/timesync/service.js` - Core service refactoring
+- `test/integration/timesync-wlan0-state.test.js` - Updated test to use array structure
+- `test/integration/timesync-ap0-state.test.js` - Added WebSocket readyState
+- `test/unit/timesync-service.test.js` - Updated to use proper disconnection method
+
+**Committed:** 2025-01-09
+
+---
 
 ### ⏳ Phase 6: Integration Testing (NOT STARTED)
 
