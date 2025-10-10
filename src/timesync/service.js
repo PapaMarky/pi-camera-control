@@ -127,7 +127,7 @@ class TimeSyncService {
       `TimeSync: Starting auto-sync for ${clientIP} on ${clientInterface}`,
     );
     this.logActivity(
-      `Device ${clientIP} connected to access point - checking time sync`,
+      `Device ${clientIP} connected (${clientInterface}) - checking time sync`,
       "info",
     );
 
