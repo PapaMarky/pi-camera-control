@@ -140,6 +140,18 @@ export class NetworkHealthMonitor extends EventEmitter {
       return;
     }
 
+    // CRITICAL: Never cycle ap0 (access point) as it drops all clients
+    // Only wlan0 (WiFi client) should be cycled for ARP recovery
+    if (this.lastKnownInterface === "ap0") {
+      logger.warn(
+        `Camera ${this.lastKnownCameraIP} has stale ARP on ap0 - skipping interface recovery (would drop all AP clients)`,
+      );
+      logger.info(
+        "ARP issue on ap0 will resolve naturally when camera reconnects",
+      );
+      return;
+    }
+
     this.isRecovering = true;
     logger.warn(
       `Attempting to recover ${this.lastKnownInterface} interface (stale ARP state detected)`,
