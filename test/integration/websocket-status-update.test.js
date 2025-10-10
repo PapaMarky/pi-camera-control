@@ -232,4 +232,75 @@ describe("WebSocket status_update with intervalometer", () => {
     expect(errors).toEqual([]);
     expect(statusUpdate.intervalometer.options.stopTime).toBe("23:30");
   });
+
+  test("status_update includes timesync field matching welcome message", () => {
+    const statusUpdate = {
+      type: "status_update",
+      timestamp: new Date().toISOString(),
+      camera: { connected: true, ip: "192.168.4.2" },
+      discovery: { isDiscovering: true, cameras: 1 },
+      power: {
+        battery: { capacity: 85 },
+        thermal: { temperature: 45.2 },
+        uptime: 3600,
+      },
+      network: { interfaces: {} },
+      timesync: {
+        pi: {
+          isSynchronized: true,
+          reliability: "high",
+          lastSyncTime: "2024-01-01T12:00:00.000Z",
+        },
+        camera: {
+          isSynchronized: true,
+          lastSyncTime: "2024-01-01T12:00:30.000Z",
+        },
+        piProxyState: {
+          state: "ap0-device",
+          valid: true,
+          acquiredAt: "2024-01-01T12:00:00.000Z",
+          ageSeconds: 45,
+          clientIP: "192.168.4.2",
+        },
+        connectedClients: {
+          ap0Count: 1,
+          wlan0Count: 0,
+        },
+      },
+    };
+
+    const errors = validateSchema(
+      statusUpdate,
+      MessageSchemas.serverMessages.status_update,
+    );
+    expect(errors).toEqual([]);
+
+    // Verify timesync structure matches welcome message
+    expect(statusUpdate.timesync).toBeDefined();
+    expect(statusUpdate.timesync.pi).toBeDefined();
+    expect(statusUpdate.timesync.camera).toBeDefined();
+    expect(statusUpdate.timesync.piProxyState).toBeDefined();
+    expect(statusUpdate.timesync.connectedClients).toBeDefined();
+  });
+
+  test("status_update with no timesync service includes null timesync", () => {
+    const statusUpdate = {
+      type: "status_update",
+      timestamp: new Date().toISOString(),
+      camera: { connected: true },
+      discovery: { isDiscovering: true, cameras: 1 },
+      power: {
+        battery: { capacity: 85 },
+        thermal: { temperature: 45.2 },
+      },
+      network: { interfaces: {} },
+      timesync: null,
+    };
+
+    const errors = validateSchema(
+      statusUpdate,
+      MessageSchemas.serverMessages.status_update,
+    );
+    expect(errors).toEqual([]);
+  });
 });

@@ -964,11 +964,19 @@ export class CameraController {
         // Parse RFC1123 date string to Date object
         const date = new Date(response.data.datetime);
         if (isNaN(date.getTime())) {
+          logger.error(
+            "Invalid datetime format from camera:",
+            response.data.datetime,
+          );
           throw new Error("Invalid datetime format from camera");
         }
         // Return ISO string for consistency with rest of system
         return date.toISOString();
       }
+      logger.error(
+        "Invalid datetime response from camera - missing datetime field:",
+        response.data,
+      );
       throw new Error("Invalid datetime response from camera");
     } catch (error) {
       // Extract Canon API error details
@@ -978,6 +986,20 @@ export class CameraController {
       logger.error(
         `Failed to get camera datetime - Status: ${statusCode}, API Message: "${apiMessage}"`,
       );
+
+      // CCAPI 503: Camera temporarily unavailable
+      if (error.response?.status === 503) {
+        logger.warn(
+          "Camera datetime endpoint temporarily unavailable (HTTP 503)",
+        );
+        logger.warn(`CCAPI Message: "${apiMessage}"`);
+        logger.warn(
+          "Possible causes: Device busy, shooting in progress, or mode not supported",
+        );
+        logger.warn(
+          "Camera may be in playback mode - ensure camera is in shooting mode",
+        );
+      }
 
       // Log full response for Canon API errors (400, 503) for debugging
       if (error.response?.data && [400, 503].includes(error.response.status)) {

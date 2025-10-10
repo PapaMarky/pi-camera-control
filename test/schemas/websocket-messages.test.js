@@ -169,12 +169,68 @@ describe("WebSocket Message Schema Validation", () => {
         camera: { connected: false },
         power: { isRaspberryPi: true },
         network: { interfaces: {} },
+        timesync: {
+          pi: {
+            isSynchronized: false,
+            reliability: "none",
+            lastSyncTime: null,
+          },
+          camera: {
+            isSynchronized: false,
+            lastSyncTime: null,
+          },
+          piProxyState: {
+            state: "none",
+            valid: false,
+            acquiredAt: null,
+            ageSeconds: null,
+            clientIP: null,
+          },
+          connectedClients: {
+            ap0Count: 0,
+            wlan0Count: 0,
+          },
+        },
         clientId: "192.168.4.3:54321",
       };
 
       const errors = validateSchema(
         welcome,
         MessageSchemas.serverMessages.welcome,
+      );
+      expect(errors).toEqual([]);
+    });
+
+    test("time-sync-status message follows schema", () => {
+      const timeSyncStatus = {
+        type: "time-sync-status",
+        data: {
+          pi: {
+            isSynchronized: true,
+            reliability: "high",
+            lastSyncTime: "2024-01-01T12:00:00.000Z",
+          },
+          camera: {
+            isSynchronized: true,
+            lastSyncTime: "2024-01-01T12:00:30.000Z",
+          },
+          piProxyState: {
+            state: "ap0-device",
+            valid: true,
+            acquiredAt: "2024-01-01T12:00:00.000Z",
+            ageSeconds: 45,
+            clientIP: "192.168.4.2",
+          },
+          connectedClients: {
+            ap0Count: 1,
+            wlan0Count: 0,
+          },
+        },
+      };
+
+      const errors = validateSchema(
+        timeSyncStatus,
+        MessageSchemas.serverMessages["time-sync-status"],
       );
       expect(errors).toEqual([]);
     });

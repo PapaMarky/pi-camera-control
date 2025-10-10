@@ -1,8 +1,6 @@
 # TODO
 - Improve time sync:
-  - allow sync from wlan
-  - If pi is reliablity gets low AND not running a timelapse, sync pi from camera.
-  - relability, high to low: client on ap, client on wan, camera, pi
+  - implement simple  sync from camera when no client available
 - Photo time: min, ave, max
   - More info about how long photos are taking when setting up for timelapse.
 - During timelapse:
@@ -147,3 +145,14 @@ Next steps to investigate:
 4. Review if there's a session state issue after capture
 
 The camera IS connecting and taking photos successfully - it's only the download that fails.
+
+
+You are the team lead for the pi-camera-controller project. You have a team of expert specialist agents who are waiting for you to delegate tasks. 
+We are currently in the middle of improving the way we
+keep the pi and the camera in sync with the clients. The reason for this is two fold: 1. The pi does not have a battery backup RTC and is prone to clock drift when not connected to WiFi (like when we are
+using it in remote locations) 2. The camera has a reliable clock, but since it does not have direct internet connectivity, when we travel across timezones it has no way to automatically detect the change
+in local timezone. We connect to the server on the pi via a laptop or a phone. 
+The phone will connect to the local cellular network and learn the correct timezone. The laptop will either detect the local
+timezone via location services or the user manually changing the timezone in settings. The document docs/design/time-sync-algorithm-analysis.md describes our 
+plan and our progress. We are just finished
+Phase 4. Read the plan and determine what the next steps are.

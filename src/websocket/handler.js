@@ -155,6 +155,26 @@ export function createWebSocketHandler(
       intervalometer: server.activeIntervalometerSession
         ? server.activeIntervalometerSession.getStatus()
         : null,
+      timesync: timeSyncService
+        ? (() => {
+            const rawStatus = timeSyncService.getStatus();
+            return {
+              pi: {
+                isSynchronized: rawStatus.piReliable,
+                reliability: timeSyncService.getPiReliability
+                  ? timeSyncService.getPiReliability(rawStatus)
+                  : "none",
+                lastSyncTime: rawStatus.lastPiSync,
+              },
+              camera: {
+                isSynchronized: !!rawStatus.lastCameraSync,
+                lastSyncTime: rawStatus.lastCameraSync,
+              },
+              piProxyState: rawStatus.piProxyState,
+              connectedClients: rawStatus.connectedClients,
+            };
+          })()
+        : null,
     };
 
     const message = JSON.stringify(status);
@@ -306,6 +326,8 @@ export function createWebSocketHandler(
                   isSynchronized: !!rawStatus.lastCameraSync,
                   lastSyncTime: rawStatus.lastCameraSync,
                 },
+                piProxyState: rawStatus.piProxyState,
+                connectedClients: rawStatus.connectedClients,
               };
             })()
           : null,
@@ -372,7 +394,9 @@ export function createWebSocketHandler(
   const handleClientMessage = async (ws, message, clientId) => {
     const { type, data } = message;
 
-    logger.info(`WebSocket message from ${clientId}: type=${type}`);
+    logger.info(
+      `WebSocket message from ${clientId}: type=${type}, keys=${Object.keys(message).join(",")}, fullMessage=${JSON.stringify(message).substring(0, 200)}`,
+    );
 
     try {
       switch (type) {
@@ -1340,20 +1364,37 @@ export function createWebSocketHandler(
   // Time sync message handlers
   const handleTimeSyncResponse = async (ws, data) => {
     try {
+      logger.info(
+        "handleTimeSyncResponse called with data:",
+        JSON.stringify(data),
+      );
+
       const info = clientInfo.get(ws);
       if (!info) {
         logger.warn("Received time sync response from unknown client");
         return;
       }
 
+      logger.info(`Time sync response from ${info.ip}:`, {
+        data,
+        hasClientTime: !!data?.clientTime,
+        hasTimezone: !!data?.timezone,
+      });
+
       const { clientTime, timezone, gps } = data;
       if (timeSyncService) {
+        logger.info(
+          `Calling timeSyncService.handleClientTimeResponse for ${info.ip}`,
+        );
         await timeSyncService.handleClientTimeResponse(
           info.ip,
           clientTime,
           timezone,
           gps,
         );
+        logger.info(`handleClientTimeResponse completed for ${info.ip}`);
+      } else {
+        logger.warn("timeSyncService not available");
       }
     } catch (error) {
       logger.error("Failed to handle time sync response:", error);

@@ -79,8 +79,56 @@ const MessageSchemas = {
       },
       temperature: "string?",
       intervalometer: "object?",
-      timesync: "object?",
+      timesync: {
+        pi: {
+          isSynchronized: "boolean",
+          reliability: "string",
+          lastSyncTime: "string?",
+        },
+        camera: {
+          isSynchronized: "boolean",
+          lastSyncTime: "string?",
+        },
+        piProxyState: {
+          state: "string",
+          valid: "boolean",
+          acquiredAt: "string?",
+          ageSeconds: "number?",
+          clientIP: "string?",
+        },
+        connectedClients: {
+          ap0Count: "number",
+          wlan0Count: "number",
+        },
+      },
       clientId: "string",
+    },
+
+    // Time sync status broadcast (periodic and after sync events)
+    "time-sync-status": {
+      type: "time-sync-status",
+      data: {
+        pi: {
+          isSynchronized: "boolean",
+          reliability: "string",
+          lastSyncTime: "string?",
+        },
+        camera: {
+          isSynchronized: "boolean",
+          lastSyncTime: "string?",
+        },
+        piProxyState: {
+          state: "string",
+          valid: "boolean",
+          acquiredAt: "string?",
+          ageSeconds: "number?",
+          clientIP: "string?",
+        },
+        connectedClients: {
+          ap0Count: "number",
+          wlan0Count: "number",
+        },
+      },
     },
 
     status_update: {
@@ -139,6 +187,28 @@ const MessageSchemas = {
           stopCondition: "string?",
         },
         averageShotDuration: "number?",
+      },
+      timesync: {
+        pi: {
+          isSynchronized: "boolean?",
+          reliability: "string?",
+          lastSyncTime: "string?",
+        },
+        camera: {
+          isSynchronized: "boolean?",
+          lastSyncTime: "string?",
+        },
+        piProxyState: {
+          state: "string?",
+          valid: "boolean?",
+          acquiredAt: "string?",
+          ageSeconds: "number?",
+          clientIP: "string?",
+        },
+        connectedClients: {
+          ap0Count: "number?",
+          wlan0Count: "number?",
+        },
       },
     },
 

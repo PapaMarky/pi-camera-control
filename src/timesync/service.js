@@ -68,9 +68,14 @@ class TimeSyncService {
     this.connectedClients[clientInterface].push({ ip: clientIP, ws });
 
     // Rule 1: ap0 Client Connection - Check if already in ap0-device state
-    if (clientInterface === "ap0" && this.piProxyState.state === "ap0-device") {
+    // BUT allow the same client IP to reconnect (in case previous sync failed)
+    if (
+      clientInterface === "ap0" &&
+      this.piProxyState.state === "ap0-device" &&
+      this.piProxyState.clientIP !== clientIP
+    ) {
       logger.info(
-        `TimeSync: Ignoring ap0 connection from ${clientIP} - already have ap0 proxy`,
+        `TimeSync: Ignoring ap0 connection from ${clientIP} - already have ap0 proxy from ${this.piProxyState.clientIP}`,
       );
       this.logActivity(
         `Device ${clientIP} connected (ap0) - already synchronized with another ap0 device`,
@@ -96,13 +101,15 @@ class TimeSyncService {
     }
 
     // Rule 2b: wlan0 Client Connection - Check if already in wlan0-device state
+    // BUT allow the same client IP to reconnect (in case previous sync failed)
     if (
       clientInterface === "wlan0" &&
       this.piProxyState.state === "wlan0-device" &&
-      this.piProxyState.isValid()
+      this.piProxyState.isValid() &&
+      this.piProxyState.clientIP !== clientIP
     ) {
       logger.info(
-        `TimeSync: Ignoring wlan0 connection from ${clientIP} - already have wlan0 proxy`,
+        `TimeSync: Ignoring wlan0 connection from ${clientIP} - already have wlan0 proxy from ${this.piProxyState.clientIP}`,
       );
       this.logActivity(
         `Device ${clientIP} connected (wlan0) - already synchronized with another wlan0 device`,
@@ -176,7 +183,7 @@ class TimeSyncService {
 
   /**
    * Start resync timer for ap0 or wlan0
-   * Resyncs every 5 minutes to keep acquiredAt fresh
+   * Uses adaptive interval based on observed drift (defaults to 5 minutes)
    */
   startResyncTimer(timerType) {
     // Cancel any existing timer
@@ -185,11 +192,17 @@ class TimeSyncService {
       this.resyncTimer = null;
     }
 
-    logger.info(`Starting ${timerType} resync timer (5-minute interval)`);
+    // Get adaptive resync interval (conservative minimum is 5 minutes)
+    const resyncIntervalMs = this.piProxyState.getRecommendedResyncInterval();
+    const resyncMinutes = (resyncIntervalMs / 60000).toFixed(1);
+
+    logger.info(
+      `Starting ${timerType} resync timer (${resyncMinutes}-minute interval, adaptive)`,
+    );
 
     this.resyncTimer = setInterval(() => {
       this.handleResyncTimer(timerType);
-    }, this.state.config.RESYNC_INTERVAL);
+    }, resyncIntervalMs);
   }
 
   /**
@@ -422,6 +435,9 @@ class TimeSyncService {
         // Record sync event
         this.state.recordPiSync(clientTimestamp, clientIP, driftMs);
 
+        // Record drift observation for adaptive interval calculation
+        this.piProxyState.recordSync(Math.abs(driftMs));
+
         // Update acquiredAt to reflect actual sync time
         // (State was already set optimistically in handleClientConnection)
         if (
@@ -474,6 +490,9 @@ class TimeSyncService {
         );
         // Still record that we checked
         this.state.recordPiSync(clientTimestamp, clientIP, driftMs);
+
+        // Record drift observation for adaptive interval calculation (even when no sync needed)
+        this.piProxyState.recordSync(Math.abs(driftMs));
 
         // Update acquiredAt even when no sync needed (resync scenario)
         if (
@@ -626,6 +645,9 @@ class TimeSyncService {
         const syncSuccess = await this.syncPiTime(cameraTimestamp, null);
 
         if (syncSuccess) {
+          // Record drift observation for adaptive interval calculation
+          this.piProxyState.recordSync(Math.abs(driftMs));
+
           // Update piProxyState to 'none' - Pi is not acting as proxy, just has camera time
           this.piProxyState.updateState("none", null);
           this.logActivity(
@@ -943,6 +965,11 @@ class TimeSyncService {
     const status = this.state.getStatus();
     // Include piProxyState for frontend display
     status.piProxyState = this.piProxyState.getInfo();
+    // Include connected clients count for frontend display
+    status.connectedClients = {
+      ap0Count: this.connectedClients.ap0.length,
+      wlan0Count: this.connectedClients.wlan0.length,
+    };
     return status;
   }
 
