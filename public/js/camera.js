@@ -1491,8 +1491,8 @@ class CameraManager {
       let text = "Not Synced";
 
       // Check for piProxyState information (Phase 5)
-      if (data.pi.piProxyState) {
-        const proxyState = data.pi.piProxyState;
+      if (data.piProxyState) {
+        const proxyState = data.piProxyState;
         const stateValid = proxyState.valid;
         const stateName = proxyState.state;
         const ageSeconds = proxyState.ageSeconds;

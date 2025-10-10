@@ -20,11 +20,22 @@ const mockTimeSyncService = {
   handleClientDisconnection: jest.fn(() => {}),
   handleClientTimeResponse: jest.fn(async () => {}),
   getStatus: jest.fn(() => ({
-    synced: false,
-    reliability: "unknown",
-    lastSync: null,
-    drift: 0,
+    piReliable: false,
+    lastPiSync: null,
+    lastCameraSync: null,
+    piProxyState: {
+      state: "none",
+      valid: false,
+      acquiredAt: null,
+      ageSeconds: null,
+      clientIP: null,
+    },
+    connectedClients: {
+      ap0Count: 0,
+      wlan0Count: 0,
+    },
   })),
+  getPiReliability: jest.fn(() => "none"),
   getStatistics: jest.fn(() => ({ count: 0 })),
   startScheduledChecks: jest.fn(() => {}),
   stopScheduledChecks: jest.fn(() => {}),
@@ -39,6 +50,7 @@ describe("WebSocket Handler Unit Tests", () => {
   let mockNetworkManager;
   let mockDiscoveryManager;
   let mockIntervalometerStateManager;
+  let mockLiveViewManager;
   let mockWebSocket;
   let mockRequest;
   let sentMessages;
@@ -155,6 +167,11 @@ describe("WebSocket Handler Unit Tests", () => {
       })),
     };
 
+    // Mock liveViewManager (parameter added between intervalometerStateManager and timeSyncService)
+    mockLiveViewManager = {
+      captureImage: jest.fn(async () => ({ imageData: "mock-image" })),
+    };
+
     // Create WebSocket handler with mocked dependencies
     wsHandler = createWebSocketHandler(
       mockCameraController,
@@ -163,6 +180,7 @@ describe("WebSocket Handler Unit Tests", () => {
       mockNetworkManager,
       mockDiscoveryManager,
       mockIntervalometerStateManager,
+      mockLiveViewManager, // <-- This was missing!
       mockTimeSyncService,
     );
 
@@ -209,6 +227,11 @@ describe("WebSocket Handler Unit Tests", () => {
       expect(welcomeMessage).toHaveProperty("network");
       expect(welcomeMessage.clientId).toBe("192.168.4.100:54321");
 
+      // Validate timesync structure includes piProxyState and connectedClients
+      expect(welcomeMessage).toHaveProperty("timesync");
+      expect(welcomeMessage.timesync).toHaveProperty("piProxyState");
+      expect(welcomeMessage.timesync).toHaveProperty("connectedClients");
+
       // Validate against schema
       const errors = validateSchema(
         welcomeMessage,
@@ -242,6 +265,7 @@ describe("WebSocket Handler Unit Tests", () => {
         null, // No network manager
         mockDiscoveryManager,
         mockIntervalometerStateManager,
+        mockLiveViewManager,
         mockTimeSyncService,
       );
 
@@ -486,6 +510,7 @@ describe("WebSocket Handler Unit Tests", () => {
         null, // No network manager
         mockDiscoveryManager,
         mockIntervalometerStateManager,
+        mockLiveViewManager,
         mockTimeSyncService,
       );
 

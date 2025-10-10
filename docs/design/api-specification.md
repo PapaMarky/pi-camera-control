@@ -1014,7 +1014,29 @@ graph LR
     "usedMB": 22888,
     "percentUsed": 75
   },
-  "temperature": "normal"
+  "temperature": "normal",
+  "timesync": {
+    "pi": {
+      "isSynchronized": true,
+      "reliability": "high",
+      "lastSyncTime": "2024-01-01T12:00:00.000Z"
+    },
+    "camera": {
+      "isSynchronized": true,
+      "lastSyncTime": "2024-01-01T12:00:30.000Z"
+    },
+    "piProxyState": {
+      "state": "ap0-device",
+      "valid": true,
+      "acquiredAt": "2024-01-01T12:00:00.000Z",
+      "ageSeconds": 45,
+      "clientIP": "192.168.4.2"
+    },
+    "connectedClients": {
+      "ap0Count": 1,
+      "wlan0Count": 0
+    }
+  }
 }
 ```
 
@@ -1033,6 +1055,14 @@ graph LR
 - Possible values: `"normal"`, `"warning"`, `"frameratedown"`, `"disableliveview"`, `"disablerelease"`, `"stillqualitywarning"`, `"restrictionmovierecording"`, or combined states
 - Field is `null` when camera is not connected or temperature info unavailable
 - **CRITICAL**: `"disablerelease"` indicates shooting is prohibited due to overheating
+
+**TimeSync Field Details:**
+
+- `timesync` (object|null): Current time synchronization status
+- Same structure as `welcome` message `timesync` field
+- Broadcast every 10 seconds with status updates to keep frontend synchronized
+- Field is `null` when time sync service is not available
+- See "Time Sync Status Broadcast" section below for complete field documentation
 
 ````
 
